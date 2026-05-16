@@ -6,15 +6,15 @@ const MainLayout = ({ children }) => {
   const [sidebarOpen, setSidebarOpen] = useState(true)
 
   return (
-    <div className="flex h-screen bg-background-dark overflow-hidden">
-      
+    <div className="flex h-screen overflow-hidden bg-[#0A1931]">
+
       {/* Sidebar */}
       <Sidebar isOpen={sidebarOpen} />
 
-      {/* Main Content Area */}
+      {/* Right Side */}
       <div className="flex flex-col flex-1 overflow-hidden">
-        
-        {/* Navbar */}
+
+        {/* Dashboard Navbar */}
         <Navbar onToggleSidebar={() => setSidebarOpen(!sidebarOpen)} />
 
         {/* Page Content */}
