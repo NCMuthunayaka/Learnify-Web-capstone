@@ -1,7 +1,8 @@
+import { Outlet } from "react-router-dom"
 import LandingNavbar from "./LandingNavbar"
 import Footer from "./Footer"
 
-function LandingLayout({ children }) {
+function LandingLayout() {
   return (
     <div className="flex flex-col min-h-screen bg-[#F6FAFD]">
 
@@ -10,7 +11,7 @@ function LandingLayout({ children }) {
 
       {/* Page Content */}
       <main className="flex-1">
-        {children}
+        <Outlet />
       </main>
 
       {/* Footer */}
