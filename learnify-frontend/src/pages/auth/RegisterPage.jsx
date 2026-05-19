@@ -82,7 +82,7 @@ function RegisterPage() {
         </div>
 
         {/* Right — Register Form */}
-        <div className="w-full md:w-96 bg-[#0A1931] bg-opacity-95
+        <div className="w-full md:w-96 bg-[#000000] bg-opacity-50
           backdrop-blur-md px-8 py-10 flex flex-col justify-center space-y-5
           border border-[#4A7FA7] border-opacity-30 shadow-2xl">
 
