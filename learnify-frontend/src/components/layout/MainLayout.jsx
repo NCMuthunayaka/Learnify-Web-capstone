@@ -23,7 +23,7 @@ function MainLayout() {
         <Navbar onToggleSidebar={handleToggleSidebar} />
 
         {/* Page Content */}
-        <main className="flex-1 overflow-y-auto p-6 bg-[#0f2744]">
+        <main className="flex-1 overflow-y-auto p-6 bg-[#F6FAFD]">
           <Outlet />
         </main>
 
