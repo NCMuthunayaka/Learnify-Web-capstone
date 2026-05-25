@@ -1,31 +1,36 @@
 import { useState } from "react"
 import { Search, Upload, Download, Eye, ChevronLeft, ChevronRight, X } from "lucide-react"
+import Button from "../components/common/Button"
+import Badge from "../components/common/Badge"
+import Modal from "../components/common/Modal"
+import Tooltip from "../components/common/Tooltip"
+
 
 // ── Data ──────────────────────────────────────────────────
 const resources = [
-  { id: 1,  title: "Organic Chemistry — Reaction Mechanisms",      subject: "Chemistry",   mentor: "Mr. Fernando",    mentorInitials: "SF", mentorColor: "bg-green-500",  type: "PDF",  uploaded: "28 Apr 2026", size: "3.2 MB"   },
-  { id: 2,  title: "Wave Interference & Diffraction — Complete Notes", subject: "Physics",  mentor: "Mr. Senaratne",   mentorInitials: "RS", mentorColor: "bg-green-600",  type: "PDF",  uploaded: "25 Apr 2026", size: "5.8 MB"   },
-  { id: 3,  title: "Calculus Integration — Practice Problems Set 3",  subject: "Mathematics", mentor: "Mr. Rajendran", mentorInitials: "KR", mentorColor: "bg-purple-500", type: "PDF",  uploaded: "24 Apr 2026", size: "1.4 MB"   },
-  { id: 4,  title: "Cell Division — Mitosis & Meiosis Diagrams",    subject: "Biology",     mentor: "Ms. Balasubrama", mentorInitials: "AB", mentorColor: "bg-orange-500", type: "Video",uploaded: "23 Apr 2026", size: "42.3 MB"  },
-  { id: 5,  title: "Essay Writing Techniques — A/L Exam Preparation",subject: "English",   mentor: "Ms. Wijesinghe",  mentorInitials: "NW", mentorColor: "bg-red-500",    type: "DOCX", uploaded: "22 Apr 2026", size: "891 KB"   },
-  { id: 6,  title: "Sri Lanka History — Colonial Period Summary",    subject: "History",    mentor: "Mr. Gamini Silva", mentorInitials: "GS", mentorColor: "bg-blue-500",  type: "PPTX", uploaded: "20 Apr 2026", size: "7.6 MB"   },
-  { id: 7,  title: "Electrochemistry — Full Notes & MCQ Bank",       subject: "Chemistry",  mentor: "Mr. Fernando",    mentorInitials: "SF", mentorColor: "bg-green-500",  type: "PDF",  uploaded: "18 Apr 2026", size: "12.4 MB"  },
-  { id: 8,  title: "Mechanics — Newton's Laws Video Lesson",         subject: "Physics",    mentor: "Mr. Vigneswaran", mentorInitials: "KV", mentorColor: "bg-teal-500",   type: "Video",uploaded: "17 Apr 2026", size: "220.0 MB" },
+  { id: 1, title: "Organic Chemistry — Reaction Mechanisms", subject: "Chemistry", mentor: "Mr. Fernando", mentorInitials: "SF", mentorColor: "bg-green-500", type: "PDF", uploaded: "28 Apr 2026", size: "3.2 MB" },
+  { id: 2, title: "Wave Interference & Diffraction — Complete Notes", subject: "Physics", mentor: "Mr. Senaratne", mentorInitials: "RS", mentorColor: "bg-green-600", type: "PDF", uploaded: "25 Apr 2026", size: "5.8 MB" },
+  { id: 3, title: "Calculus Integration — Practice Problems Set 3", subject: "Mathematics", mentor: "Mr. Rajendran", mentorInitials: "KR", mentorColor: "bg-purple-500", type: "PDF", uploaded: "24 Apr 2026", size: "1.4 MB" },
+  { id: 4, title: "Cell Division — Mitosis & Meiosis Diagrams", subject: "Biology", mentor: "Ms. Balasubrama", mentorInitials: "AB", mentorColor: "bg-orange-500", type: "Video", uploaded: "23 Apr 2026", size: "42.3 MB" },
+  { id: 5, title: "Essay Writing Techniques — A/L Exam Preparation", subject: "English", mentor: "Ms. Wijesinghe", mentorInitials: "NW", mentorColor: "bg-red-500", type: "DOCX", uploaded: "22 Apr 2026", size: "891 KB" },
+  { id: 6, title: "Sri Lanka History — Colonial Period Summary", subject: "History", mentor: "Mr. Gamini Silva", mentorInitials: "GS", mentorColor: "bg-blue-500", type: "PPTX", uploaded: "20 Apr 2026", size: "7.6 MB" },
+  { id: 7, title: "Electrochemistry — Full Notes & MCQ Bank", subject: "Chemistry", mentor: "Mr. Fernando", mentorInitials: "SF", mentorColor: "bg-green-500", type: "PDF", uploaded: "18 Apr 2026", size: "12.4 MB" },
+  { id: 8, title: "Mechanics — Newton's Laws Video Lesson", subject: "Physics", mentor: "Mr. Vigneswaran", mentorInitials: "KV", mentorColor: "bg-teal-500", type: "Video", uploaded: "17 Apr 2026", size: "220.0 MB" },
 ]
 
-const subjects    = ["All Subjects", "Mathematics", "Physics", "Chemistry", "Biology", "English", "History"]
+const subjects = ["All Subjects", "Mathematics", "Physics", "Chemistry", "Biology", "English", "History"]
 const subjectCount = { "All Subjects": 24, Mathematics: 7, Physics: 5, Chemistry: 6, Biology: 4, English: 2 }
-const typeOptions  = ["All Types", "PDF", "Video", "DOCX", "PPTX"]
+const typeOptions = ["All Types", "PDF", "Video", "DOCX", "PPTX"]
 const mentorOptions = ["All Mentors", "Mr. Fernando", "Mr. Senaratne", "Mr. Rajendran", "Ms. Balasubrama", "Ms. Wijesinghe", "Mr. Gamini Silva", "Mr. Vigneswaran"]
-const sortOptions  = ["Newest First", "Oldest First", "A–Z", "Z–A"]
+const sortOptions = ["Newest First", "Oldest First", "A–Z", "Z–A"]
 
 // ── Type Badge ─────────────────────────────────────────────
 function TypeBadge({ type }) {
   const colors = {
-    PDF:   "bg-red-100 text-red-600 border border-red-200",
+    PDF: "bg-red-100 text-red-600 border border-red-200",
     Video: "bg-blue-100 text-blue-600 border border-blue-200",
-    DOCX:  "bg-blue-50 text-blue-500 border border-blue-100",
-    PPTX:  "bg-orange-100 text-orange-600 border border-orange-200",
+    DOCX: "bg-blue-50 text-blue-500 border border-blue-100",
+    PPTX: "bg-orange-100 text-orange-600 border border-orange-200",
   }
   return (
     <span className={`font-body text-xs px-2 py-0.5 rounded
@@ -38,12 +43,12 @@ function TypeBadge({ type }) {
 // ── Subject Badge ──────────────────────────────────────────
 function SubjectBadge({ subject }) {
   const colors = {
-    Chemistry:   "text-green-600",
-    Physics:     "text-blue-600",
+    Chemistry: "text-green-600",
+    Physics: "text-blue-600",
     Mathematics: "text-purple-600",
-    Biology:     "text-orange-500",
-    English:     "text-pink-500",
-    History:     "text-yellow-600",
+    Biology: "text-orange-500",
+    English: "text-pink-500",
+    History: "text-yellow-600",
   }
   return (
     <span className={`font-body text-xs font-semibold
@@ -64,10 +69,10 @@ function UploadModal({ onClose }) {
           <h3 className="font-heading text-lg font-semibold text-[#0A1931]">
             Upload Material
           </h3>
-          <button onClick={onClose}
-            className="text-gray-400 hover:text-gray-600 transition-colors">
-            <X size={20} />
-          </button>
+          <Button variant="primary" icon={Upload}
+            onClick={() => setShowUpload(true)}>
+            Upload Material
+          </Button>
         </div>
 
         <div className="space-y-4">
@@ -126,17 +131,12 @@ function UploadModal({ onClose }) {
           </div>
 
           <div className="flex gap-3 pt-2">
-            <button onClick={onClose}
-              className="flex-1 border border-gray-200 text-gray-500
-                font-body text-sm py-2.5 rounded-lg hover:bg-gray-50
-                transition-colors">
+            <Button variant="secondary" fullWidth onClick={onClose}>
               Cancel
-            </button>
-            <button className="flex-1 bg-[#1A3D63] text-white
-              font-body text-sm py-2.5 rounded-lg hover:bg-[#4A7FA7]
-              transition-colors">
+            </Button>
+            <Button variant="primary" fullWidth>
               Upload
-            </button>
+            </Button>
           </div>
         </div>
       </div>
@@ -146,12 +146,12 @@ function UploadModal({ onClose }) {
 
 // ── Main Component ─────────────────────────────────────────
 function ResourcesPage() {
-  const [search, setSearch]           = useState("")
-  const [selectedType, setSelectedType]     = useState("All Types")
+  const [search, setSearch] = useState("")
+  const [selectedType, setSelectedType] = useState("All Types")
   const [selectedMentor, setSelectedMentor] = useState("All Mentors")
   const [selectedSubject, setSelectedSubject] = useState("All Subjects")
-  const [sortBy, setSortBy]           = useState("Newest First")
-  const [showUpload, setShowUpload]   = useState(false)
+  const [sortBy, setSortBy] = useState("Newest First")
+  const [showUpload, setShowUpload] = useState(false)
   const [currentPage, setCurrentPage] = useState(1)
   const itemsPerPage = 8
 
@@ -228,11 +228,7 @@ function ResourcesPage() {
           </select>
 
           {/* Search Button */}
-          <button className="bg-[#1A3D63] text-white font-body text-sm
-            font-medium px-6 py-2.5 rounded-lg hover:bg-[#4A7FA7]
-            transition-colors duration-200">
-            Search
-          </button>
+          <Button variant="primary">Search</Button>
 
         </div>
 
@@ -364,18 +360,18 @@ function ResourcesPage() {
                   </td>
 
                   {/* Actions */}
-                  <td className="px-5 py-3.5">
-                    <div className="flex items-center gap-2">
-                      <button className="p-1.5 text-gray-400
-                        hover:text-[#1A3D63] transition-colors">
-                        <Eye size={15} />
-                      </button>
-                      <button className="p-1.5 text-gray-400
-                        hover:text-[#1A3D63] transition-colors">
-                        <Download size={15} />
-                      </button>
-                    </div>
-                  </td>
+                  <Tooltip text="Preview">
+                    <button className="p-1.5 text-gray-400
+                                       hover:text-[#1A3D63] transition-colors">
+                      <Eye size={15} />
+                    </button>
+                  </Tooltip>
+                  <Tooltip text="Download">
+                    <button className="p-1.5 text-gray-400
+                                       hover:text-[#1A3D63] transition-colors">
+                      <Download size={15} />
+                    </button>
+                  </Tooltip>
 
                 </tr>
               ))}

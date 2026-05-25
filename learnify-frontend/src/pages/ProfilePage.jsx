@@ -1,5 +1,6 @@
 import { useState } from "react"
 import { User, Mail, Phone, BookOpen, GraduationCap, Save } from "lucide-react"
+import Button from "../components/common/Button"
 
 const initialData = {
   firstName:   "Nirmal",
@@ -221,22 +222,15 @@ function ProfilePage() {
 
       {/* ── Save Button ── */}
       <div className="flex items-center gap-3">
-        <button
-          onClick={handleSave}
-          className="flex items-center gap-2 bg-[#1A3D63] text-white
-            font-body text-sm font-medium px-6 py-2.5 rounded-lg
-            hover:bg-[#4A7FA7] transition-colors duration-200"
-        >
-          <Save size={16} />
+        <Button variant="primary" icon={Save} onClick={handleSave}>
           Save Changes
-        </button>
+        </Button>
         {saved && (
           <span className="font-body text-sm text-green-500 font-medium">
             ✓ Changes saved successfully!
           </span>
         )}
       </div>
-
     </div>
   )
 }

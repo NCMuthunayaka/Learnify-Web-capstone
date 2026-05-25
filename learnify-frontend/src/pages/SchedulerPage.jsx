@@ -1,6 +1,9 @@
 import { useState } from "react"
 import { ChevronLeft, ChevronRight, Plus } from "lucide-react"
 import { FaBookOpen, FaCheckCircle, FaClock, FaBullseye } from "react-icons/fa"
+import ProgressBar from "../components/common/ProgressBar"
+import Button from "../components/common/Button"
+import Badge from "../components/common/Badge"
 
 // ── Data ──────────────────────────────────────────────────
 const statsData = [
@@ -46,152 +49,152 @@ const days = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"
 const timeSlots = ["8:00 AM", "10:00 AM", "12:00 PM", "1:00 PM", "3:00 PM", "5:00 PM"]
 
 const subjectColors = {
-  Mathematics:  "bg-blue-100 border-l-4 border-blue-500",
-  Physics:      "bg-sky-100 border-l-4 border-sky-500",
-  Chemistry:    "bg-cyan-100 border-l-4 border-cyan-500",
-  Biology:      "bg-teal-100 border-l-4 border-teal-500",
-  "English Lit":"bg-indigo-100 border-l-4 border-indigo-500",
-  English:      "bg-indigo-100 border-l-4 border-indigo-500",
+  Mathematics: "bg-blue-100 border-l-4 border-blue-500",
+  Physics: "bg-sky-100 border-l-4 border-sky-500",
+  Chemistry: "bg-cyan-100 border-l-4 border-cyan-500",
+  Biology: "bg-teal-100 border-l-4 border-teal-500",
+  "English Lit": "bg-indigo-100 border-l-4 border-indigo-500",
+  English: "bg-indigo-100 border-l-4 border-indigo-500",
 }
 
 const subjectTextColors = {
-  Mathematics:  "text-blue-800",
-  Physics:      "text-sky-800",
-  Chemistry:    "text-cyan-800",
-  Biology:      "text-teal-800",
-  "English Lit":"text-indigo-800",
-  English:      "text-indigo-800",
+  Mathematics: "text-blue-800",
+  Physics: "text-sky-800",
+  Chemistry: "text-cyan-800",
+  Biology: "text-teal-800",
+  "English Lit": "text-indigo-800",
+  English: "text-indigo-800",
 }
 
 const timetable = {
   "8:00 AM": {
-    Monday:    { subject: "Mathematics", detail: "Calculus - Ch.4" },
-    Tuesday:   null,
+    Monday: { subject: "Mathematics", detail: "Calculus - Ch.4" },
+    Tuesday: null,
     Wednesday: { subject: "Mathematics", detail: "Algebra" },
-    Thursday:  null,
-    Friday:    { subject: "Physics",     detail: "Mechanics" },
-    Saturday:  null,
+    Thursday: null,
+    Friday: { subject: "Physics", detail: "Mechanics" },
+    Saturday: null,
   },
   "10:00 AM": {
-    Monday:    { subject: "Chemistry",   detail: "Organic - Lab"    },
-    Tuesday:   { subject: "Physics",     detail: "Waves & Optics"   },
-    Wednesday: { subject: "English",     detail: "Essay Writing"    },
-    Thursday:  { subject: "Chemistry",   detail: "Periodic Table"   },
-    Friday:    { subject: "Mathematics", detail: "Statistics"       },
-    Saturday:  { subject: "Biology",     detail: "Cell Biology"     },
+    Monday: { subject: "Chemistry", detail: "Organic - Lab" },
+    Tuesday: { subject: "Physics", detail: "Waves & Optics" },
+    Wednesday: { subject: "English", detail: "Essay Writing" },
+    Thursday: { subject: "Chemistry", detail: "Periodic Table" },
+    Friday: { subject: "Mathematics", detail: "Statistics" },
+    Saturday: { subject: "Biology", detail: "Cell Biology" },
   },
   "12:00 PM": {
     Monday: null, Tuesday: null, Wednesday: null,
     Thursday: null, Friday: null, Saturday: null,
   },
   "1:00 PM": {
-    Monday:    { subject: "Biology",      detail: "Genetics"        },
-    Tuesday:   { subject: "English Lit",  detail: "Shakespeare"     },
-    Wednesday: { subject: "Physics",      detail: "Thermodynamics"  },
-    Thursday:  { subject: "Biology",      detail: "Ecosystems"      },
-    Friday:    null,
-    Saturday:  { subject: "Chemistry",    detail: "Revision"        },
+    Monday: { subject: "Biology", detail: "Genetics" },
+    Tuesday: { subject: "English Lit", detail: "Shakespeare" },
+    Wednesday: { subject: "Physics", detail: "Thermodynamics" },
+    Thursday: { subject: "Biology", detail: "Ecosystems" },
+    Friday: null,
+    Saturday: { subject: "Chemistry", detail: "Revision" },
   },
   "3:00 PM": {
-    Monday:    { subject: "English",      detail: "Reading"         },
-    Tuesday:   { subject: "Mathematics",  detail: "Problem Set"     },
+    Monday: { subject: "English", detail: "Reading" },
+    Tuesday: { subject: "Mathematics", detail: "Problem Set" },
     Wednesday: null,
-    Thursday:  { subject: "Mathematics",  detail: "Practice"        },
-    Friday:    { subject: "Biology",      detail: "Diagrams"        },
-    Saturday:  null,
+    Thursday: { subject: "Mathematics", detail: "Practice" },
+    Friday: { subject: "Biology", detail: "Diagrams" },
+    Saturday: null,
   },
   "5:00 PM": {
-    Monday:    null,
-    Tuesday:   { subject: "Chemistry",    detail: "Past Papers"     },
-    Wednesday: { subject: "Biology",      detail: "Flash Cards"     },
-    Thursday:  { subject: "English",      detail: "Poetry"          },
-    Friday:    null,
-    Saturday:  { subject: "Mathematics",  detail: "Mock Test"       },
+    Monday: null,
+    Tuesday: { subject: "Chemistry", detail: "Past Papers" },
+    Wednesday: { subject: "Biology", detail: "Flash Cards" },
+    Thursday: { subject: "English", detail: "Poetry" },
+    Friday: null,
+    Saturday: { subject: "Mathematics", detail: "Mock Test" },
   },
 }
 
 const todaysSessions = [
   {
     subject: "Mathematics — Statistics",
-    detail:  "Chapter 7: Probability",
-    time:    "8:00 – 9:30 AM",
-    status:  "Done",
+    detail: "Chapter 7: Probability",
+    time: "8:00 – 9:30 AM",
+    status: "Done",
     statusColor: "text-green-500",
     dot: "bg-blue-500",
   },
   {
     subject: "Physics — Thermodynamics",
-    detail:  "Heat Transfer & Entropy",
-    time:    "10:00 – 11:30 AM",
-    status:  "Active",
+    detail: "Heat Transfer & Entropy",
+    time: "10:00 – 11:30 AM",
+    status: "Active",
     statusColor: "text-yellow-500",
     dot: "bg-sky-500",
   },
   {
     subject: "Chemistry — Organic Lab",
-    detail:  "Organic reactions write-up",
-    time:    "1:00 – 2:30 PM",
-    status:  "Soon",
+    detail: "Organic reactions write-up",
+    time: "1:00 – 2:30 PM",
+    status: "Soon",
     statusColor: "text-gray-400",
     dot: "bg-cyan-500",
   },
   {
     subject: "English — Essay Writing",
-    detail:  "Argumentative structure",
-    time:    "3:00 – 4:00 PM",
-    status:  "Soon",
+    detail: "Argumentative structure",
+    time: "3:00 – 4:00 PM",
+    status: "Soon",
     statusColor: "text-gray-400",
     dot: "bg-indigo-500",
   },
 ]
 
 const subjectPerformance = [
-  { name: "Mathematics", percent: 82, color: "bg-blue-500"   },
-  { name: "Physics",     percent: 74, color: "bg-sky-500"    },
-  { name: "Chemistry",   percent: 91, color: "bg-cyan-500"   },
-  { name: "Biology",     percent: 67, color: "bg-teal-500"   },
-  { name: "English",     percent: 78, color: "bg-indigo-500" },
+  { name: "Mathematics", percent: 82, color: "bg-blue-500" },
+  { name: "Physics", percent: 74, color: "bg-sky-500" },
+  { name: "Chemistry", percent: 91, color: "bg-cyan-500" },
+  { name: "Biology", percent: 67, color: "bg-teal-500" },
+  { name: "English", percent: 78, color: "bg-indigo-500" },
 ]
 
 const aiTips = [
   {
     icon: "🤖",
-    tip:    "Schedule Biology earlier in the day",
+    tip: "Schedule Biology earlier in the day",
     detail: "Your retention is 23% higher in morning sessions",
   },
   {
     icon: "⚙️",
-    tip:    "Add a 10-min break after Physics",
+    tip: "Add a 10-min break after Physics",
     detail: "Pomodoro pattern improves focus by 18%",
   },
   {
     icon: "🚀",
-    tip:    "Chemistry exam in 12 days",
+    tip: "Chemistry exam in 12 days",
     detail: "Increase revision sessions by 1 per day",
   },
 ]
 
 const upcomingDeadlines = [
-  { title: "Mathematics Mock Exam",  detail: "Chapter 7 — Statistics",        days: 3  },
-  { title: "Physics Assignment",     detail: "Thermodynamics report",          days: 5  },
-  { title: "Chemistry Lab Report",   detail: "Organic reactions write-up",     days: 8  },
-  { title: "English Essay Draft",    detail: "Argumentative essay - 1200w",    days: 12 },
+  { title: "Mathematics Mock Exam", detail: "Chapter 7 — Statistics", days: 3 },
+  { title: "Physics Assignment", detail: "Thermodynamics report", days: 5 },
+  { title: "Chemistry Lab Report", detail: "Organic reactions write-up", days: 8 },
+  { title: "English Essay Draft", detail: "Argumentative essay - 1200w", days: 12 },
 ]
 
 const legendItems = [
-  { label: "Mathematics", color: "bg-blue-500"   },
-  { label: "Physics",     color: "bg-sky-500"    },
-  { label: "Chemistry",   color: "bg-cyan-500"   },
-  { label: "Biology",     color: "bg-teal-500"   },
-  { label: "English",     color: "bg-indigo-500" },
-  { label: "Free Slot",   color: "bg-gray-200"   },
+  { label: "Mathematics", color: "bg-blue-500" },
+  { label: "Physics", color: "bg-sky-500" },
+  { label: "Chemistry", color: "bg-cyan-500" },
+  { label: "Biology", color: "bg-teal-500" },
+  { label: "English", color: "bg-indigo-500" },
+  { label: "Free Slot", color: "bg-gray-200" },
 ]
 
 // ── Component ─────────────────────────────────────────────
 function SchedulerPage() {
   const [intensity, setIntensity] = useState("Balanced (4–5 hrs/day)")
-  const [subject,   setSubject]   = useState("Mathematics")
-  const [examDate,  setExamDate]  = useState("2026-05-20")
+  const [subject, setSubject] = useState("Mathematics")
+  const [examDate, setExamDate] = useState("2026-05-20")
 
   return (
     <div className="space-y-5">
@@ -291,11 +294,11 @@ function SchedulerPage() {
                           <td key={day} className="py-1 px-1">
                             <div className={`rounded-lg py-2 px-2
                               min-h-[48px] ${subjectColors[cell.subject]
-                                || "bg-gray-100 border-l-4 border-gray-300"}`}>
+                              || "bg-gray-100 border-l-4 border-gray-300"}`}>
                               <p className={`font-body font-semibold
                                 text-[11px] leading-tight
                                 ${subjectTextColors[cell.subject]
-                                  || "text-gray-700"}`}>
+                                || "text-gray-700"}`}>
                                 {cell.subject}
                               </p>
                               {cell.detail && (
@@ -376,7 +379,7 @@ function SchedulerPage() {
                     text-xs px-3 py-2.5 rounded-lg border border-gray-200
                     focus:outline-none focus:border-[#4A7FA7]"
                 >
-                  {["Mathematics","Physics","Chemistry","Biology","English"].map(s => (
+                  {["Mathematics", "Physics", "Chemistry", "Biology", "English"].map(s => (
                     <option key={s}>{s}</option>
                   ))}
                 </select>
@@ -396,14 +399,13 @@ function SchedulerPage() {
                     focus:outline-none focus:border-[#4A7FA7]"
                 />
               </div>
-
-              <button className="w-full flex items-center justify-center
-                gap-2 bg-[#1A3D63] hover:bg-[#4A7FA7] text-white
-                font-body text-sm font-medium py-3 rounded-lg
-                transition-colors duration-200">
-                <Plus size={16} />
+              <Button
+                variant="primary"
+                fullWidth
+                icon={Plus}
+              >
                 Generate My Schedule
-              </button>
+              </Button>
             </div>
           </div>
 
@@ -454,32 +456,24 @@ function SchedulerPage() {
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
 
         {/* Subject Performance */}
-        <div className="bg-white rounded-2xl p-5 shadow-lg
-          border border-gray-100">
-          <h3 className="font-heading text-sm font-semibold
-            text-[#0A1931] mb-4">
+        <div className="bg-white rounded-2xl p-5 shadow-sm border border-gray-100">
+          <h3 className="font-heading text-sm font-semibold text-[#0A1931] mb-4">
             Subject Performance
           </h3>
           <div className="space-y-3">
             {subjectPerformance.map((item) => (
-              <div key={item.name}>
-                <div className="flex items-center justify-between mb-1">
-                  <span className="font-body text-xs text-gray-600">
-                    {item.name}
-                  </span>
-                  <span className="font-body text-xs font-semibold
-                    text-[#1A3D63]">
-                    {item.percent}%
-                  </span>
-                </div>
-                <div className="w-full bg-gray-100 rounded-full h-2">
-                  <div
-                    className={`${item.color} h-2 rounded-full
-                      transition-all duration-500`}
-                    style={{ width: `${item.percent}%` }}
-                  />
-                </div>
-              </div>
+              <ProgressBar
+                key={item.name}
+                value={item.percent}
+                label={item.name}
+                showPercent
+                color={
+                  item.name === "Mathematics" ? "primary" :
+                    item.name === "Physics" ? "accent" :
+                      item.name === "Chemistry" ? "success" :
+                        item.name === "Biology" ? "warning" : "purple"
+                }
+              />
             ))}
           </div>
         </div>

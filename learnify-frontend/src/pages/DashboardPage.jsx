@@ -1,34 +1,36 @@
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Cell } from "recharts"
 import { Send } from "lucide-react"
 import { useState } from "react"
+import Badge from "../components/common/Badge"
+import Button from "../components/common/Button"
 
 const statsData = [
-  { label: "Subjects",    value: "05" },
+  { label: "Subjects", value: "05" },
   { label: "Tasks Today", value: "05" },
-  { label: "Completed",   value: "15" },
+  { label: "Completed", value: "15" },
 ]
 
 const weeklyData = [
   { day: "Mon", value: 10 },
-  { day: "Tue", value: 4  },
+  { day: "Tue", value: 4 },
   { day: "Wed", value: 15 },
   { day: "Thu", value: 10 },
-  { day: "Fri", value: 3  },
+  { day: "Fri", value: 3 },
   { day: "Sat", value: 11 },
-  { day: "Sun", value: 8  },
+  { day: "Sun", value: 8 },
 ]
 
 const scheduledSubjects = [
-  { name: "Data Structures",  priority: "High",   dot: "bg-pink-400"  },
-  { name: "Machine Learning", priority: "Medium", dot: "bg-blue-400"  },
+  { name: "Data Structures", priority: "High", dot: "bg-pink-400" },
+  { name: "Machine Learning", priority: "Medium", dot: "bg-blue-400" },
 ]
 
 const calendar = {
   month: "January",
-  days: ["Mon","Tue","Wed","Thu","Fri","Sat","Sun"],
+  days: ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"],
   dates: [
-    [1,  2,  3,  4,  5,  6,  7 ],
-    [8,  9,  10, 11, 12, 13, 14],
+    [1, 2, 3, 4, 5, 6, 7],
+    [8, 9, 10, 11, 12, 13, 14],
     [15, 16, 17, 18, 19, 20, 21],
     [22, 23, 24, 25, 26, 27, 28],
     [29, 30, 31, null, null, null, null],
@@ -38,19 +40,7 @@ const calendar = {
   highlight: 2,
 }
 
-function PriorityBadge({ priority }) {
-  const colors = {
-    High:   "bg-green-500",
-    Medium: "bg-yellow-500",
-    Low:    "bg-gray-400",
-  }
-  return (
-    <span className={`text-xs font-body px-3 py-1 rounded-full
-      font-medium text-white ${colors[priority]}`}>
-      {priority}
-    </span>
-  )
-}
+
 
 function DashboardPage() {
   const [message, setMessage] = useState("")
@@ -100,7 +90,7 @@ function DashboardPage() {
                 axisLine={false}
                 tickLine={false}
                 domain={[0, 24]}
-                ticks={[0,2,4,6,8,10,12,14,16,18,20,22,24]}
+                ticks={[0, 2, 4, 6, 8, 10, 12, 14, 16, 18, 20, 22, 24]}
               />
               <Tooltip
                 contentStyle={{
@@ -112,7 +102,7 @@ function DashboardPage() {
                 }}
                 cursor={{ fill: "rgba(74,127,167,0.1)" }}
               />
-              <Bar dataKey="value" radius={[4,4,0,0]}>
+              <Bar dataKey="value" radius={[4, 4, 0, 0]}>
                 {weeklyData.map((entry, index) => (
                   <Cell
                     key={index}
@@ -162,10 +152,10 @@ function DashboardPage() {
                         date === calendar.today
                           ? "bg-red-500 text-[#1A3D63] font-bold"
                           : date === calendar.deadline
-                          ? "bg-yellow-400 text-[#1A3D63] font-bold"
-                          : date === calendar.highlight
-                          ? "bg-green-500 text-[#1A3D63] font-bold"
-                          : "text-[#B3CFE5] hover:bg-[#1A3D63]"
+                            ? "bg-yellow-400 text-[#1A3D63] font-bold"
+                            : date === calendar.highlight
+                              ? "bg-green-500 text-[#1A3D63] font-bold"
+                              : "text-[#B3CFE5] hover:bg-[#1A3D63]"
                       }`}
                   >
                     {date || ""}
@@ -192,7 +182,11 @@ function DashboardPage() {
                       {subject.name}
                     </span>
                   </div>
-                  <PriorityBadge priority={subject.priority} />
+                  <Badge
+                    variant={subject.priority === "High" ? "success" : "warning"}
+                    size="sm">
+                    {subject.priority}
+                  </Badge>
                 </div>
               ))}
             </div>
@@ -230,10 +224,7 @@ function DashboardPage() {
             className="flex-1 bg-transparent text-white
               placeholder-[#1A3D63]/30 font-body text-sm focus:outline-none"
           />
-          <button className="text-[#1A3D63] hover:text-[#4A7FA7]
-            transition-colors duration-200">
-            <Send size={18} />
-          </button>
+          <Button variant="ghost" icon={Send} size="sm" />
         </div>
       </div>
 

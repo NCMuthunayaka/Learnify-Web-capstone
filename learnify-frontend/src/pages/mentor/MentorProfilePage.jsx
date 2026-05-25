@@ -1,16 +1,17 @@
 import { useState } from "react"
 import { User, Mail, Phone, BookOpen, Briefcase, Save } from "lucide-react"
+import Button from "../../components/common/Button"
 
 const initialData = {
-  firstName:   "Kamal",
-  lastName:    "Fernando",
-  email:       "kamal.fernando@gmail.com",
-  phone:       "077 123 4567",
-  university:  "Sabaragamuwa University of Sri Lanka",
-  department:  "Department of Physical Sciences",
-  subject:     "Chemistry",
-  experience:  "8 Years",
-  bio:         "Experienced chemistry lecturer with a focus on organic chemistry and analytical methods.",
+  firstName: "Kamal",
+  lastName: "Fernando",
+  email: "kamal.fernando@gmail.com",
+  phone: "077 123 4567",
+  university: "Sabaragamuwa University of Sri Lanka",
+  department: "Department of Physical Sciences",
+  subject: "Chemistry",
+  experience: "8 Years",
+  bio: "Experienced chemistry lecturer with a focus on organic chemistry and analytical methods.",
 }
 
 const subjectOptions = ["Chemistry", "Physics", "Mathematics", "Biology", "English"]
@@ -47,8 +48,8 @@ function InputField({ label, icon: Icon, type = "text", value, onChange, name, d
 }
 
 function MentorProfilePage() {
-  const [formData, setFormData]   = useState(initialData)
-  const [saved, setSaved]         = useState(false)
+  const [formData, setFormData] = useState(initialData)
+  const [saved, setSaved] = useState(false)
   const [activeTab, setActiveTab] = useState("personal")
 
   function handleChange(e) {
@@ -104,7 +105,7 @@ function MentorProfilePage() {
           <button
             key={tab}
             onClick={() => setActiveTab(tab)}
-           className={`font-body text-sm font-medium px-5 py-2 rounded-lg transition-colors duration-200 
+            className={`font-body text-sm font-medium px-5 py-2 rounded-lg transition-colors duration-200 
             capitalize ${activeTab === tab ? "bg-[#1A3D63] text-white" : "bg-white text-gray-400 hover:text-[#1A3D63] border border-gray-200"}`}
           >
             {tab === "personal" ? "Personal Info" : "Professional Info"}
@@ -240,15 +241,9 @@ function MentorProfilePage() {
 
       {/* ── Save Button ── */}
       <div className="flex items-center gap-3">
-        <button
-          onClick={handleSave}
-          className="flex items-center gap-2 bg-[#1A3D63] text-white
-            font-body text-sm font-medium px-6 py-2.5 rounded-lg
-            hover:bg-[#4A7FA7] transition-colors duration-200"
-        >
-          <Save size={16} />
+        <Button variant="primary" icon={Save} onClick={handleSave}>
           Save Changes
-        </button>
+        </Button>
         {saved && (
           <span className="font-body text-sm text-green-500 font-medium">
             ✓ Changes saved successfully!
