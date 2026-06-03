@@ -1,6 +1,4 @@
 // src/pages/DashboardPage.jsx
-import { useState } from "react";
-import MainLayout from "../components/layout/MainLayout";
 import StatsCard from "../components/dashboard/StatsCard";
 import ProductivityChart from "../components/dashboard/ProductivityChart";
 import { DonutChart, SubjectProgress } from "../components/dashboard/DonutChart";
@@ -22,16 +20,8 @@ function SectionLabel({ children }) {
 }
 
 export default function DashboardPage() {
-  const [activeTab, setActiveTab] = useState("month");
-
   return (
-    <MainLayout
-      activeNav="dashboard"
-      navbarTitle="Progress & Analytics"
-      activeTab={activeTab}
-      onTabChange={setActiveTab}
-      userName="Nayana Chandupa"
-    >
+    <div>
       <div className="mb-7 flex flex-wrap items-end justify-between gap-3">
         <div>
           <h1
@@ -126,6 +116,6 @@ export default function DashboardPage() {
       <div className="mt-1">
         <AIInsights />
       </div>
-    </MainLayout>
+    </div>
   );
 }

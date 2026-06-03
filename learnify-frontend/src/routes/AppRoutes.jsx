@@ -1,13 +1,50 @@
-import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
-import DashboardPage from "../pages/DashboardPage";
+import { BrowserRouter, Routes, Route } from "react-router-dom"
+import MainLayout from "../components/layout/MainLayout"
+import LandingLayout from "../components/layout/LandingLayout"
 
-export default function AppRoutes() {
+// Pages
+import LandingPage from "../pages/LandingPage"    
+import DashboardPage from "../pages/DashboardPage"
+import SchedulerPage from "../pages/SchedulerPage"
+import AIChatPage from "../pages/AIChatPage"
+import ResourcesPage from "../pages/ResourcesPage"
+import FeedbackPage from "../pages/FeedbackPage"
+import ProfilePage from "../pages/ProfilePage"
+import LoginPage from "../pages/auth/LoginPage"
+import RegisterPage from "../pages/auth/RegisterPage"
+import MentorResourcesPage from "../pages/mentor/MentorResourcesPage"
+import MentorProfilePage from "../pages/mentor/MentorProfilePage"
+import NotificationsPage from "../pages/NotificationsPage"
+
+function AppRoutes() {
   return (
     <BrowserRouter>
       <Routes>
-        <Route path="/" element={<Navigate to="/dashboard" replace />} />
-        <Route path="/dashboard" element={<DashboardPage />} />
+
+        {/* Landing Page Routes — Light theme */}
+        <Route element={<LandingLayout />}>
+          <Route path="/" element={<LandingPage />} /> 
+        </Route>
+
+        <Route path="/login" element={<LoginPage />} />
+        <Route path="/register" element={<RegisterPage />} />
+
+        {/* Dashboard Routes — Dark theme with sidebar */}
+        <Route element={<MainLayout />}>
+          <Route path="/dashboard" element={<DashboardPage />} />
+          <Route path="/scheduler" element={<SchedulerPage />} />
+          <Route path="/ai-chat" element={<AIChatPage />} />
+          <Route path="/resources" element={<ResourcesPage />} />
+          <Route path="/feedback" element={<FeedbackPage />} />
+          <Route path="/profile" element={<ProfilePage />} />
+          <Route path="/mentor/resources" element={<MentorResourcesPage />} />
+          <Route path="/mentor/profile" element={<MentorProfilePage />} />
+          <Route path="/notifications" element={<NotificationsPage />} />
+        </Route>
+
       </Routes>
     </BrowserRouter>
-  );
+  )
 }
+
+export default AppRoutes

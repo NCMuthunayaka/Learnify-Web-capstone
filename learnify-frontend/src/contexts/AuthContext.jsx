@@ -1,72 +1,28 @@
-import { createContext, useContext, useEffect, useMemo, useState } from 'react';
+import { createContext, useState } from "react"
 
-const AuthContext = createContext(null);
-
-function readStoredAuth() {
-	if (typeof window === 'undefined') {
-		return { user: null, token: null };
-	}
-
-	try {
-		const rawUser = window.localStorage.getItem('learnify_user');
-		const token = window.localStorage.getItem('learnify_token');
-		return {
-			user: rawUser ? JSON.parse(rawUser) : null,
-			token,
-		};
-	} catch {
-		return { user: null, token: null };
-	}
-}
+export const AuthContext = createContext(null)
 
 export function AuthProvider({ children }) {
-	const [authState, setAuthState] = useState(readStoredAuth);
+  const [user, setUser] = useState(null)
+  const [token, setToken] = useState(
+    localStorage.getItem("access_token") || null
+  )
 
-	useEffect(() => {
-		if (typeof window === 'undefined') {
-			return;
-		}
+  function login(userData, accessToken) {
+    setUser(userData)
+    setToken(accessToken)
+    localStorage.setItem("access_token", accessToken)
+  }
 
-		if (authState.user) {
-			window.localStorage.setItem('learnify_user', JSON.stringify(authState.user));
-		} else {
-			window.localStorage.removeItem('learnify_user');
-		}
+  function logout() {
+    setUser(null)
+    setToken(null)
+    localStorage.clear()
+  }
 
-		if (authState.token) {
-			window.localStorage.setItem('learnify_token', authState.token);
-		} else {
-			window.localStorage.removeItem('learnify_token');
-		}
-	}, [authState]);
-
-	const value = useMemo(() => {
-		const login = ({ user, token }) => {
-			setAuthState({ user: user ?? null, token: token ?? null });
-		};
-
-		const logout = () => setAuthState({ user: null, token: null });
-
-		return {
-			user: authState.user,
-			token: authState.token,
-			isAuthenticated: Boolean(authState.token),
-			login,
-			logout,
-		};
-	}, [authState]);
-
-	return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
+  return (
+    <AuthContext.Provider value={{ user, token, login, logout }}>
+      {children}
+    </AuthContext.Provider>
+  )
 }
-
-export function useAuth() {
-	const context = useContext(AuthContext);
-
-	if (!context) {
-		throw new Error('useAuth must be used within an AuthProvider');
-	}
-
-	return context;
-}
-
-export default AuthContext;
