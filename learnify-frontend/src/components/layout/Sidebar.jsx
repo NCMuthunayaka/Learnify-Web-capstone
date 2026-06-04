@@ -4,6 +4,7 @@ import {
   Bot, BookOpen, HelpCircle, User, LogOut
 } from "lucide-react"
 import sidebarBg from "../../assets/images/sidebar_img.jpg"
+import learnify_logo from "../../assets/images/learnify_logo.png"
 
 const navItems = [
   { label: "Dashboard",    icon: LayoutDashboard, path: "/dashboard" },
@@ -35,9 +36,9 @@ function Sidebar({ isOpen }) {
         {/* Logo */}
         <div className="flex items-center gap-3 px-6 py-5
           border-b border-white/10">
-          <div className="w-10 h-10 bg-white/20 rounded-lg flex items-center
-            justify-center font-bold text-white border border-white/30">
-            L
+          <div className="w-10 h-10  bg-[#f6fafd] rounded-lg flex items-center
+            justify-center">
+            <img src={learnify_logo} alt="Learnify Logo" />
           </div>
           {isOpen && (
             <span className="font-semibold text-lg">Learnify</span>

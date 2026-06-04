@@ -1,4 +1,5 @@
 import { Link } from "react-router-dom"
+import learnify_logo from "../../assets/images/learnify_logo.png"
 
 const quickLinks = ["Features", "How it Works", "About", "Contact"]
 
@@ -11,9 +12,9 @@ function Footer() {
         {/* Brand */}
         <div className="space-y-3">
           <div className="flex items-center gap-2">
-            <div className="w-8 h-8 bg-[#4A7FA7] rounded-lg flex items-center
-              justify-center font-bold text-white">
-              L
+            <div className="w-8 h-8 bg-[#f6fafd] rounded-lg flex items-center
+              justify-center">
+               <img src={learnify_logo} alt="Learnify Logo" />
             </div>
             <span className="font-semibold text-lg">Learnify</span>
           </div>
