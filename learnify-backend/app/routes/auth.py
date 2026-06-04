@@ -1,5 +1,99 @@
-from flask import Blueprint
+from flask import Blueprint, request, jsonify
+from flask_jwt_extended import create_access_token, create_refresh_token, jwt_required, get_jwt_identity
+from app.services.auth_service import register_user, login_user
+from app.utils.response_utils import success_response, error_response
 
 bp = Blueprint("auth", __name__)
 
-# TODO: Add auth routes here
+
+# ── Register ──────────────────────────────────────────────
+@bp.route("/register", methods=["POST"])
+def register():
+    data = request.get_json()
+
+    # Validate required fields
+    required = ["name", "email", "password", "role"]
+    for field in required:
+        if not data.get(field):
+            return error_response("MISSING_FIELD", f"{field} is required", field, 400)
+
+    # Validate role
+    if data["role"] not in ["student", "mentor"]:
+        return error_response("INVALID_ROLE", "Role must be student or mentor", "role", 400)
+
+    # Register user
+    user, err = register_user(
+        name     = data["name"],
+        email    = data["email"],
+        password = data["password"],
+        role     = data["role"],
+    )
+
+    if err:
+        return error_response("REGISTRATION_FAILED", err, status=400)
+
+    # Generate tokens
+    access_token  = create_access_token(identity=str(user.id),
+                      additional_claims={"role": user.role})
+    refresh_token = create_refresh_token(identity=str(user.id))
+
+    return success_response(
+        data={
+            "user":          user.to_dict(),
+            "access_token":  access_token,
+            "refresh_token": refresh_token,
+        },
+        message="Registration successful",
+        status=201,
+    )
+
+
+# ── Login ─────────────────────────────────────────────────
+@bp.route("/login", methods=["POST"])
+def login():
+    data = request.get_json()
+
+    if not data.get("email") or not data.get("password"):
+        return error_response("MISSING_FIELD", "Email and password are required", status=400)
+
+    user, err = login_user(data["email"], data["password"])
+
+    if err:
+        return error_response("LOGIN_FAILED", err, status=401)
+
+    # Generate tokens
+    access_token  = create_access_token(identity=str(user.id),
+                      additional_claims={"role": user.role})
+    refresh_token = create_refresh_token(identity=str(user.id))
+
+    return success_response(
+        data={
+            "user":          user.to_dict(),
+            "access_token":  access_token,
+            "refresh_token": refresh_token,
+        },
+        message="Login successful",
+    )
+
+
+# ── Get Current User ──────────────────────────────────────
+@bp.route("/me", methods=["GET"])
+@jwt_required()
+def get_me():
+    from app.models.user import User
+    user_id = get_jwt_identity()
+    user    = User.query.get(user_id)
+
+    if not user:
+        return error_response("NOT_FOUND", "User not found", status=404)
+
+    return success_response(data=user.to_dict())
+
+
+# ── Refresh Token ─────────────────────────────────────────
+@bp.route("/refresh", methods=["POST"])
+@jwt_required(refresh=True)
+def refresh():
+    user_id      = get_jwt_identity()
+    access_token = create_access_token(identity=user_id)
+    return success_response(data={"access_token": access_token})
