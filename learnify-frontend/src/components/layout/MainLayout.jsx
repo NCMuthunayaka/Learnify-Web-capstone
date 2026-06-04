@@ -2,6 +2,7 @@ import { useState } from "react"
 import { Outlet } from "react-router-dom"
 import Sidebar from "./Sidebar"
 import Navbar from "./Navbar"
+import Footer from "./Footer"
 
 function MainLayout() {
   const [sidebarOpen, setSidebarOpen] = useState(true)
@@ -23,8 +24,11 @@ function MainLayout() {
         <Navbar onToggleSidebar={handleToggleSidebar} />
 
         {/* Page Content */}
-        <main className="flex-1 overflow-y-auto p-6 bg-[#F6FAFD]">
-          <Outlet />
+        <main className="flex-1 overflow-y-auto bg-[#F6FAFD] flex flex-col justify-between">
+          <div className="p-6 flex-1">
+            <Outlet />
+          </div>
+          <Footer />
         </main>
 
       </div>

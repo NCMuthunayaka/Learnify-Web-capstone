@@ -114,8 +114,8 @@ const ACTIVITY = [
 
 export function RecentActivity() {
   return (
-    <div className="h-full bg-white rounded-[18px] border border-[#D0E3F0] overflow-hidden shadow-[0_2px_8px_rgba(10,25,49,0.07)]">
-      <div className="px-6 py-4 border-b border-[#D0E3F0]">
+    <div className="flex-1 bg-white rounded-[18px] border border-[#D0E3F0] overflow-hidden shadow-[0_2px_8px_rgba(10,25,49,0.07)] flex flex-col">
+      <div className="px-6 py-4 border-b border-[#D0E3F0] shrink-0">
         <div className="text-[15px] font-bold text-[#0A1931]" style={{ fontFamily: "Poppins, sans-serif" }}>
           Recent Activity
         </div>
@@ -123,7 +123,7 @@ export function RecentActivity() {
           Your latest actions
         </div>
       </div>
-      <div className="px-6 divide-y divide-[#D0E3F0]">
+      <div className="px-6 divide-y divide-[#D0E3F0] flex-1 flex flex-col justify-center">
         {ACTIVITY.map((a, i) => (
           <div key={i} className="flex items-start gap-3 py-3">
             <div className={`w-[34px] h-[34px] rounded-[10px] flex items-center justify-center text-[15px] shrink-0 ${a.color}`}>
@@ -154,13 +154,13 @@ const LB_ENTRIES = [
   { rank: 3, rankClass: "text-[#b07040]", initials: "NF", name: "Nuha Farouk",      pts: "2,090", isMe: false },
   { rank: 4, rankClass: "text-[#4A7FA7]", initials: "DK", name: "You",              pts: "1,940", isMe: true  },
   { rank: 5, rankClass: "text-[#8AAABF]", initials: "KP", name: "Kasun Perera",     pts: "1,820", isMe: false },
-  { rank: 6, rankClass: "text-[#8AAABF]", initials: "LW", name: "Layla Wijeratne",  pts: "1,750", isMe: false },
 ];
 
 export function ClassLeaderboard({ entries = LB_ENTRIES }) {
+  const displayEntries = entries.slice(0, 5);
   return (
-    <div className="h-full bg-white rounded-[18px] border border-[#D0E3F0] overflow-hidden shadow-[0_2px_8px_rgba(10,25,49,0.07)]">
-      <div className="px-6 py-4 border-b border-[#D0E3F0]">
+    <div className="flex-1 bg-white rounded-[18px] border border-[#D0E3F0] overflow-hidden shadow-[0_2px_8px_rgba(10,25,49,0.07)] flex flex-col">
+      <div className="px-6 py-4 border-b border-[#D0E3F0] shrink-0">
         <div className="text-[15px] font-bold text-[#0A1931]" style={{ fontFamily: "Poppins, sans-serif" }}>
           Class Leaderboard
         </div>
@@ -168,8 +168,8 @@ export function ClassLeaderboard({ entries = LB_ENTRIES }) {
           Top students this month
         </div>
       </div>
-      <div className="px-5 py-4 flex flex-col gap-2">
-        {entries.map((e) => (
+      <div className="px-5 pt-4 pb-6 flex-1 flex flex-col justify-center gap-2">
+        {displayEntries.map((e) => (
           <div
             key={e.rank}
             className={`flex items-center gap-3 px-3 py-2 rounded-[11px] border transition-colors
@@ -272,8 +272,8 @@ export function MonthlyScoreChart() {
   }, []);
 
   return (
-    <div className="h-full bg-white rounded-[18px] border border-[#D0E3F0] overflow-hidden shadow-[0_2px_8px_rgba(10,25,49,0.07)]">
-      <div className="flex items-center justify-between px-6 py-4 border-b border-[#D0E3F0]">
+    <div className="h-full bg-white rounded-[18px] border border-[#D0E3F0] overflow-hidden shadow-[0_2px_8px_rgba(10,25,49,0.07)] flex flex-col">
+      <div className="flex items-center justify-between px-6 py-4 border-b border-[#D0E3F0] shrink-0">
         <div>
           <div className="text-[15px] font-bold text-[#0A1931]" style={{ fontFamily: "Poppins, sans-serif" }}>
             Monthly Score Trend
@@ -286,8 +286,10 @@ export function MonthlyScoreChart() {
           Full Report
         </button>
       </div>
-      <div className="px-6 py-5" style={{ height: 260 }}>
-        <canvas ref={canvasRef} />
+      <div className="flex-1 w-full relative min-h-[350px]">
+        <div className="absolute inset-0 px-6 py-5">
+          <canvas ref={canvasRef} />
+        </div>
       </div>
     </div>
   );
