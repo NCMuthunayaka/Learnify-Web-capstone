@@ -1,10 +1,15 @@
 import { useState } from "react"
 import { Link, useNavigate } from "react-router-dom"
+import { useDispatch, useSelector } from "react-redux"
+import { registerUser } from "../../store/authSlice"
 import backgroundImage from "../../assets/images/background.jpg"
 import { GraduationCap, Users } from "lucide-react"
 
 function RegisterPage() {
-  const navigate = useNavigate()
+  const navigate  = useNavigate()
+  const dispatch  = useDispatch()
+  const { loading, error: reduxError } = useSelector((state) => state.auth)
+
   const [formData, setFormData] = useState({
     firstName: "",
     lastName: "",
@@ -13,7 +18,8 @@ function RegisterPage() {
     confirmPassword: "",
     role: "",
   })
-  const [error, setError] = useState("")
+  const [localError, setLocalError] = useState("")
+  const error = localError || reduxError
 
   function handleChange(e) {
     setFormData({ ...formData, [e.target.name]: e.target.value })
@@ -23,29 +29,36 @@ function RegisterPage() {
     setFormData({ ...formData, role })
   }
 
-  function handleSubmit(e) {
+  async function handleSubmit(e) {
     e.preventDefault()
-    setError("")
+    setLocalError("")
 
-    // Validation
     if (!formData.firstName || !formData.lastName ||
         !formData.email || !formData.password ||
         !formData.confirmPassword) {
-      setError("Please fill in all fields")
+      setLocalError("Please fill in all fields")
       return
     }
     if (formData.password !== formData.confirmPassword) {
-      setError("Passwords do not match")
+      setLocalError("Passwords do not match")
       return
     }
     if (!formData.role) {
-      setError("Please select a role")
+      setLocalError("Please select a role")
       return
     }
 
-    // TODO: Connect to backend later
-    console.log("Register with:", formData)
-    navigate("/dashboard")
+    const result = await dispatch(registerUser({
+      firstName: formData.firstName,
+      lastName:  formData.lastName,
+      email:     formData.email,
+      password:  formData.password,
+      role:      formData.role,
+    }))
+
+    if (registerUser.fulfilled.match(result)) {
+      navigate("/dashboard")
+    }
   }
 
   return (
@@ -92,7 +105,6 @@ function RegisterPage() {
             REGISTER
           </h2>
 
-          {/* Error Message */}
           {error && (
             <p className="font-body text-xs text-red-400 text-center">
               {error}
@@ -210,14 +222,14 @@ function RegisterPage() {
               </div>
             </div>
 
-            {/* Register Button */}
             <button
               onClick={handleSubmit}
+              disabled={loading}
               className="w-full bg-[#4A7FA7] hover:bg-[#1A3D63] text-white
                 font-body text-sm font-medium py-3 rounded-lg
-                transition-colors duration-200"
+                transition-colors duration-200 disabled:opacity-60 disabled:cursor-not-allowed"
             >
-              Register
+              {loading ? "Registering..." : "Register"}
             </button>
 
           </div>
