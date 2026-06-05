@@ -407,28 +407,22 @@ function SchedulerPage() {
                           <td key={day} className="py-1 px-1">
                             <button
                               onClick={() => handleOpenModal(time, day, cell.subject, cell.detail)}
-                              className={`w-full text-left rounded-lg py-2 px-2 min-h-[58px] transition-all duration-200 hover:scale-[1.02] hover:shadow-md border-t-4 ${
-                                isCompleted
-                                  ? "border-t-green-500"
-                                  : isPartial
-                                  ? "border-t-amber-500"
-                                  : isSkipped
-                                  ? "border-t-red-500 opacity-60"
-                                  : "border-t-gray-300/40"
-                              } ${subjectColors[cell.subject] || "bg-gray-100"}`}
+                              className={`w-full text-left rounded-lg py-2 px-2 min-h-[58px] transition-all duration-200 hover:scale-[1.02] hover:shadow-md border border-transparent ${subjectColors[cell.subject] || "bg-gray-100"}`}
                             >
                               <p className={`font-body font-semibold text-[11px] leading-tight ${
                                 isSkipped
-                                  ? "line-through opacity-50 text-gray-700"
-                                  : subjectTextColors[cell.subject] || "text-gray-700"
-                              }`}>
+                                  ? "line-through opacity-50"
+                                  : ""
+                              } ${subjectTextColors[cell.subject] || "text-gray-700"}`}>
                                 {cell.subject}
                               </p>
                               {cell.detail && (
                                 <p className={`font-body text-[10px] leading-tight mt-0.5 ${
                                   isSkipped
-                                    ? "line-through opacity-40 text-gray-500"
-                                    : cell.subject === "Mathematics" || cell.subject === "Physics"
+                                    ? "line-through opacity-40"
+                                    : ""
+                                } ${
+                                  cell.subject === "Mathematics" || cell.subject === "Physics"
                                     ? "text-white/70"
                                     : "text-gray-500"
                                 }`}>
