@@ -5,6 +5,7 @@ import {
 } from "lucide-react"
 import sidebarBg from "../../assets/images/sidebar_img.jpg"
 import learnify_logo from "../../assets/images/learnify_logo.png"
+import { useAuth } from "../../hooks/useAuth"
 
 const studentNavItems = [
   { label: "Dashboard",    icon: LayoutDashboard, path: "/dashboard" },

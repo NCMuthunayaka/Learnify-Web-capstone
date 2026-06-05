@@ -49,21 +49,21 @@ const days = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"
 const timeSlots = ["8:00 AM", "10:00 AM", "12:00 PM", "1:00 PM", "3:00 PM", "5:00 PM"]
 
 const subjectColors = {
-  Mathematics: "bg-blue-100 border-l-4 border-blue-500",
-  Physics: "bg-sky-100 border-l-4 border-sky-500",
-  Chemistry: "bg-cyan-100 border-l-4 border-cyan-500",
-  Biology: "bg-teal-100 border-l-4 border-teal-500",
-  "English Lit": "bg-indigo-100 border-l-4 border-indigo-500",
-  English: "bg-indigo-100 border-l-4 border-indigo-500",
+  Mathematics: "bg-[#0D2440]",
+  Physics: "bg-[#2E5B82]",
+  Chemistry: "bg-[#EAF0F6]",
+  Biology: "bg-[#7BA7D7]",
+  "English Lit": "bg-[#C6D8EB]",
+  English: "bg-[#C6D8EB]",
 }
 
 const subjectTextColors = {
-  Mathematics: "text-blue-800",
-  Physics: "text-sky-800",
-  Chemistry: "text-cyan-800",
-  Biology: "text-teal-800",
-  "English Lit": "text-indigo-800",
-  English: "text-indigo-800",
+  Mathematics: "text-white",
+  Physics: "text-white",
+  Chemistry: "text-[#0D2440]",
+  Biology: "text-[#0D2440]",
+  "English Lit": "text-[#0D2440]",
+  English: "text-[#0D2440]",
 }
 
 const timetable = {
@@ -182,12 +182,12 @@ const upcomingDeadlines = [
 ]
 
 const legendItems = [
-  { label: "Mathematics", color: "bg-blue-500" },
-  { label: "Physics", color: "bg-sky-500" },
-  { label: "Chemistry", color: "bg-cyan-500" },
-  { label: "Biology", color: "bg-teal-500" },
-  { label: "English", color: "bg-indigo-500" },
-  { label: "Free Slot", color: "bg-gray-200" },
+  { label: "Mathematics", color: "bg-[#0D2440]" },
+  { label: "Physics",     color: "bg-[#2E5B82]" },
+  { label: "Chemistry",   color: "bg-[#EAF0F6] border border-gray-200" },
+  { label: "Biology",     color: "bg-[#7BA7D7]" },
+  { label: "English",     color: "bg-[#C6D8EB]" },
+  { label: "Free Slot",   color: "border border-dashed border-[#B3CFE5]" },
 ]
 
 // ── Component ─────────────────────────────────────────────
@@ -384,7 +384,9 @@ function SchedulerPage() {
                         if (!cell) {
                           return (
                             <td key={day} className="py-1 px-1">
-                              <div className="min-h-[58px]" />
+                              <div className="border border-dashed border-[#B3CFE5] rounded-lg py-4 text-center text-[#B3CFE5] font-body text-[10px] font-bold min-h-[58px] flex items-center justify-center bg-transparent">
+                                Free
+                              </div>
                             </td>
                           )
                         }
@@ -400,15 +402,7 @@ function SchedulerPage() {
                           <td key={day} className="py-1 px-1">
                             <button
                               onClick={() => handleOpenModal(time, day, cell.subject, cell.detail)}
-                              className={`w-full text-left rounded-lg py-2 px-2 min-h-[58px] transition-all duration-200 hover:scale-[1.02] hover:shadow-md border-2 ${
-                                isCompleted
-                                  ? "border-green-400/80 shadow-[0_0_8px_rgba(34,197,94,0.15)] bg-green-50/10"
-                                  : isPartial
-                                  ? "border-amber-400/80 shadow-[0_0_8px_rgba(245,158,11,0.15)] bg-amber-50/10"
-                                  : isSkipped
-                                  ? "border-red-300/60 opacity-50 bg-red-50/5"
-                                  : "border-transparent"
-                              } ${subjectColors[cell.subject] || "bg-gray-100 border-l-4 border-gray-300"}`}
+                              className={`w-full text-left rounded-lg py-2 px-2 min-h-[58px] transition-all duration-200 hover:scale-[1.02] hover:shadow-md border border-transparent ${subjectColors[cell.subject] || "bg-gray-100"}`}
                             >
                               <p className={`font-body font-semibold text-[11px] leading-tight ${
                                 isSkipped ? "line-through text-gray-400" : subjectTextColors[cell.subject] || "text-gray-700"
