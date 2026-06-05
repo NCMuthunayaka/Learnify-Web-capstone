@@ -4,6 +4,7 @@ import { useNavigate, useLocation } from "react-router-dom"
 import Avatar from "../common/Avatar"
 import Tooltip from "../common/Tooltip"
 import Badge from "../common/Badge"
+import { useAuth } from "../../hooks/useAuth"
 
 const pageTitles = {
   "/dashboard":        "Dashboard",
@@ -14,6 +15,7 @@ const pageTitles = {
   "/feedback":         "Feedback",
   "/profile":          "Profile",
   "/notifications":    "Notifications",
+  "/mentor/dashboard": "Mentor Dashboard",
   "/mentor/resources": "My Resources",
   "/mentor/profile":   "My Profile",
 }
@@ -43,7 +45,10 @@ function NotificationIcon({ type }) {
 }
 
 function Navbar({ onToggleSidebar }) {
-  const user     = { name: "Nirmal Chamara", role: "Student" }
+  const { user: authUser } = useAuth()
+  const user = authUser
+    ? { name: `${authUser.firstName} ${authUser.lastName}`, role: authUser.role === "mentor" ? "Mentor" : "Student" }
+    : { name: "Nirmal Chamara", role: "Student" }
   const navigate = useNavigate()
   const location = useLocation()
   const pageTitle = pageTitles[location.pathname] || "Dashboard"

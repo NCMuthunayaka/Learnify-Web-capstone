@@ -1,5 +1,5 @@
 import { useState } from "react"
-import { ChevronLeft, ChevronRight, Plus } from "lucide-react"
+import { ChevronLeft, ChevronRight, Plus, Sparkles } from "lucide-react"
 import { FaBookOpen, FaCheckCircle, FaClock, FaBullseye } from "react-icons/fa"
 import ProgressBar from "../components/common/ProgressBar"
 import Button from "../components/common/Button"
@@ -49,21 +49,21 @@ const days = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"
 const timeSlots = ["8:00 AM", "10:00 AM", "12:00 PM", "1:00 PM", "3:00 PM", "5:00 PM"]
 
 const subjectColors = {
-  Mathematics: "bg-blue-100 border-l-4 border-blue-500",
-  Physics: "bg-sky-100 border-l-4 border-sky-500",
-  Chemistry: "bg-cyan-100 border-l-4 border-cyan-500",
-  Biology: "bg-teal-100 border-l-4 border-teal-500",
-  "English Lit": "bg-indigo-100 border-l-4 border-indigo-500",
-  English: "bg-indigo-100 border-l-4 border-indigo-500",
+  Mathematics: "bg-[#0D2440]",
+  Physics: "bg-[#2E5B82]",
+  Chemistry: "bg-[#EAF0F6]",
+  Biology: "bg-[#7BA7D7]",
+  "English Lit": "bg-[#C6D8EB]",
+  English: "bg-[#C6D8EB]",
 }
 
 const subjectTextColors = {
-  Mathematics: "text-blue-800",
-  Physics: "text-sky-800",
-  Chemistry: "text-cyan-800",
-  Biology: "text-teal-800",
-  "English Lit": "text-indigo-800",
-  English: "text-indigo-800",
+  Mathematics: "text-white",
+  Physics: "text-white",
+  Chemistry: "text-[#0D2440]",
+  Biology: "text-[#0D2440]",
+  "English Lit": "text-[#0D2440]",
+  English: "text-[#0D2440]",
 }
 
 const timetable = {
@@ -182,12 +182,12 @@ const upcomingDeadlines = [
 ]
 
 const legendItems = [
-  { label: "Mathematics", color: "bg-blue-500" },
-  { label: "Physics", color: "bg-sky-500" },
-  { label: "Chemistry", color: "bg-cyan-500" },
-  { label: "Biology", color: "bg-teal-500" },
-  { label: "English", color: "bg-indigo-500" },
-  { label: "Free Slot", color: "bg-gray-200" },
+  { label: "Mathematics", color: "bg-[#0D2440]" },
+  { label: "Physics",     color: "bg-[#2E5B82]" },
+  { label: "Chemistry",   color: "bg-[#EAF0F6] border border-gray-200" },
+  { label: "Biology",     color: "bg-[#7BA7D7]" },
+  { label: "English",     color: "bg-[#C6D8EB]" },
+  { label: "Free Slot",   color: "border border-dashed border-[#B3CFE5]" },
 ]
 
 // ── Component ─────────────────────────────────────────────
@@ -196,17 +196,120 @@ function SchedulerPage() {
   const [subject, setSubject] = useState("Mathematics")
   const [examDate, setExamDate] = useState("2026-05-20")
 
+  // Timetable study status logs state (initialised with logs to sum to exactly 24.5h and 18 completed sessions)
+  const [timetableLogs, setTimetableLogs] = useState({
+    "8:00 AM-Monday": { status: "Completed", hours: 2.0 },
+    "10:00 AM-Monday": { status: "Partially Completed", hours: 1.5 },
+    "1:00 PM-Monday": { status: "Completed", hours: 2.0 },
+    "3:00 PM-Monday": { status: "Partially Completed", hours: 0.5 },
+    "10:00 AM-Tuesday": { status: "Completed", hours: 2.0 },
+    "1:00 PM-Tuesday": { status: "Partially Completed", hours: 1.0 },
+    "3:00 PM-Tuesday": { status: "Partially Completed", hours: 1.5 },
+    "5:00 PM-Tuesday": { status: "Partially Completed", hours: 1.0 },
+    "8:00 AM-Wednesday": { status: "Completed", hours: 2.0 },
+    "10:00 AM-Wednesday": { status: "Partially Completed", hours: 1.0 },
+    "1:00 PM-Wednesday": { status: "Partially Completed", hours: 1.5 },
+    "5:00 PM-Wednesday": { status: "Partially Completed", hours: 1.0 },
+    "10:00 AM-Thursday": { status: "Partially Completed", hours: 1.5 },
+    "1:00 PM-Thursday": { status: "Completed", hours: 2.0 },
+    "3:00 PM-Thursday": { status: "Partially Completed", hours: 1.0 },
+    "5:00 PM-Thursday": { status: "Partially Completed", hours: 1.0 },
+    "8:00 AM-Friday": { status: "Partially Completed", hours: 1.5 },
+    "3:00 PM-Friday": { status: "Partially Completed", hours: 0.5 },
+  })
+
+  // Modal control states
+  const [isModalOpen, setIsModalOpen] = useState(false)
+  const [selectedSlot, setSelectedSlot] = useState(null)
+  const [tempStatus, setTempStatus] = useState("Completed") // "Completed", "Partially Completed", "Skipped"
+  const [tempHours, setTempHours] = useState(2.0)
+
+  // Open modal handler
+  function handleOpenModal(time, day, subject, detail) {
+    const slotKey = `${time}-${day}`
+    const existingLog = timetableLogs[slotKey] || { status: "Untracked", hours: 0 }
+    
+    setSelectedSlot({ time, day, subject, detail, key: slotKey })
+    setTempStatus(existingLog.status === "Untracked" ? "Completed" : existingLog.status)
+    setTempHours(existingLog.status === "Untracked" ? 2.0 : existingLog.hours)
+    setIsModalOpen(true)
+  }
+
+  // Save progress handler
+  function handleSaveProgress() {
+    if (!selectedSlot) return
+    
+    const finalHours = tempStatus === "Completed" ? 2.0 : tempStatus === "Skipped" ? 0 : tempHours
+    
+    setTimetableLogs({
+      ...timetableLogs,
+      [selectedSlot.key]: {
+        status: tempStatus,
+        hours: finalHours
+      }
+    })
+    setIsModalOpen(false)
+  }
+
+  // Dynamic header stats calculations
+  const totalHours = Object.values(timetableLogs).reduce((sum, log) => sum + log.hours, 0)
+  const completedSessionsCount = Object.values(timetableLogs).filter(log => log.hours > 0).length
+
+  const dynamicStats = [
+    {
+      icon: FaBookOpen,
+      iconColor: "text-blue-500",
+      iconBg: "bg-blue-50",
+      label: "Study Hours This Week",
+      value: `${totalHours.toFixed(1)}h`,
+      sub: "↑ 3.2h vs last week",
+      subColor: "text-green-500",
+    },
+    {
+      icon: FaCheckCircle,
+      iconColor: "text-green-500",
+      iconBg: "bg-green-50",
+      label: "Sessions Completed",
+      value: `${completedSessionsCount}`,
+      sub: `${Math.round((completedSessionsCount / 22) * 100)}% completion rate`,
+      subColor: "text-gray-400",
+    },
+    {
+      icon: FaClock,
+      iconColor: "text-orange-500",
+      iconBg: "bg-orange-50",
+      label: "Upcoming Deadlines",
+      value: "4",
+      sub: "2 due this week",
+      subColor: "text-gray-400",
+    },
+    {
+      icon: FaBullseye,
+      iconColor: "text-purple-500",
+      iconBg: "bg-purple-50",
+      label: "Focus Score",
+      value: `${completedSessionsCount > 0 ? Math.min(100, Math.round(91 * (completedSessionsCount / 18))) : 0}%`,
+      sub: "Excellent consistency",
+      subColor: "text-green-500",
+    },
+  ]
+
   return (
-    <div className="space-y-5">
+    <div className="space-y-5 relative">
 
       {/* ── Stats Row ── */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-        {statsData.map((stat) => {
+        {dynamicStats.map((stat, idx) => {
           const Icon = stat.icon
+          const topBorderColors = [
+            "border-t-[#2E5B82]",
+            "border-t-green-500",
+            "border-t-orange-500",
+            "border-t-purple-500"
+          ]
           return (
             <div key={stat.label}
-              className="bg-white rounded-2xl px-5 py-4 shadow-lg
-                border border-gray-100">
+              className={`bg-white rounded-2xl px-5 py-4 shadow-lg border-t-4 ${topBorderColors[idx]} border-x border-b border-gray-100`}>
               <div className={`w-10 h-10 rounded-xl ${stat.iconBg}
                 flex items-center justify-center mb-3`}>
                 <Icon size={20} className={stat.iconColor} />
@@ -286,28 +389,93 @@ function SchedulerPage() {
                         if (!cell) {
                           return (
                             <td key={day} className="py-1 px-1">
-                              <div className="min-h-[48px]" />
+                              <div className="border border-dashed border-[#B3CFE5] rounded-lg py-4 text-center text-[#B3CFE5] font-body text-[10px] font-bold min-h-[58px] flex items-center justify-center bg-transparent">
+                                Free
+                              </div>
                             </td>
                           )
                         }
+
+                        const logKey = `${time}-${day}`
+                        const log = timetableLogs[logKey]
+                        const hasLogged = !!log
+                        const isCompleted = log?.status === "Completed"
+                        const isPartial = log?.status === "Partially Completed"
+                        const isSkipped = log?.status === "Skipped"
+
                         return (
                           <td key={day} className="py-1 px-1">
-                            <div className={`rounded-lg py-2 px-2
-                              min-h-[48px] ${subjectColors[cell.subject]
-                              || "bg-gray-100 border-l-4 border-gray-300"}`}>
-                              <p className={`font-body font-semibold
-                                text-[11px] leading-tight
-                                ${subjectTextColors[cell.subject]
-                                || "text-gray-700"}`}>
+                            <button
+                              onClick={() => handleOpenModal(time, day, cell.subject, cell.detail)}
+                              className={`w-full text-left rounded-lg py-2 px-2 min-h-[58px] transition-all duration-200 hover:scale-[1.02] hover:shadow-md border-t-4 ${
+                                isCompleted
+                                  ? "border-t-green-500"
+                                  : isPartial
+                                  ? "border-t-amber-500"
+                                  : isSkipped
+                                  ? "border-t-red-500 opacity-60"
+                                  : "border-t-gray-300/40"
+                              } ${subjectColors[cell.subject] || "bg-gray-100"}`}
+                            >
+                              <p className={`font-body font-semibold text-[11px] leading-tight ${
+                                isSkipped
+                                  ? "line-through opacity-50 text-gray-700"
+                                  : subjectTextColors[cell.subject] || "text-gray-700"
+                              }`}>
                                 {cell.subject}
                               </p>
                               {cell.detail && (
-                                <p className="font-body text-[10px]
-                                  text-gray-500 leading-tight mt-0.5">
+                                <p className={`font-body text-[10px] leading-tight mt-0.5 ${
+                                  isSkipped
+                                    ? "line-through opacity-40 text-gray-500"
+                                    : cell.subject === "Mathematics" || cell.subject === "Physics"
+                                    ? "text-white/70"
+                                    : "text-gray-500"
+                                }`}>
                                   {cell.detail}
                                 </p>
                               )}
-                            </div>
+
+                              {/* Progress Status Indicator */}
+                              <div className="mt-2 flex items-center gap-1">
+                                {isCompleted && (
+                                  <span className={`text-[9px] font-bold px-1.5 py-0.5 rounded flex items-center gap-0.5 ${
+                                    cell.subject === "Mathematics" || cell.subject === "Physics"
+                                      ? "bg-green-500/20 text-green-300"
+                                      : "bg-green-100 text-green-700"
+                                  }`}>
+                                    ✓ 2.0h
+                                  </span>
+                                )}
+                                {isPartial && (
+                                  <span className={`text-[9px] font-bold px-1.5 py-0.5 rounded flex items-center gap-0.5 ${
+                                    cell.subject === "Mathematics" || cell.subject === "Physics"
+                                      ? "bg-amber-500/20 text-amber-300"
+                                      : "bg-amber-100 text-amber-700"
+                                  }`}>
+                                    ◷ {log.hours}h
+                                  </span>
+                                )}
+                                {isSkipped && (
+                                  <span className={`text-[9px] font-bold px-1.5 py-0.5 rounded flex items-center gap-0.5 ${
+                                    cell.subject === "Mathematics" || cell.subject === "Physics"
+                                      ? "bg-red-500/20 text-red-300"
+                                      : "bg-red-100 text-red-700"
+                                  }`}>
+                                    ✗ Skipped
+                                  </span>
+                                )}
+                                {!hasLogged && (
+                                  <span className={`text-[9px] font-medium px-1.5 py-0.5 rounded border ${
+                                    cell.subject === "Mathematics" || cell.subject === "Physics"
+                                      ? "bg-white/10 text-white/40 border-white/10 hover:text-white/70"
+                                      : "bg-gray-100 text-gray-400 border-gray-200 hover:text-gray-600"
+                                  }`}>
+                                    Track
+                                  </span>
+                                )}
+                              </div>
+                            </button>
                           </td>
                         )
                       })
@@ -336,30 +504,24 @@ function SchedulerPage() {
         <div className="space-y-4">
 
           {/* Auto Generate */}
-          <div className="bg-white rounded-2xl p-5 shadow-lg
-            border border-gray-100">
-            <h3 className="font-heading text-sm font-semibold
-              text-[#0A1931] mb-1">
+          <div className="bg-gradient-to-br from-[#1A3D63] to-[#0A1931] text-white rounded-2xl p-5 shadow-lg border border-white/10">
+            <h3 className="font-heading text-sm font-semibold mb-1">
               Auto-Generate Timetable
             </h3>
-            <p className="font-body text-xs text-gray-400 mb-4
-              leading-relaxed">
+            <p className="font-body text-xs text-[#B3CFE5] mb-4 leading-relaxed">
               Let AI build the perfect study schedule based on
               your subjects, difficulty & deadlines.
             </p>
 
             <div className="space-y-3">
               <div>
-                <label className="font-body text-xs text-gray-500
-                  mb-1 block">
+                <label className="font-body text-xs text-[#B3CFE5] mb-1 block font-semibold">
                   Study Intensity
                 </label>
                 <select
                   value={intensity}
                   onChange={(e) => setIntensity(e.target.value)}
-                  className="w-full bg-white text-gray-700 font-body
-                    text-xs px-3 py-2.5 rounded-lg border border-gray-200
-                    focus:outline-none focus:border-[#4A7FA7]"
+                  className="w-full bg-[#0A1931] text-white font-body text-xs px-3 py-2.5 rounded-lg border border-white/10 focus:outline-none focus:border-[#4A7FA7] transition-colors"
                 >
                   <option>Light (2–3 hrs/day)</option>
                   <option>Balanced (4–5 hrs/day)</option>
@@ -368,16 +530,13 @@ function SchedulerPage() {
               </div>
 
               <div>
-                <label className="font-body text-xs text-gray-500
-                  mb-1 block">
+                <label className="font-body text-xs text-[#B3CFE5] mb-1 block font-semibold">
                   Focus subject
                 </label>
                 <select
                   value={subject}
                   onChange={(e) => setSubject(e.target.value)}
-                  className="w-full bg-white text-gray-700 font-body
-                    text-xs px-3 py-2.5 rounded-lg border border-gray-200
-                    focus:outline-none focus:border-[#4A7FA7]"
+                  className="w-full bg-[#0A1931] text-white font-body text-xs px-3 py-2.5 rounded-lg border border-white/10 focus:outline-none focus:border-[#4A7FA7] transition-colors"
                 >
                   {["Mathematics", "Physics", "Chemistry", "Biology", "English"].map(s => (
                     <option key={s}>{s}</option>
@@ -386,26 +545,23 @@ function SchedulerPage() {
               </div>
 
               <div>
-                <label className="font-body text-xs text-gray-500
-                  mb-1 block">
+                <label className="font-body text-xs text-[#B3CFE5] mb-1 block font-semibold">
                   Exam date
                 </label>
                 <input
                   type="date"
                   value={examDate}
                   onChange={(e) => setExamDate(e.target.value)}
-                  className="w-full bg-white text-gray-700 font-body
-                    text-xs px-3 py-2.5 rounded-lg border border-gray-200
-                    focus:outline-none focus:border-[#4A7FA7]"
+                  className="w-full bg-[#0A1931] text-white font-body text-xs px-3 py-2.5 rounded-lg border border-white/10 focus:outline-none focus:border-[#4A7FA7] transition-colors"
                 />
               </div>
-              <Button
-                variant="primary"
-                fullWidth
-                icon={Plus}
+              <button
+                onClick={() => {}}
+                className="w-full bg-[#EAF0F6] hover:bg-[#CBDDF0] text-[#0D2440] font-body text-xs font-bold py-2.5 rounded-lg shadow-sm transition-colors duration-200 flex items-center justify-center gap-1.5 border-none"
               >
+                <Sparkles size={14} />
                 Generate My Schedule
-              </Button>
+              </button>
             </div>
           </div>
 
@@ -538,6 +694,160 @@ function SchedulerPage() {
         </div>
 
       </div>
+
+      {/* ── 4. Track Slot Progress Modal ── */}
+      {isModalOpen && selectedSlot && (
+        <div className="fixed inset-0 bg-[#0A1931]/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+          <div className="bg-white rounded-2xl max-w-sm w-full p-6 shadow-2xl border border-gray-100 animate-in fade-in zoom-in duration-200">
+            <h3 className="font-heading text-sm font-bold text-[#0A1931] border-b border-gray-50 pb-3">
+              Track Study Progress
+            </h3>
+            
+            <div className="space-y-4 pt-4 font-body text-xs text-gray-600">
+              <div>
+                <span className="text-[10px] uppercase font-bold text-[#4A7FA7] tracking-wider block">Subject</span>
+                <p className="font-heading text-sm font-bold text-[#1A3D63] mt-0.5">
+                  {selectedSlot.subject}
+                </p>
+                <p className="text-[11px] text-gray-400 font-medium">{selectedSlot.detail}</p>
+              </div>
+
+              <div className="grid grid-cols-2 gap-3 bg-[#F6FAFD] p-3 rounded-xl border border-gray-100">
+                <div>
+                  <span className="text-[10px] uppercase font-bold text-gray-400 tracking-wider block">Day</span>
+                  <p className="font-bold text-gray-700 mt-0.5">{selectedSlot.day}</p>
+                </div>
+                <div>
+                  <span className="text-[10px] uppercase font-bold text-gray-400 tracking-wider block">Time Slot</span>
+                  <p className="font-bold text-gray-700 mt-0.5">{selectedSlot.time}</p>
+                </div>
+              </div>
+
+              {/* Status Choices Card list */}
+              <div className="space-y-2">
+                <span className="text-[10px] uppercase font-bold text-gray-400 tracking-wider block">How did you do?</span>
+                <div className="flex flex-col gap-2">
+                  
+                  {/* Option 1: Completed */}
+                  <button
+                    onClick={() => {
+                      setTempStatus("Completed")
+                      setTempHours(2.0)
+                    }}
+                    className={`flex items-center gap-3 p-3 rounded-xl border text-left transition-all duration-200 ${
+                      tempStatus === "Completed"
+                        ? "bg-green-50/50 border-green-300 text-green-800 shadow-sm"
+                        : "bg-white border-gray-100 text-gray-500 hover:border-gray-200"
+                    }`}
+                  >
+                    <span className={`w-5 h-5 rounded-full border flex items-center justify-center font-bold text-xs ${
+                      tempStatus === "Completed" ? "bg-green-500 border-green-500 text-white" : "border-gray-200"
+                    }`}>
+                      {tempStatus === "Completed" && "✓"}
+                    </span>
+                    <div className="flex-1 min-w-0">
+                      <p className="font-bold text-xs">Completed Completely</p>
+                      <p className="text-[10px] text-gray-400 mt-0.5 leading-tight">Studied the entire session (2.0 hrs)</p>
+                    </div>
+                  </button>
+
+                  {/* Option 2: Partially Completed */}
+                  <button
+                    onClick={() => {
+                      setTempStatus("Partially Completed")
+                      if (tempHours === 2.0 || tempHours === 0) setTempHours(1.0)
+                    }}
+                    className={`flex items-center gap-3 p-3 rounded-xl border text-left transition-all duration-200 ${
+                      tempStatus === "Partially Completed"
+                        ? "bg-amber-50/50 border-amber-300 text-amber-800 shadow-sm"
+                        : "bg-white border-gray-100 text-gray-500 hover:border-gray-200"
+                    }`}
+                  >
+                    <span className={`w-5 h-5 rounded-full border flex items-center justify-center font-bold text-xs ${
+                      tempStatus === "Partially Completed" ? "bg-amber-500 border-amber-500 text-white" : "border-gray-200"
+                    }`}>
+                      {tempStatus === "Partially Completed" && "◷"}
+                    </span>
+                    <div className="flex-1 min-w-0">
+                      <p className="font-bold text-xs">Partially Completed</p>
+                      <p className="text-[10px] text-gray-400 mt-0.5 leading-tight">Studied for a portion of the session</p>
+                    </div>
+                  </button>
+
+                  {/* Option 3: Skipped */}
+                  <button
+                    onClick={() => {
+                      setTempStatus("Skipped")
+                      setTempHours(0)
+                    }}
+                    className={`flex items-center gap-3 p-3 rounded-xl border text-left transition-all duration-200 ${
+                      tempStatus === "Skipped"
+                        ? "bg-red-50/50 border-red-300 text-red-800 shadow-sm"
+                        : "bg-white border-gray-100 text-gray-500 hover:border-gray-200"
+                    }`}
+                  >
+                    <span className={`w-5 h-5 rounded-full border flex items-center justify-center font-bold text-xs ${
+                      tempStatus === "Skipped" ? "bg-red-500 border-red-500 text-white" : "border-gray-200"
+                    }`}>
+                      {tempStatus === "Skipped" && "✗"}
+                    </span>
+                    <div className="flex-1 min-w-0">
+                      <p className="font-bold text-xs">Skipped / Did not study</p>
+                      <p className="text-[10px] text-gray-400 mt-0.5 leading-tight">Was not able to study this session (0 hrs)</p>
+                    </div>
+                  </button>
+
+                </div>
+              </div>
+
+              {/* Slider (shown only if status is Partial) */}
+              {tempStatus === "Partially Completed" && (
+                <div className="space-y-2 bg-amber-50/30 p-3 rounded-xl border border-amber-100/40 animate-in slide-in-from-top-2 duration-200 mt-3">
+                  <div className="flex justify-between items-center">
+                    <span className="text-[10px] uppercase font-bold text-amber-800 tracking-wider">Specify study time</span>
+                    <span className="font-heading text-xs font-bold text-amber-800 bg-amber-100 px-2 py-0.5 rounded border border-amber-200">
+                      {tempHours} hrs / 2.0 hrs max
+                    </span>
+                  </div>
+                  <input
+                    type="range"
+                    min="0.25"
+                    max="2.0"
+                    step="0.25"
+                    value={tempHours}
+                    onChange={(e) => setTempHours(parseFloat(e.target.value))}
+                    className="w-full h-1.5 bg-gray-200 rounded-lg appearance-none cursor-pointer accent-amber-500"
+                  />
+                  <div className="flex justify-between text-[9px] text-gray-400 font-semibold px-0.5 mt-1">
+                    <span>15 mins</span>
+                    <span>1 hour</span>
+                    <span>2 hours</span>
+                  </div>
+                </div>
+              )}
+
+            </div>
+
+            {/* Actions */}
+            <div className="flex items-center gap-3 pt-6 border-t border-gray-50 mt-6">
+              <button
+                onClick={() => setIsModalOpen(false)}
+                className="flex-1 border border-gray-200 text-gray-500 hover:bg-gray-50 font-body text-xs font-semibold py-2.5 px-4 rounded-xl transition-colors duration-200"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleSaveProgress}
+                className="flex-1 bg-[#0A1931] hover:bg-[#1A3D63] text-white font-body text-xs font-semibold py-2.5 px-4 rounded-xl shadow-sm transition-colors duration-200"
+              >
+                Save Progress
+              </button>
+            </div>
+
+          </div>
+        </div>
+      )}
+
     </div>
   )
 }
