@@ -4,36 +4,34 @@ import { useNavigate, useLocation } from "react-router-dom"
 import Avatar from "../common/Avatar"
 import Tooltip from "../common/Tooltip"
 import Badge from "../common/Badge"
-import { useAuth } from "../../hooks/useAuth"
+import {
+  getNotifications,
+  markAsRead,
+  markAllAsRead,
+} from "../../api/notificationsApi"
 
 const pageTitles = {
   "/dashboard":        "Dashboard",
   "/scheduler":        "Study Scheduler",
   "/progress":         "Progress",
   "/ai-chat":          "AI Assistant",
-  "/resources":        "Study Materials",
+  "/resources":        "Study Resources",
   "/feedback":         "Feedback",
   "/profile":          "Profile",
   "/notifications":    "Notifications",
-  "/mentor/dashboard": "Mentor Dashboard",
   "/mentor/resources": "My Resources",
   "/mentor/profile":   "My Profile",
 }
 
-const initialNotifications = [
-  { id: 1, type: "deadline", title: "Mathematics Mock Exam",   message: "Due in 3 days — Chapter 7: Statistics",              time: "2 min ago",  read: false },
-  { id: 2, type: "session",  title: "Study Session Starting",  message: "Physics — Thermodynamics starts in 30 minutes",       time: "25 min ago", read: false },
-  { id: 3, type: "resource", title: "New Resource Uploaded",   message: "Mr. Fernando uploaded Organic Chemistry notes",       time: "1 hr ago",   read: false },
-  { id: 4, type: "system",   title: "Schedule Generated",      message: "Your weekly timetable has been auto-generated",       time: "3 hrs ago",  read: true  },
-  { id: 5, type: "deadline", title: "Physics Assignment",      message: "Due in 5 days — Thermodynamics report",               time: "5 hrs ago",  read: true  },
-]
-
+// ── Notification Icon ─────────────────────────────────────
 function NotificationIcon({ type }) {
   const config = {
-    deadline: { icon: Clock,        bg: "bg-red-100",    color: "text-red-500"    },
-    session:  { icon: BookOpen,     bg: "bg-blue-100",   color: "text-blue-500"   },
-    resource: { icon: BookOpen,     bg: "bg-green-100",  color: "text-green-500"  },
-    system:   { icon: AlertCircle,  bg: "bg-purple-100", color: "text-purple-500" },
+    deadline:     { icon: Clock,       bg: "bg-red-100",    color: "text-red-500"    },
+    session:      { icon: BookOpen,    bg: "bg-blue-100",   color: "text-blue-500"   },
+    resource:     { icon: BookOpen,    bg: "bg-green-100",  color: "text-green-500"  },
+    system:       { icon: AlertCircle, bg: "bg-purple-100", color: "text-purple-500" },
+    mentor_reply: { icon: AlertCircle, bg: "bg-yellow-100", color: "text-yellow-500" },
+    reminder:     { icon: Clock,       bg: "bg-orange-100", color: "text-orange-500" },
   }
   const { icon: Icon, bg, color } = config[type] || config.system
   return (
@@ -45,19 +43,50 @@ function NotificationIcon({ type }) {
 }
 
 function Navbar({ onToggleSidebar }) {
-  const { user: authUser } = useAuth()
-  const user = authUser
-    ? { name: `${authUser.firstName} ${authUser.lastName}`, role: authUser.role === "mentor" ? "Mentor" : "Student" }
-    : { name: "Nirmal Chamara", role: "Student" }
-  const navigate = useNavigate()
-  const location = useLocation()
-  const pageTitle = pageTitles[location.pathname] || "Dashboard"
-
-  const [notifications, setNotifications] = useState(initialNotifications)
-  const [showDropdown, setShowDropdown]   = useState(false)
+  const navigate    = useNavigate()
+  const location    = useLocation()
+  const pageTitle   = pageTitles[location.pathname] || "Dashboard"
   const dropdownRef = useRef(null)
-  const unreadCount = notifications.filter(n => !n.read).length
 
+  const [notifications, setNotifications] = useState([])
+  const [unreadCount, setUnreadCount]     = useState(0)
+  const [showDropdown, setShowDropdown]   = useState(false)
+  const [user, setUser]                   = useState({ name: "", role: "" })
+
+  // ── Fetch notifications on mount ──────────────────────
+  useEffect(() => {
+    fetchNotifications()
+    fetchUser()
+  }, [])
+
+  async function fetchNotifications() {
+    try {
+      const response = await getNotifications()
+      const data     = response.data
+      setNotifications(data.notifications || [])
+      setUnreadCount(data.unread_count   || 0)
+    } catch (err) {
+      console.error("Failed to fetch notifications:", err)
+    }
+  }
+
+  async function fetchUser() {
+    try {
+      // Get user from localStorage token
+      const token = localStorage.getItem("access_token")
+      if (!token) return
+
+      // Decode JWT payload to get user info
+      const payload = JSON.parse(atob(token.split(".")[1]))
+      const { default: api } = await import("../../api/axiosInstance")
+      const response = await api.get("/auth/me")
+      setUser(response.data.data)
+    } catch (err) {
+      console.error("Failed to fetch user:", err)
+    }
+  }
+
+  // Close dropdown on outside click
   useEffect(() => {
     function handleClickOutside(e) {
       if (dropdownRef.current && !dropdownRef.current.contains(e.target)) {
@@ -68,14 +97,26 @@ function Navbar({ onToggleSidebar }) {
     return () => document.removeEventListener("mousedown", handleClickOutside)
   }, [])
 
-  function handleMarkAllRead() {
-    setNotifications(notifications.map(n => ({ ...n, read: true })))
+  async function handleMarkAllRead() {
+    try {
+      await markAllAsRead()
+      setNotifications(notifications.map(n => ({ ...n, is_read: true })))
+      setUnreadCount(0)
+    } catch (err) {
+      console.error("Failed to mark all as read:", err)
+    }
   }
 
-  function handleMarkRead(id) {
-    setNotifications(notifications.map(n =>
-      n.id === id ? { ...n, read: true } : n
-    ))
+  async function handleMarkRead(id) {
+    try {
+      await markAsRead(id)
+      setNotifications(notifications.map(n =>
+        n.id === id ? { ...n, is_read: true } : n
+      ))
+      setUnreadCount(prev => Math.max(0, prev - 1))
+    } catch (err) {
+      console.error("Failed to mark as read:", err)
+    }
   }
 
   return (
@@ -105,8 +146,7 @@ function Navbar({ onToggleSidebar }) {
           <Tooltip text="Notifications" position="bottom">
             <button
               onClick={() => setShowDropdown(!showDropdown)}
-              className="relative p-2 rounded-lg hover:bg-white/10
-                transition-colors"
+              className="relative p-2 rounded-lg hover:bg-white/10 transition-colors"
             >
               <Bell size={20} />
               {unreadCount > 0 && (
@@ -133,9 +173,7 @@ function Navbar({ onToggleSidebar }) {
                     Notifications
                   </h3>
                   {unreadCount > 0 && (
-                    <Badge variant="danger" size="sm">
-                      {unreadCount}
-                    </Badge>
+                    <Badge variant="danger" size="sm">{unreadCount}</Badge>
                   )}
                 </div>
                 {unreadCount > 0 && (
@@ -151,43 +189,48 @@ function Navbar({ onToggleSidebar }) {
               </div>
 
               <div className="max-h-80 overflow-y-auto">
-                {notifications.map((notification) => (
-                  <div
-                    key={notification.id}
-                    onClick={() => handleMarkRead(notification.id)}
-                    className={`flex items-start gap-3 px-4 py-3
-                      border-b border-gray-50 cursor-pointer
-                      hover:bg-gray-50 transition-colors
-                      ${!notification.read ? "bg-blue-50/50" : "bg-white"}`}
-                  >
-                    <NotificationIcon type={notification.type} />
-                    <div className="flex-1 min-w-0">
-                      <div className="flex items-start justify-between gap-2">
-                        <p className={`font-body text-xs leading-tight
-                          ${!notification.read
-                            ? "font-semibold text-[#0A1931]"
-                            : "font-medium text-gray-600"}`}>
-                          {notification.title}
-                        </p>
-                        {!notification.read && (
-                          <span className="w-1.5 h-1.5 rounded-full
-                            bg-blue-500 flex-shrink-0 mt-1" />
-                        )}
-                      </div>
-                      <p className="font-body text-[11px] text-gray-400
-                        mt-0.5 leading-tight">
-                        {notification.message}
-                      </p>
-                      <p className="font-body text-[10px] text-gray-300 mt-1">
-                        {notification.time}
-                      </p>
-                    </div>
+                {notifications.length === 0 ? (
+                  <div className="py-8 text-center">
+                    <Bell size={24} className="text-gray-200 mx-auto mb-2" />
+                    <p className="font-body text-xs text-gray-300">
+                      No notifications
+                    </p>
                   </div>
-                ))}
+                ) : (
+                  notifications.slice(0, 5).map((notification) => (
+                    <div
+                      key={notification.id}
+                      onClick={() => handleMarkRead(notification.id)}
+                      className={`flex items-start gap-3 px-4 py-3
+                        border-b border-gray-50 cursor-pointer
+                        hover:bg-gray-50 transition-colors
+                        ${!notification.is_read ? "bg-blue-50/50" : "bg-white"}`}
+                    >
+                      <NotificationIcon type={notification.type} />
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-start justify-between gap-2">
+                          <p className={`font-body text-xs leading-tight
+                            ${!notification.is_read
+                              ? "font-semibold text-[#0A1931]"
+                              : "font-medium text-gray-600"}`}>
+                            {notification.title}
+                          </p>
+                          {!notification.is_read && (
+                            <span className="w-1.5 h-1.5 rounded-full
+                              bg-blue-500 flex-shrink-0 mt-1" />
+                          )}
+                        </div>
+                        <p className="font-body text-[11px] text-gray-400
+                          mt-0.5 leading-tight">
+                          {notification.body}
+                        </p>
+                      </div>
+                    </div>
+                  ))
+                )}
               </div>
 
-              <div className="px-4 py-2.5 border-t border-gray-100
-                text-center">
+              <div className="px-4 py-2.5 border-t border-gray-100 text-center">
                 <button
                   onClick={() => {
                     setShowDropdown(false)
@@ -199,6 +242,7 @@ function Navbar({ onToggleSidebar }) {
                   View all notifications
                 </button>
               </div>
+
             </div>
           )}
         </div>
@@ -207,13 +251,13 @@ function Navbar({ onToggleSidebar }) {
         <div className="flex items-center gap-3">
           <div className="text-right">
             <p className="font-body text-sm font-medium text-white">
-              {user.name}
+              {user.name || "User"}
             </p>
-            <p className="font-body text-xs text-[#B3CFE5]">
-              {user.role}
+            <p className="font-body text-xs text-[#B3CFE5] capitalize">
+              {user.role || "Student"}
             </p>
           </div>
-          <Avatar name={user.name} color="accent" size="md" />
+          <Avatar name={user.name || "U"} color="accent" size="md" />
         </div>
 
       </div>

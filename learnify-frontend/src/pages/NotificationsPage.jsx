@@ -1,28 +1,29 @@
-import { useState } from "react"
+import { useState, useEffect } from "react"
 import { Clock, BookOpen, AlertCircle, CheckCheck, Trash2, Bell } from "lucide-react"
 import Button from "../components/common/Button"
 import Badge from "../components/common/Badge"
-import Tooltip from "../components/common/Tooltip" 
-
-const initialNotifications = [
-  { id: 1, type: "deadline", title: "Mathematics Mock Exam",   message: "Due in 3 days — Chapter 7: Statistics",              time: "2 min ago",  date: "Today",     read: false },
-  { id: 2, type: "session",  title: "Study Session Starting",  message: "Physics — Thermodynamics starts in 30 minutes",       time: "25 min ago", date: "Today",     read: false },
-  { id: 3, type: "resource", title: "New Resource Uploaded",   message: "Mr. Fernando uploaded Organic Chemistry notes",       time: "1 hr ago",   date: "Today",     read: false },
-  { id: 4, type: "system",   title: "Schedule Generated",      message: "Your weekly timetable has been auto-generated successfully", time: "3 hrs ago", date: "Today",  read: true  },
-  { id: 5, type: "deadline", title: "Physics Assignment",      message: "Due in 5 days — Thermodynamics report",               time: "5 hrs ago",  date: "Today",     read: true  },
-  { id: 6, type: "resource", title: "New Resource Uploaded",   message: "Ms. Wijesinghe uploaded Essay Writing Techniques notes", time: "Yesterday", date: "Yesterday", read: true },
-  { id: 7, type: "session",  title: "Session Completed",       message: "You completed Chemistry — Organic Lab session",       time: "Yesterday",  date: "Yesterday", read: true  },
-  { id: 8, type: "system",   title: "Profile Updated",         message: "Your profile information has been updated successfully", time: "2 days ago", date: "Earlier",  read: true  },
-]
+import Tooltip from "../components/common/Tooltip"
+import LoadingSpinner from "../components/common/LoadingSpinner"
+import ErrorMessage from "../components/common/ErrorMessage"
+import {
+  getNotifications,
+  markAsRead,
+  markAllAsRead,
+  deleteNotification,
+} from "../api/notificationsApi"
 
 const filterTabs = ["All", "Unread", "Deadlines", "Sessions", "Resources", "System"]
 
+// ── Notification Icon ─────────────────────────────────────
 function NotificationIcon({ type }) {
   const config = {
-    deadline: { icon: Clock,        bg: "bg-red-100",    color: "text-red-500"    },
-    session:  { icon: BookOpen,     bg: "bg-blue-100",   color: "text-blue-500"   },
-    resource: { icon: BookOpen,     bg: "bg-green-100",  color: "text-green-500"  },
-    system:   { icon: AlertCircle,  bg: "bg-purple-100", color: "text-purple-500" },
+    deadline:     { icon: Clock,        bg: "bg-red-100",    color: "text-red-500"    },
+    session:      { icon: BookOpen,     bg: "bg-blue-100",   color: "text-blue-500"   },
+    resource:     { icon: BookOpen,     bg: "bg-green-100",  color: "text-green-500"  },
+    system:       { icon: AlertCircle,  bg: "bg-purple-100", color: "text-purple-500" },
+    mentor_reply: { icon: AlertCircle,  bg: "bg-yellow-100", color: "text-yellow-500" },
+    achievement:  { icon: AlertCircle,  bg: "bg-pink-100",   color: "text-pink-500"   },
+    reminder:     { icon: Clock,        bg: "bg-orange-100", color: "text-orange-500" },
   }
   const { icon: Icon, bg, color } = config[type] || config.system
   return (
@@ -33,15 +34,67 @@ function NotificationIcon({ type }) {
   )
 }
 
+// ── Format time helper ────────────────────────────────────
+function formatTime(isoString) {
+  const date  = new Date(isoString)
+  const now   = new Date()
+  const diffMs = now - date
+  const diffMins = Math.floor(diffMs / 60000)
+  const diffHrs  = Math.floor(diffMs / 3600000)
+  const diffDays = Math.floor(diffMs / 86400000)
+
+  if (diffMins < 1)   return "Just now"
+  if (diffMins < 60)  return `${diffMins} min ago`
+  if (diffHrs  < 24)  return `${diffHrs} hr ago`
+  if (diffDays === 1) return "Yesterday"
+  return date.toLocaleDateString("en-GB", {
+    day: "2-digit", month: "short"
+  })
+}
+
+// ── Group by date helper ──────────────────────────────────
+function getDateGroup(isoString) {
+  const date  = new Date(isoString)
+  const now   = new Date()
+  const diffDays = Math.floor((now - date) / 86400000)
+
+  if (diffDays === 0) return "Today"
+  if (diffDays === 1) return "Yesterday"
+  return "Earlier"
+}
+
+// ── Main Component ────────────────────────────────────────
 function NotificationsPage() {
-  const [notifications, setNotifications] = useState(initialNotifications)
+  const [notifications, setNotifications] = useState([])
+  const [loading, setLoading]             = useState(true)
+  const [error, setError]                 = useState("")
   const [activeFilter, setActiveFilter]   = useState("All")
 
-  const unreadCount = notifications.filter(n => !n.read).length
+  const unreadCount = notifications.filter(n => !n.is_read).length
 
+  // ── Fetch notifications from backend ──────────────────
+  useEffect(() => {
+    fetchNotifications()
+  }, [])
+
+  async function fetchNotifications() {
+    try {
+      setLoading(true)
+      setError("")
+      const response = await getNotifications()
+      // Backend returns { notifications, unread_count }
+      setNotifications(response.data.notifications || [])
+    } catch (err) {
+      setError("Failed to load notifications. Please try again.")
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  // ── Filter logic ───────────────────────────────────────
   function getFiltered() {
     switch (activeFilter) {
-      case "Unread":    return notifications.filter(n => !n.read)
+      case "Unread":    return notifications.filter(n => !n.is_read)
       case "Deadlines": return notifications.filter(n => n.type === "deadline")
       case "Sessions":  return notifications.filter(n => n.type === "session")
       case "Resources": return notifications.filter(n => n.type === "resource")
@@ -50,26 +103,58 @@ function NotificationsPage() {
     }
   }
 
-  function handleMarkAllRead() {
-    setNotifications(notifications.map(n => ({ ...n, read: true })))
+  // ── Mark one as read ───────────────────────────────────
+  async function handleMarkRead(id) {
+    try {
+      await markAsRead(id)
+      // Update local state — no need to refetch
+      setNotifications(notifications.map(n =>
+        n.id === id ? { ...n, is_read: true } : n
+      ))
+    } catch (err) {
+      console.error("Failed to mark as read:", err)
+    }
   }
 
-  function handleMarkRead(id) {
-    setNotifications(notifications.map(n =>
-      n.id === id ? { ...n, read: true } : n
-    ))
+  // ── Mark all as read ───────────────────────────────────
+  async function handleMarkAllRead() {
+    try {
+      await markAllAsRead()
+      // Update all local notifications
+      setNotifications(notifications.map(n => ({ ...n, is_read: true })))
+    } catch (err) {
+      console.error("Failed to mark all as read:", err)
+    }
   }
 
-  function handleDelete(id) {
-    setNotifications(notifications.filter(n => n.id !== id))
+  // ── Delete notification ────────────────────────────────
+  async function handleDelete(id) {
+    try {
+      await deleteNotification(id)
+      // Remove from local state — no need to refetch
+      setNotifications(notifications.filter(n => n.id !== id))
+    } catch (err) {
+      console.error("Failed to delete notification:", err)
+    }
   }
 
+  // ── Group by date ──────────────────────────────────────
   const filtered = getFiltered()
   const grouped  = filtered.reduce((acc, n) => {
-    if (!acc[n.date]) acc[n.date] = []
-    acc[n.date].push(n)
+    const group = getDateGroup(n.created_at)
+    if (!acc[group]) acc[group] = []
+    acc[group].push(n)
     return acc
   }, {})
+
+  // ── Loading state ──────────────────────────────────────
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center h-64">
+        <LoadingSpinner size="lg" label="Loading notifications..." />
+      </div>
+    )
+  }
 
   return (
     <div className="max-w-3xl space-y-5">
@@ -97,6 +182,15 @@ function NotificationsPage() {
         )}
       </div>
 
+      {/* Error */}
+      {error && (
+        <ErrorMessage
+          message={error}
+          onRetry={fetchNotifications}
+          onDismiss={() => setError("")}
+        />
+      )}
+
       {/* Filter Tabs */}
       <div className="bg-white rounded-2xl p-1.5 shadow-sm
         border border-gray-100 flex flex-wrap gap-1">
@@ -111,7 +205,6 @@ function NotificationsPage() {
                 : "text-gray-400 hover:text-[#1A3D63] hover:bg-gray-50"}`}
           >
             {tab}
-            {/* 👇 replaced span with Badge */}
             {tab === "Unread" && unreadCount > 0 && (
               <span className="ml-1.5 inline-flex">
                 <Badge
@@ -155,25 +248,23 @@ function NotificationsPage() {
                   className={`flex items-start gap-4 px-5 py-4
                     transition-colors hover:bg-gray-50 cursor-pointer
                     ${index !== items.length - 1 ? "border-b border-gray-50" : ""}
-                    ${!notification.read ? "bg-blue-50/40" : "bg-white"}`}
+                    ${!notification.is_read ? "bg-blue-50/40" : "bg-white"}`}
                   onClick={() => handleMarkRead(notification.id)}
                 >
-
                   <NotificationIcon type={notification.type} />
 
                   <div className="flex-1 min-w-0">
                     <div className="flex items-start justify-between gap-2">
                       <p className={`font-body text-sm leading-tight
-                        ${!notification.read
+                        ${!notification.is_read
                           ? "font-semibold text-[#0A1931]"
                           : "font-medium text-gray-600"}`}>
                         {notification.title}
                       </p>
                       <div className="flex items-center gap-2 flex-shrink-0">
-                        {!notification.read && (
+                        {!notification.is_read && (
                           <span className="w-2 h-2 rounded-full bg-blue-500" />
                         )}
-                        {/* 👇 wrapped with Tooltip */}
                         <Tooltip text="Delete" position="left">
                           <button
                             onClick={(e) => {
@@ -188,12 +279,13 @@ function NotificationsPage() {
                         </Tooltip>
                       </div>
                     </div>
+                    {/* body from backend instead of message */}
                     <p className="font-body text-xs text-gray-400
                       mt-0.5 leading-relaxed">
-                      {notification.message}
+                      {notification.body}
                     </p>
                     <p className="font-body text-[11px] text-gray-300 mt-1">
-                      {notification.time}
+                      {formatTime(notification.created_at)}
                     </p>
                   </div>
 
