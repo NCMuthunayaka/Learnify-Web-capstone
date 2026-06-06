@@ -23,6 +23,7 @@ const pageTitles = {
   "/notifications":    "Notifications",
   "/mentor/resources": "My Resources",
   "/mentor/profile":   "My Profile",
+  "/help":             "Help Requests",
 }
 
 // ── Notification Icon ─────────────────────────────────────
