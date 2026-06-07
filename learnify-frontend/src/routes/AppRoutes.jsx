@@ -1,6 +1,7 @@
 import { BrowserRouter, Routes, Route } from "react-router-dom"
 import MainLayout from "../components/layout/MainLayout"
 import LandingLayout from "../components/layout/LandingLayout"
+import PrivateRoute from "./PrivateRoute"
 
 // Pages
 import LandingPage from "../pages/LandingPage"    
@@ -23,28 +24,77 @@ function AppRoutes() {
     <BrowserRouter>
       <Routes>
 
-        {/* Landing Page Routes — Light theme */}
+        {/* ── Public Routes — no login needed ── */}
         <Route element={<LandingLayout />}>
-          <Route path="/" element={<LandingPage />} /> 
+          <Route path="/" element={<LandingPage />} />
         </Route>
-
-        <Route path="/login" element={<LoginPage />} />
+        <Route path="/login"    element={<LoginPage />} />
         <Route path="/register" element={<RegisterPage />} />
 
-        {/* Dashboard Routes — Dark theme with sidebar */}
-        <Route element={<MainLayout />}>
-          <Route path="/dashboard" element={<DashboardPage />} />
-          <Route path="/progress" element={<ProgressPage />} />
-          <Route path="/scheduler" element={<SchedulerPage />} />
-          <Route path="/ai-chat" element={<AIChatPage />} />
-          <Route path="/resources" element={<ResourcesPage />} />
-          <Route path="/feedback" element={<FeedbackPage />} />
-          <Route path="/profile" element={<ProfilePage />} />
-          <Route path="/mentor/dashboard" element={<MentorDashboardPage />} />
-          <Route path="/mentor/requests" element={<MentorDashboardPage />} />
-          <Route path="/mentor/resources" element={<MentorResourcesPage />} />
-          <Route path="/mentor/profile" element={<MentorProfilePage />} />
-          <Route path="/notifications" element={<NotificationsPage />} />
+        {/* ── All logged in users ── */}
+        <Route element={
+          <PrivateRoute>
+            <MainLayout />
+          </PrivateRoute>
+        }>
+
+          {/* Shared pages — all roles */}
+          <Route path="/dashboard" element={
+            <PrivateRoute roles={["student", "mentor", "admin"]}>
+              <DashboardPage />
+            </PrivateRoute>
+          } />
+
+          <Route path="/notifications" element={
+            <PrivateRoute roles={["student", "mentor", "admin"]}>
+              <NotificationsPage />
+            </PrivateRoute>
+          } />
+
+          <Route path="/ai-chat" element={
+            <PrivateRoute roles={["student", "mentor", "admin"]}>
+              <AIChatPage />
+            </PrivateRoute>
+          } />
+
+          <Route path="/feedback" element={
+            <PrivateRoute roles={["student", "mentor", "admin"]}>
+              <FeedbackPage />
+            </PrivateRoute>
+          } />
+
+          {/* ── Student only pages ── */}
+          <Route path="/scheduler" element={
+            <PrivateRoute roles={["student"]}>
+              <SchedulerPage />
+            </PrivateRoute>
+          } />
+
+          <Route path="/resources" element={
+            <PrivateRoute roles={["student"]}>
+              <ResourcesPage />
+            </PrivateRoute>
+          } />
+
+          <Route path="/profile" element={
+            <PrivateRoute roles={["student"]}>
+              <ProfilePage />
+            </PrivateRoute>
+          } />
+
+          {/* ── Mentor only pages ── */}
+          <Route path="/mentor/resources" element={
+            <PrivateRoute roles={["mentor", "admin"]}>
+              <MentorResourcesPage />
+            </PrivateRoute>
+          } />
+
+          <Route path="/mentor/profile" element={
+            <PrivateRoute roles={["mentor", "admin"]}>
+              <MentorProfilePage />
+            </PrivateRoute>
+          } />
+
         </Route>
 
       </Routes>

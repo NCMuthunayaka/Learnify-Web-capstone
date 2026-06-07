@@ -21,8 +21,23 @@ def create_app(config_name="development"):
     migrate.init_app(app, db)
     bcrypt.init_app(app)
     cors.init_app(app, resources={
-        r"/api/*": {"origins": ["http://localhost:3000", "http://127.0.0.1:3000"]}
+        r"/api/*": {
+            "origins": [
+                "http://localhost:3000",
+                "http://127.0.0.1:3000"
+            ],
+            "methods": ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
+            "allow_headers": ["Content-Type", "Authorization"],
+            "supports_credentials": True
+        }
     })
+
+    # Fix Google OAuth popup issue
+    @app.after_request
+    def add_headers(response):
+        response.headers["Cross-Origin-Opener-Policy"] = "unsafe-none"
+        response.headers["Cross-Origin-Embedder-Policy"] = "unsafe-none"
+        return response
 
     # Register blueprints
     app.register_blueprint(auth.bp,          url_prefix="/api/auth")

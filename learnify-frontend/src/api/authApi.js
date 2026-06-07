@@ -24,6 +24,12 @@ export async function registerUser(name, email, password, role) {
     return response.data
 }
 
+export async function googleAuth(token) {
+    // Send Google token to backend for verification
+    const response = await api.post("/auth/google", { token })
+    return response.data
+}
+
 // ── Get Current User ──────────────────────────────────────
 // Fetches the currently logged in user's data
 // Uses token from axiosInstance automatically
