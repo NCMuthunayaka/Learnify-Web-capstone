@@ -19,6 +19,8 @@ import MentorProfilePage from "../pages/mentor/MentorProfilePage"
 import MentorDashboardPage from "../pages/mentor/MentorDashboardPage"
 import NotificationsPage from "../pages/NotificationsPage"
 import HelpPage from "../pages/HelpPage"
+import AdminAnalyticsPage from "../pages/admin/AdminAnalyticsPage"
+import AdminFeedbackDashboard from "../pages/admin/AdminFeedbackDashboard"
 
 function AppRoutes() {
   return (
@@ -95,6 +97,24 @@ function AppRoutes() {
               <MentorProfilePage />
             </PrivateRoute>
           } />
+
+          {/* ── Admin only pages ── */}
+          <Route path="/admin/dashboard" element={
+            <PrivateRoute roles={["admin"]}>
+              <AdminAnalyticsPage />
+            </PrivateRoute>
+          } />
+
+          <Route path="/admin/feedback" element={
+            <PrivateRoute roles={["admin"]}>
+              <AdminFeedbackDashboard />
+            </PrivateRoute>
+          } />
+
+          {/* Placeholder routes — full pages to be built when backend is ready */}
+          <Route path="/admin/users"     element={<PrivateRoute roles={["admin"]}><AdminAnalyticsPage /></PrivateRoute>} />
+          <Route path="/admin/approvals" element={<PrivateRoute roles={["admin"]}><AdminAnalyticsPage /></PrivateRoute>} />
+          <Route path="/admin/system"    element={<PrivateRoute roles={["admin"]}><AdminAnalyticsPage /></PrivateRoute>} />
 
         </Route>
 

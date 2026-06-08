@@ -1,7 +1,8 @@
 import { NavLink, useNavigate } from "react-router-dom"
 import {
   LayoutDashboard, CalendarDays, TrendingUp,
-  Bot, BookOpen, HelpCircle, User, LogOut
+  Bot, BookOpen, HelpCircle, User, LogOut,
+  Users, UserCheck, Monitor, MessageSquare, Settings
 } from "lucide-react"
 import sidebarBg from "../../assets/images/sidebar_img.jpg"
 
@@ -22,6 +23,14 @@ const mentorNavItems = [
   { label: "Help",         icon: HelpCircle,      path: "/help"             },
 ]
 
+const adminNavItems = [
+  { label: "Dashboard",        icon: LayoutDashboard, path: "/admin/dashboard" },
+  { label: "User Management",  icon: Users,           path: "/admin/users"     },
+  { label: "User Approvals",   icon: UserCheck,       path: "/admin/approvals" },
+  { label: "System Monitoring",icon: Monitor,         path: "/admin/system"    },
+  { label: "Feedback",         icon: MessageSquare,   path: "/admin/feedback"  },
+]
+
 // ── Get role from JWT token ───────────────────────────────
 function getRoleFromToken() {
   try {
@@ -39,14 +48,16 @@ function Sidebar({ isOpen }) {
   const role     = getRoleFromToken()
 
   // Pick correct nav items based on role
-  const navItems = role === "mentor" || role === "admin"
-    ? mentorNavItems
-    : studentNavItems
+  const navItems =
+    role === "admin"  ? adminNavItems  :
+    role === "mentor" ? mentorNavItems :
+    studentNavItems
 
   // Pick correct profile path based on role
-  const profilePath = role === "mentor" || role === "admin"
-    ? "/mentor/profile"
-    : "/profile"
+  const profilePath =
+    role === "admin"  ? "/admin/dashboard" :
+    role === "mentor" ? "/mentor/profile"  :
+    "/profile"
 
   function handleLogout() {
     localStorage.clear()
@@ -104,7 +115,7 @@ function Sidebar({ isOpen }) {
         {/* Bottom — Profile & Logout */}
         <div className="px-3 py-4 border-t border-white/10 space-y-1">
 
-          {/* Profile path changes based on role */}
+          {/* Bottom link: Settings for admin, Profile for others */}
           <NavLink
             to={profilePath}
             className={({ isActive }) =>
@@ -116,8 +127,8 @@ function Sidebar({ isOpen }) {
               }`
             }
           >
-            <User size={18} />
-            <span>Profile</span>
+            {role === "admin" ? <Settings size={18} /> : <User size={18} />}
+            <span>{role === "admin" ? "Settings" : "Profile"}</span>
           </NavLink>
 
           <button
