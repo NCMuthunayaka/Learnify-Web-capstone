@@ -7,6 +7,7 @@ import { useAuth } from "../../hooks/useAuth"
 import { useGoogleLogin } from "@react-oauth/google"
 import LoadingSpinner from "../../components/common/LoadingSpinner"
 import ErrorMessage from "../../components/common/ErrorMessage"
+import api from "../../api/axiosInstance"
 
 function RegisterPage() {
   const navigate  = useNavigate()
@@ -19,6 +20,14 @@ function RegisterPage() {
   const [loading, setLoading]   = useState(false)
   const [gLoading, setGLoading] = useState(false)
   const [error, setError]       = useState("")
+
+  // ── Google Role Selection State ────────────────────────
+  // When Google auth returns a new user
+  // we show a role selection screen
+  const [showRoleSelect, setShowRoleSelect] = useState(false)
+  const [googleUserData, setGoogleUserData] = useState(null)
+  const [selectedRole, setSelectedRole]     = useState("")
+  const [roleLoading, setRoleLoading]       = useState(false)
 
   function handleChange(e) {
     setFormData({ ...formData, [e.target.name]: e.target.value })
@@ -65,18 +74,26 @@ function RegisterPage() {
   }
 
   // ── Google Register ────────────────────────────────────
-  // Google register works same as Google login
-  // If account exists — logs in
-  // If new account — creates it as student by default
   const handleGoogleRegister = useGoogleLogin({
     onSuccess: async (tokenResponse) => {
       try {
         setGLoading(true)
         setError("")
+
         const response = await googleAuth(tokenResponse.access_token)
-        const { user, access_token, refresh_token } = response.data
-        login(user, access_token, refresh_token)
-        navigate("/dashboard")
+        const { user, access_token, refresh_token, is_new_user } = response.data
+
+        if (is_new_user) {
+          // New user — show role selection screen
+          // Save data temporarily to use after role selection
+          setGoogleUserData({ user, access_token, refresh_token })
+          setShowRoleSelect(true)
+        } else {
+          // Existing user — login directly
+          login(user, access_token, refresh_token)
+          navigate("/dashboard")
+        }
+
       } catch (err) {
         setError(err.response?.data?.error?.message || "Google signup failed.")
       } finally {
@@ -87,6 +104,136 @@ function RegisterPage() {
       setError("Google signup was cancelled or failed.")
     }
   })
+
+  // ── Confirm Role After Google Auth ─────────────────────
+  async function handleRoleConfirm() {
+    if (!selectedRole) {
+      setError("Please select a role to continue")
+      return
+    }
+
+    try {
+      setRoleLoading(true)
+      setError("")
+
+      // Save token temporarily to make the update request
+      localStorage.setItem("access_token", googleUserData.access_token)
+
+      // Update user role in backend
+      await api.patch("/users/profile", { role: selectedRole })
+
+      // Now login with updated user
+      const updatedUser = { ...googleUserData.user, role: selectedRole }
+      login(updatedUser, googleUserData.access_token, googleUserData.refresh_token)
+      navigate("/dashboard")
+
+    } catch (err) {
+      setError("Failed to set role. Please try again.")
+    } finally {
+      setRoleLoading(false)
+    }
+  }
+
+  // ── Role Selection Screen ──────────────────────────────
+  // Shown after Google auth for new users
+  if (showRoleSelect) {
+    return (
+      <div className="relative min-h-screen w-full flex items-center
+        justify-center">
+        <div
+          className="absolute inset-0 bg-cover bg-center bg-no-repeat blur-sm"
+          style={{ backgroundImage: `url(${backgroundImage})` }}
+        />
+        <div className="absolute inset-0 bg-[#0A1931] opacity-60" />
+
+        <div className="relative z-10 w-full max-w-md mx-6 bg-[#0A1931]
+          bg-opacity-95 backdrop-blur-md rounded-2xl px-8 py-10
+          border border-[#4A7FA7] border-opacity-30 shadow-2xl space-y-6">
+
+          {/* Header */}
+          <div className="text-center space-y-2">
+            <div className="w-16 h-16 rounded-full bg-[#4A7FA7] flex
+              items-center justify-center mx-auto mb-4">
+              <span className="font-heading text-2xl font-bold text-white">
+                {googleUserData?.user?.name?.charAt(0) || "U"}
+              </span>
+            </div>
+            <h2 className="font-heading text-xl font-bold text-white">
+              Welcome, {googleUserData?.user?.name?.split(" ")[0]}!
+            </h2>
+            <p className="font-body text-sm text-[#B3CFE5]">
+              One last step — choose your role to continue
+            </p>
+          </div>
+
+          {error && (
+            <ErrorMessage message={error} onDismiss={() => setError("")} />
+          )}
+
+          {/* Role Selection */}
+          <div className="space-y-3">
+            <p className="font-body text-sm text-[#B3CFE5] text-center">
+              I am a...
+            </p>
+            <div className="grid grid-cols-2 gap-4">
+              <button
+                onClick={() => setSelectedRole("student")}
+                className={`flex flex-col items-center gap-3 py-6
+                  rounded-xl border-2 transition-all duration-200
+                  ${selectedRole === "student"
+                    ? "bg-[#4A7FA7] border-[#4A7FA7] text-white"
+                    : "bg-[#1A3D63] bg-opacity-60 border-[#4A7FA7] border-opacity-40 text-[#B3CFE5] hover:border-[#4A7FA7]"
+                  }`}
+              >
+                <GraduationCap size={32} />
+                <div className="text-center">
+                  <p className="font-body text-sm font-semibold">Student</p>
+                  <p className="font-body text-xs opacity-70 mt-0.5">
+                    I want to learn
+                  </p>
+                </div>
+              </button>
+
+              <button
+                onClick={() => setSelectedRole("mentor")}
+                className={`flex flex-col items-center gap-3 py-6
+                  rounded-xl border-2 transition-all duration-200
+                  ${selectedRole === "mentor"
+                    ? "bg-[#4A7FA7] border-[#4A7FA7] text-white"
+                    : "bg-[#1A3D63] bg-opacity-60 border-[#4A7FA7] border-opacity-40 text-[#B3CFE5] hover:border-[#4A7FA7]"
+                  }`}
+              >
+                <Users size={32} />
+                <div className="text-center">
+                  <p className="font-body text-sm font-semibold">Mentor</p>
+                  <p className="font-body text-xs opacity-70 mt-0.5">
+                    I want to teach
+                  </p>
+                </div>
+              </button>
+            </div>
+          </div>
+
+          {/* Continue Button */}
+          <button
+            onClick={handleRoleConfirm}
+            disabled={roleLoading || !selectedRole}
+            className="w-full bg-[#4A7FA7] hover:bg-[#1A3D63] text-white
+              font-body text-sm font-medium py-3 rounded-lg
+              transition-colors duration-200 flex items-center
+              justify-center gap-2 disabled:opacity-50
+              disabled:cursor-not-allowed"
+          >
+            {roleLoading
+              ? <LoadingSpinner size="sm" color="white" />
+              : "Continue to Learnify"
+            }
+          </button>
+
+        </div>
+      </div>
+    )
+  }
 
   return (
     <div className="relative min-h-screen w-full flex items-center justify-center">
@@ -117,7 +264,7 @@ function RegisterPage() {
           </p>
         </div>
 
-        {/* Right — Form */}
+        {/* Right */}
         <div className="w-full md:w-96 bg-[#0A1931] bg-opacity-95
           backdrop-blur-md px-8 py-10 flex flex-col justify-center
           space-y-4 border border-[#4A7FA7] border-opacity-30 shadow-2xl">
@@ -131,7 +278,7 @@ function RegisterPage() {
             <ErrorMessage message={error} onDismiss={() => setError("")} />
           )}
 
-          {/* ── Google Register Button ── */}
+          {/* Google Button */}
           <button
             onClick={() => handleGoogleRegister()}
             disabled={gLoading}
@@ -165,7 +312,6 @@ function RegisterPage() {
             <div className="flex-1 h-px bg-white/10" />
           </div>
 
-          {/* Form Fields */}
           <div className="space-y-3">
             <input type="text" name="firstName" placeholder="First Name"
               value={formData.firstName} onChange={handleChange}
@@ -203,7 +349,6 @@ function RegisterPage() {
                 rounded-lg border border-[#4A7FA7] border-opacity-40
                 focus:outline-none focus:border-[#4A7FA7] transition-colors" />
 
-            {/* Role Selection */}
             <div className="space-y-2">
               <p className="font-body text-sm text-[#B3CFE5]">
                 Choose your role

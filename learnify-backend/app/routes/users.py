@@ -42,6 +42,7 @@ def update_profile():
         "faculty",
         "year",
         "avatar_url",
+        "role",
     ]
 
     updated = False

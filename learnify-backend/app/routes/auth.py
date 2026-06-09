@@ -5,6 +5,7 @@ from flask_jwt_extended import (
 )
 from app.services.auth_service import register_user, login_user, google_auth_user
 from app.utils.response_utils import success_response, error_response
+from app.models.user import User 
 
 bp = Blueprint("auth", __name__)
 
@@ -87,7 +88,8 @@ def google_login():
     if not google_token:
         return error_response("MISSING_FIELD", "Google token is required", status=400)
 
-    user, err = google_auth_user(google_token)
+    # Now returns 3 values — user, is_new_user, error
+    user, is_new_user, err = google_auth_user(google_token)
 
     if err:
         return error_response("GOOGLE_AUTH_FAILED", err, status=401)
@@ -103,17 +105,17 @@ def google_login():
             "user":          user.to_dict(),
             "access_token":  access_token,
             "refresh_token": refresh_token,
+            "is_new_user":   is_new_user,  # 👈 frontend uses this
         },
         message="Google login successful",
     )
-
 
 # ── Get Current User ──────────────────────────────────────
 @bp.route("/me", methods=["GET"])
 @jwt_required()
 def get_me():
     user_id = get_jwt_identity()
-    user    = User.query.get(user_id)
+    user = User.query.get(user_id)
 
     if not user:
         return error_response("NOT_FOUND", "User not found", status=404)

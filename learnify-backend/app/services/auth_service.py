@@ -39,45 +39,38 @@ def login_user(email, password):
 
 
 def google_auth_user(google_token):
-    """
-    Verify Google token using Google's userinfo endpoint
-    instead of id_token verification
-    """
     import requests as http_requests
     from datetime import datetime
 
     try:
-        # Use Google's userinfo endpoint to verify token
-        # and get user info
         userinfo_response = http_requests.get(
             "https://www.googleapis.com/oauth2/v3/userinfo",
             headers={"Authorization": f"Bearer {google_token}"}
         )
 
         if userinfo_response.status_code != 200:
-            return None, "Invalid Google token"
+            return None, False, "Invalid Google token"
 
-        # Get user info from Google
         id_info = userinfo_response.json()
         email   = id_info.get("email")
         name    = id_info.get("name")
         picture = id_info.get("picture")
 
         if not email:
-            return None, "Could not get email from Google"
+            return None, False, "Could not get email from Google"
 
-        # Check if user already exists
         user = User.query.filter_by(email=email).first()
 
         if user:
-            # Existing user — update last login
+            # Existing user
             user.last_login = datetime.utcnow()
             if picture and not user.avatar_url:
                 user.avatar_url = picture
             db.session.commit()
-            return user, None
+            return user, False, None  # False = not new user
+
         else:
-            # New user — create account
+            # New user
             import secrets
             random_password = secrets.token_hex(32)
             password_hash   = bcrypt.generate_password_hash(
@@ -94,7 +87,7 @@ def google_auth_user(google_token):
             )
             db.session.add(user)
             db.session.commit()
-            return user, None
+            return user, True, None  # True = new user
 
     except Exception as e:
-        return None, f"Google authentication failed: {str(e)}"
+        return None, False, f"Google authentication failed: {str(e)}"
