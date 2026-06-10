@@ -1,54 +1,116 @@
-// src/pages/DashboardPage.jsx
-import { useState } from "react"
+import { useState, useEffect } from "react"
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Cell } from "recharts"
 import { Send } from "lucide-react"
 import Badge from "../components/common/Badge"
 import Button from "../components/common/Button"
+import LoadingSpinner from "../components/common/LoadingSpinner"
+import ErrorMessage from "../components/common/ErrorMessage"
 import { useAuth } from "../hooks/useAuth"
+import { getDashboardStats } from "../api/dashboardApi"
 
-const statsData = [
-  { label: "Subjects",    value: "05" },
-  { label: "Tasks Today", value: "05" },
-  { label: "Completed",   value: "15" },
-]
+// ── Helper — build calendar for current month ─────────────
+function buildCalendar(deadlines) {
+  const now       = new Date()
+  const year      = now.getFullYear()
+  const month     = now.getMonth()
+  const today     = now.getDate()
+  const monthName = now.toLocaleString("default", { month: "long" })
 
-const weeklyData = [
-  { day: "Mon", value: 10 },
-  { day: "Tue", value: 4  },
-  { day: "Wed", value: 15 },
-  { day: "Thu", value: 10 },
-  { day: "Fri", value: 3  },
-  { day: "Sat", value: 11 },
-  { day: "Sun", value: 8  },
-]
+  // Get deadline dates as a Set for quick lookup
+  const deadlineDates = new Set(
+    deadlines.map(d => new Date(d.due_date).getDate())
+  )
 
-const scheduledSubjects = [
-  { name: "Data Structures",  priority: "High",   dot: "bg-pink-400"  },
-  { name: "Machine Learning", priority: "Medium", dot: "bg-blue-400"  },
-]
+  // First day of month (0=Sun, 1=Mon...)
+  // We want Mon-based so adjust
+  const firstDay = new Date(year, month, 1).getDay()
+  const adjusted = firstDay === 0 ? 6 : firstDay - 1
 
-const calendar = {
-  month: "January",
-  days: ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"],
-  dates: [
-    [1,  2,  3,  4,  5,  6,  7 ],
-    [8,  9,  10, 11, 12, 13, 14],
-    [15, 16, 17, 18, 19, 20, 21],
-    [22, 23, 24, 25, 26, 27, 28],
-    [29, 30, 31, null, null, null, null],
-  ],
-  today: 11,
-  deadline: 24,
-  highlight: 2,
+  const daysInMonth = new Date(year, month + 1, 0).getDate()
+
+  // Build weeks array
+  const dates  = []
+  let   week   = Array(adjusted).fill(null)
+
+  for (let d = 1; d <= daysInMonth; d++) {
+    week.push(d)
+    if (week.length === 7) {
+      dates.push(week)
+      week = []
+    }
+  }
+  if (week.length > 0) {
+    while (week.length < 7) week.push(null)
+    dates.push(week)
+  }
+
+  return { monthName, today, deadlineDates, dates }
 }
 
 export default function DashboardPage() {
+  const { user }          = useAuth()
   const [message, setMessage] = useState("")
-  const { user } = useAuth()
-  const firstName = user?.firstName || "Nirmal"
+
+  // ── State ──────────────────────────────────────────────
+  const [loading, setLoading]   = useState(true)
+  const [error, setError]       = useState("")
+  const [stats, setStats]       = useState({
+    subjects: 0, tasks_today: 0, completed: 0
+  })
+  const [weeklyData, setWeeklyData]       = useState([])
+  const [deadlines, setDeadlines]         = useState([])
+  const [scheduledSubjects, setScheduled] = useState([])
+
+  // ── Fetch dashboard data ───────────────────────────────
+  useEffect(() => {
+    async function fetchDashboard() {
+      try {
+        setLoading(true)
+        const response = await getDashboardStats()
+        const data     = response.data
+        setStats(data.stats)
+        setWeeklyData(data.weekly_chart)
+        setDeadlines(data.deadlines)
+        setScheduled(data.scheduled_subjects)
+      } catch (err) {
+        setError("Failed to load dashboard data.")
+      } finally {
+        setLoading(false)
+      }
+    }
+    fetchDashboard()
+  }, [])
+
+  // ── Build stats cards ──────────────────────────────────
+  const statsData = [
+    { label: "Subjects",    value: String(stats.subjects).padStart(2, "0")    },
+    { label: "Tasks Today", value: String(stats.tasks_today).padStart(2, "0") },
+    { label: "Completed",   value: String(stats.completed).padStart(2, "0")   },
+  ]
+
+  // ── Build calendar ─────────────────────────────────────
+  const { monthName, today, deadlineDates, dates } = buildCalendar(deadlines)
+  const calendarDays = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"]
+
+  // ── Get first name from user ───────────────────────────
+  const firstName = user?.name?.split(" ")[0] || "there"
+
+  // ── Loading state ──────────────────────────────────────
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center h-64">
+        <LoadingSpinner size="lg" label="Loading dashboard..." />
+      </div>
+    )
+  }
 
   return (
     <div className="space-y-5">
+
+      {/* Error */}
+      {error && (
+        <ErrorMessage message={error} onDismiss={() => setError("")} />
+      )}
 
       {/* ── Stats Cards ── */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
@@ -78,61 +140,71 @@ export default function DashboardPage() {
           <h3 className="font-heading text-sm font-semibold text-[#1A3D63] mb-4">
             Weekly Progress
           </h3>
-          <ResponsiveContainer width="100%" height={240}>
-            <BarChart data={weeklyData} barSize={35}
-              margin={{ top: 5, right: 10, left: -20, bottom: 5 }}>
-              <XAxis
-                dataKey="day"
-                tick={{ fill: "#1A3D63", fontSize: 12 }}
-                axisLine={false}
-                tickLine={false}
-              />
-              <YAxis
-                tick={{ fill: "#1A3D63", fontSize: 12 }}
-                axisLine={false}
-                tickLine={false}
-                domain={[0, 24]}
-                ticks={[0, 2, 4, 6, 8, 10, 12, 14, 16, 18, 20, 22, 24]}
-              />
-              <Tooltip
-                contentStyle={{
-                  backgroundColor: "#4A7FA7",
-                  border: "1px solid #5a93c0",
-                  borderRadius: "8px",
-                  color: "#fff",
-                  fontSize: "12px",
-                }}
-                cursor={{ fill: "rgba(74,127,167,0.1)" }}
-              />
-              <Bar dataKey="value" radius={[4, 4, 0, 0]}>
-                {weeklyData.map((entry, index) => (
-                  <Cell
-                    key={index}
-                    fill={entry.value === Math.max(...weeklyData.map(d => d.value))
-                      ? "#4A7FA7" : "#1A3D63"}
-                  />
-                ))}
-              </Bar>
-            </BarChart>
-          </ResponsiveContainer>
+
+          {weeklyData.every(d => d.value === 0) ? (
+            <div className="flex items-center justify-center h-48">
+              <p className="font-body text-sm text-gray-400">
+                No study sessions recorded this week
+              </p>
+            </div>
+          ) : (
+            <ResponsiveContainer width="100%" height={240}>
+              <BarChart data={weeklyData} barSize={35}
+                margin={{ top: 5, right: 10, left: -20, bottom: 5 }}>
+                <XAxis
+                  dataKey="day"
+                  tick={{ fill: "#1A3D63", fontSize: 12 }}
+                  axisLine={false}
+                  tickLine={false}
+                />
+                <YAxis
+                  tick={{ fill: "#1A3D63", fontSize: 12 }}
+                  axisLine={false}
+                  tickLine={false}
+                  domain={[0, "auto"]}
+                />
+                <Tooltip
+                  contentStyle={{
+                    backgroundColor: "#4A7FA7",
+                    border: "1px solid #5a93c0",
+                    borderRadius: "8px",
+                    color: "#fff",
+                    fontSize: "12px",
+                  }}
+                  cursor={{ fill: "rgba(74,127,167,0.1)" }}
+                />
+                <Bar dataKey="value" radius={[4, 4, 0, 0]}>
+                  {weeklyData.map((entry, index) => (
+                    <Cell
+                      key={index}
+                      fill={entry.value === Math.max(...weeklyData.map(d => d.value))
+                        ? "#4A7FA7" : "#1A3D63"}
+                    />
+                  ))}
+                </Bar>
+              </BarChart>
+            </ResponsiveContainer>
+          )}
         </div>
 
         {/* Right Column */}
         <div className="space-y-4">
 
-          {/* Deadlines Calendar */}
+          {/* Deadlines Calendar — real current month */}
           <div className="bg-white rounded-2xl p-4 shadow-lg
             border border-white/5">
-            <h3 className="font-heading text-sm font-semibold text-[#1A3D63] mb-3">
+            <h3 className="font-heading text-sm font-semibold
+              text-[#1A3D63] mb-3">
               Deadlines
             </h3>
-            <p className="font-body text-xs text-[#1A3D63] text-center mb-2">
-              {calendar.month}
+            <p className="font-body text-xs text-[#1A3D63]
+              text-center mb-2">
+              {monthName}
             </p>
 
             {/* Day Headers */}
             <div className="grid grid-cols-7 mb-1">
-              {calendar.days.map((day) => (
+              {calendarDays.map((day) => (
                 <div key={day}
                   className="font-body text-[10px] text-[#1A3D63]
                     text-center py-1 font-medium">
@@ -142,7 +214,7 @@ export default function DashboardPage() {
             </div>
 
             {/* Dates */}
-            {calendar.dates.map((week, wi) => (
+            {dates.map((week, wi) => (
               <div key={wi} className="grid grid-cols-7">
                 {week.map((date, di) => (
                   <div
@@ -151,13 +223,11 @@ export default function DashboardPage() {
                       w-6 h-6 mx-auto my-0.5 flex items-center
                       justify-center rounded-full
                       ${!date ? "" :
-                        date === calendar.today
+                        date === today
                           ? "bg-red-500 text-white font-bold"
-                          : date === calendar.deadline
-                            ? "bg-yellow-400 text-[#1A3D63] font-bold"
-                            : date === calendar.highlight
-                              ? "bg-green-500 text-white font-bold"
-                              : "text-[#4A6880] hover:bg-[#1A3D63] hover:text-white"
+                          : deadlineDates.has(date)
+                          ? "bg-yellow-400 text-white font-bold"
+                          : "text-[#4A6880] hover:bg-[#1A3D63] hover:text-white cursor-pointer"
                       }`}
                   >
                     {date || ""}
@@ -165,33 +235,53 @@ export default function DashboardPage() {
                 ))}
               </div>
             ))}
+
+            {/* Legend */}
+            <div className="flex items-center gap-3 mt-3 pt-2
+              border-t border-gray-100">
+              <div className="flex items-center gap-1">
+                <span className="w-2 h-2 rounded-full bg-red-500" />
+                <span className="font-body text-[10px] text-gray-400">Today</span>
+              </div>
+              <div className="flex items-center gap-1">
+                <span className="w-2 h-2 rounded-full bg-yellow-400" />
+                <span className="font-body text-[10px] text-gray-400">Deadline</span>
+              </div>
+            </div>
           </div>
 
           {/* Scheduled Subjects */}
           <div className="bg-white rounded-2xl p-4 shadow-lg
             border border-white/5">
-            <h3 className="font-heading text-sm font-semibold text-[#1A3D63] mb-3">
+            <h3 className="font-heading text-sm font-semibold
+              text-[#1A3D63] mb-3">
               Scheduled Subjects
             </h3>
-            <div className="space-y-3">
-              {scheduledSubjects.map((subject) => (
-                <div key={subject.name}
-                  className="flex items-center justify-between">
-                  <div className="flex items-center gap-2">
-                    <span className={`w-2.5 h-2.5 rounded-full
-                      ${subject.dot}`} />
-                    <span className="font-body text-sm text-[#1A3D63]">
-                      {subject.name}
-                    </span>
+
+            {scheduledSubjects.length === 0 ? (
+              <p className="font-body text-xs text-gray-400
+                text-center py-3">
+                No subjects enrolled yet
+              </p>
+            ) : (
+              <div className="space-y-3">
+                {scheduledSubjects.map((subject, i) => (
+                  <div key={i}
+                    className="flex items-center justify-between">
+                    <div className="flex items-center gap-2">
+                      <span
+                        className="w-2.5 h-2.5 rounded-full flex-shrink-0"
+                        style={{ backgroundColor: subject.color_hex || "#4A7FA7" }}
+                      />
+                      <span className="font-body text-sm text-[#1A3D63]">
+                        {subject.name}
+                      </span>
+                    </div>
                   </div>
-                  <Badge
-                    variant={subject.priority === "High" ? "success" : "warning"}
-                    size="sm">
-                    {subject.priority}
-                  </Badge>
-                </div>
-              ))}
-            </div>
+                ))}
+              </div>
+            )}
+
             <button className="font-body text-xs text-[#B3CFE5]
               hover:text-[#1A3D63] mt-4 w-full text-center
               transition-colors duration-200 font-medium">
@@ -205,11 +295,14 @@ export default function DashboardPage() {
       {/* ── AI Assistant ── */}
       <div className="bg-white rounded-2xl p-6 shadow-lg
         border border-white/5">
-        <h3 className="font-heading text-sm font-semibold text-[#1A3D63] mb-4">
+        <h3 className="font-heading text-sm font-semibold
+          text-[#1A3D63] mb-4">
           Your personal AI study assistant
         </h3>
         <div className="text-center mb-6">
-          <p className="font-body text-sm text-[#1A3D63]">Hi {firstName},</p>
+          <p className="font-body text-sm text-[#1A3D63]">
+            Hi {firstName},
+          </p>
           <p className="font-body text-sm text-[#1A3D63]">
             What is on your mind?
           </p>
@@ -224,7 +317,8 @@ export default function DashboardPage() {
             value={message}
             onChange={(e) => setMessage(e.target.value)}
             className="flex-1 bg-transparent text-[#0A1931]
-              placeholder-[#1A3D63]/30 font-body text-sm focus:outline-none"
+              placeholder-[#1A3D63]/30 font-body text-sm
+              focus:outline-none"
           />
           <Button variant="ghost" icon={Send} size="sm" />
         </div>
