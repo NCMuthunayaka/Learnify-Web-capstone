@@ -1,147 +1,327 @@
-import { useState } from "react"
+import { useState, useEffect } from "react"
 import { Upload, Download, Eye, Trash2, Edit, X, Plus } from "lucide-react"
+import Button from "../../components/common/Button"
+import Modal from "../../components/common/Modal"
+import Tooltip from "../../components/common/Tooltip"
+import LoadingSpinner from "../../components/common/LoadingSpinner"
+import ErrorMessage from "../../components/common/ErrorMessage"
+import {
+  getMyResources,
+  getMyStats,
+  uploadResource,
+  deleteResource,
+  updateResource,
+} from "../../api/resourcesApi"
+import { getSubjects } from "../../api/subjectsApi"
 
-// ── Data ──────────────────────────────────────────────────
-const myResources = [
-  { id: 1, title: "Organic Chemistry — Reaction Mechanisms",   subject: "Chemistry",   type: "PDF",   uploaded: "28 Apr 2026", size: "3.2 MB",  downloads: 45, views: 120 },
-  { id: 2, title: "Electrochemistry — Full Notes & MCQ Bank",  subject: "Chemistry",   type: "PDF",   uploaded: "18 Apr 2026", size: "12.4 MB", downloads: 38, views: 95  },
-  { id: 3, title: "Wave Interference & Diffraction",           subject: "Physics",     type: "PDF",   uploaded: "25 Apr 2026", size: "5.8 MB",  downloads: 52, views: 140 },
-  { id: 4, title: "Mechanics — Newton's Laws Video Lesson",    subject: "Physics",     type: "Video", uploaded: "17 Apr 2026", size: "220 MB",  downloads: 67, views: 210 },
-]
-
-const statsData = [
-  { label: "Total Uploads",    value: "24",   icon: "📁" },
-  { label: "Total Downloads",  value: "1.2k", icon: "⬇️" },
-  { label: "Total Views",      value: "3.4k", icon: "👁️" },
-  { label: "Students Reached", value: "89",   icon: "👥" },
-]
+const fileTypeIdMap = { "PDF": 1, "DOCX": 2, "PPTX": 3, "Video": 4 }
+const sortOptions   = ["Newest First", "Oldest First", "A–Z", "Z–A"]
 
 // ── Type Badge ─────────────────────────────────────────────
 function TypeBadge({ type }) {
   const colors = {
-    PDF:   "bg-red-100 text-red-600",
-    Video: "bg-blue-100 text-blue-600",
-    DOCX:  "bg-blue-50 text-blue-500",
-    PPTX:  "bg-orange-100 text-orange-600",
+    pdf:  "bg-red-100 text-red-600",
+    mp4:  "bg-blue-100 text-blue-600",
+    docx: "bg-blue-50 text-blue-500",
+    pptx: "bg-orange-100 text-orange-600",
   }
   return (
-    <span className={`font-body text-xs px-2 py-0.5 rounded
-      font-medium ${colors[type] || "bg-gray-100 text-gray-600"}`}>
-      {type}
+    <span className={`font-body text-xs px-2 py-0.5 rounded font-medium
+      ${colors[type?.toLowerCase()] || "bg-gray-100 text-gray-600"}`}>
+      {type?.toUpperCase()}
     </span>
   )
 }
 
 // ── Upload Modal ───────────────────────────────────────────
-function UploadModal({ onClose }) {
+function UploadModal({ onClose, onSuccess, subjects, editResource = null }) {
+  const [formData, setFormData] = useState({
+    title:        editResource?.title        || "",
+    subject_id:   editResource?.subject_id   || "",
+    file_type_id: editResource?.file_type_id || "",
+    file_url:     editResource?.file_url     || "",
+    file_size_mb: editResource?.file_size_mb || "",
+  })
+  const [uploading, setUploading] = useState(false)
+  const [error, setError]         = useState("")
+  const isEdit                    = !!editResource
+
+  function handleChange(e) {
+    setFormData({ ...formData, [e.target.name]: e.target.value })
+  }
+
+  async function handleSubmit() {
+    setError("")
+
+    if (!formData.title || !formData.subject_id ||
+        !formData.file_type_id || !formData.file_url) {
+      setError("Please fill in all required fields")
+      return
+    }
+
+    try {
+      setUploading(true)
+      const payload = {
+        title:        formData.title,
+        subject_id:   parseInt(formData.subject_id),
+        file_type_id: parseInt(formData.file_type_id),
+        file_url:     formData.file_url,
+        file_size_mb: parseFloat(formData.file_size_mb) || 0,
+      }
+
+      if (isEdit) {
+        await updateResource(editResource.id, payload)
+      } else {
+        await uploadResource(payload)
+      }
+
+      onSuccess()
+      onClose()
+    } catch (err) {
+      setError(err.response?.data?.error?.message || "Failed. Please try again.")
+    } finally {
+      setUploading(false)
+    }
+  }
+
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center
-      bg-black/50 backdrop-blur-sm">
-      <div className="bg-white rounded-2xl p-6 w-full max-w-md
-        shadow-2xl mx-4">
-        <div className="flex items-center justify-between mb-5">
-          <h3 className="font-heading text-lg font-semibold text-[#0A1931]">
-            Upload New Resource
-          </h3>
-          <button onClick={onClose}
-            className="text-gray-400 hover:text-gray-600">
-            <X size={20} />
-          </button>
+    <Modal
+      isOpen={true}
+      onClose={onClose}
+      title={isEdit ? "Edit Resource" : "Upload New Resource"}
+      size="md"
+    >
+      <div className="space-y-4">
+
+        {error && <ErrorMessage message={error} onDismiss={() => setError("")} />}
+
+        <div>
+          <label className="font-body text-xs text-gray-500 mb-1 block">
+            Title *
+          </label>
+          <input type="text" name="title" placeholder="Resource title"
+            value={formData.title} onChange={handleChange}
+            className="w-full border border-gray-200 rounded-lg px-3 py-2.5
+              font-body text-sm text-gray-700 focus:outline-none
+              focus:border-[#4A7FA7]" />
         </div>
 
-        <div className="space-y-4">
+        <div>
+          <label className="font-body text-xs text-gray-500 mb-1 block">
+            Description
+          </label>
+          <textarea name="description" placeholder="Brief description..."
+            rows={3}
+            className="w-full border border-gray-200 rounded-lg px-3 py-2.5
+              font-body text-sm text-gray-700 focus:outline-none
+              focus:border-[#4A7FA7] resize-none" />
+        </div>
+
+        <div className="grid grid-cols-2 gap-3">
           <div>
             <label className="font-body text-xs text-gray-500 mb-1 block">
-              Title
+              Subject *
             </label>
-            <input type="text" placeholder="Resource title"
+            <select name="subject_id" value={formData.subject_id}
+              onChange={handleChange}
               className="w-full border border-gray-200 rounded-lg px-3
-                py-2.5 font-body text-sm focus:outline-none
+                py-2.5 font-body text-sm text-gray-700 focus:outline-none
+                focus:border-[#4A7FA7]">
+              <option value="">Select subject</option>
+              {subjects.map(s => (
+                <option key={s.id} value={s.id}>{s.name}</option>
+              ))}
+            </select>
+          </div>
+          <div>
+            <label className="font-body text-xs text-gray-500 mb-1 block">
+              Visibility
+            </label>
+            <select className="w-full border border-gray-200 rounded-lg px-3
+              py-2.5 font-body text-sm text-gray-700 focus:outline-none
+              focus:border-[#4A7FA7]">
+              <option>All Students</option>
+              <option>My Students Only</option>
+            </select>
+          </div>
+        </div>
+
+        <div className="grid grid-cols-2 gap-3">
+          <div>
+            <label className="font-body text-xs text-gray-500 mb-1 block">
+              File Type *
+            </label>
+            <select name="file_type_id" value={formData.file_type_id}
+              onChange={handleChange}
+              className="w-full border border-gray-200 rounded-lg px-3
+                py-2.5 font-body text-sm text-gray-700 focus:outline-none
+                focus:border-[#4A7FA7]">
+              <option value="">Select type</option>
+              {Object.entries(fileTypeIdMap).map(([name, id]) => (
+                <option key={id} value={id}>{name}</option>
+              ))}
+            </select>
+          </div>
+          <div>
+            <label className="font-body text-xs text-gray-500 mb-1 block">
+              File Size (MB)
+            </label>
+            <input type="number" name="file_size_mb" placeholder="3.2"
+              value={formData.file_size_mb} onChange={handleChange}
+              className="w-full border border-gray-200 rounded-lg px-3
+                py-2.5 font-body text-sm text-gray-700 focus:outline-none
                 focus:border-[#4A7FA7]" />
           </div>
+        </div>
 
-          <div>
-            <label className="font-body text-xs text-gray-500 mb-1 block">
-              Description
-            </label>
-            <textarea placeholder="Brief description..."
-              rows={3}
-              className="w-full border border-gray-200 rounded-lg px-3
-                py-2.5 font-body text-sm focus:outline-none
-                focus:border-[#4A7FA7] resize-none" />
-          </div>
+        <div>
+          <label className="font-body text-xs text-gray-500 mb-1 block">
+            File URL *
+          </label>
+          <input type="text" name="file_url"
+            placeholder="https://example.com/file.pdf"
+            value={formData.file_url} onChange={handleChange}
+            className="w-full border border-gray-200 rounded-lg px-3 py-2.5
+              font-body text-sm text-gray-700 focus:outline-none
+              focus:border-[#4A7FA7]" />
+        </div>
 
-          <div className="grid grid-cols-2 gap-3">
-            <div>
-              <label className="font-body text-xs text-gray-500 mb-1 block">
-                Subject
-              </label>
-              <select className="w-full border border-gray-200 rounded-lg
-                px-3 py-2.5 font-body text-sm focus:outline-none
-                focus:border-[#4A7FA7]">
-                {["Chemistry", "Physics", "Mathematics", "Biology", "English"].map(s => (
-                  <option key={s}>{s}</option>
-                ))}
-              </select>
-            </div>
-            <div>
-              <label className="font-body text-xs text-gray-500 mb-1 block">
-                Visibility
-              </label>
-              <select className="w-full border border-gray-200 rounded-lg
-                px-3 py-2.5 font-body text-sm focus:outline-none
-                focus:border-[#4A7FA7]">
-                <option>All Students</option>
-                <option>My Students Only</option>
-              </select>
-            </div>
-          </div>
+        <div className="flex gap-3 pt-2">
+          <Button variant="secondary" fullWidth onClick={onClose}
+            disabled={uploading}>
+            Cancel
+          </Button>
+          <Button variant="primary" fullWidth onClick={handleSubmit}
+            disabled={uploading}>
+            {uploading ? "Saving..." : isEdit ? "Save Changes" : "Upload Resource"}
+          </Button>
+        </div>
 
-          <div>
-            <label className="font-body text-xs text-gray-500 mb-1 block">
-              File
-            </label>
-            <div className="border-2 border-dashed border-gray-200
-              rounded-lg p-6 text-center hover:border-[#4A7FA7]
-              transition-colors cursor-pointer">
-              <Upload size={24} className="text-gray-300 mx-auto mb-2" />
-              <p className="font-body text-xs text-gray-400">
-                Click to upload or drag & drop
-              </p>
-              <p className="font-body text-xs text-gray-300 mt-1">
-                PDF, DOCX, PPTX, MP4 up to 500MB
-              </p>
-            </div>
-          </div>
+      </div>
+    </Modal>
+  )
+}
 
-          <div className="flex gap-3 pt-2">
-            <button onClick={onClose}
-              className="flex-1 border border-gray-200 text-gray-500
-                font-body text-sm py-2.5 rounded-lg hover:bg-gray-50">
-              Cancel
-            </button>
-            <button className="flex-1 bg-[#1A3D63] text-white
-              font-body text-sm py-2.5 rounded-lg hover:bg-[#4A7FA7]
-              transition-colors">
-              Upload Resource
-            </button>
-          </div>
+// ── Delete Confirm Modal ──────────────────────────────────
+function DeleteModal({ onClose, onConfirm, title }) {
+  return (
+    <Modal isOpen={true} onClose={onClose} title="Delete Resource" size="sm">
+      <div className="space-y-4">
+        <p className="font-body text-sm text-gray-600">
+          Are you sure you want to delete <strong>{title}</strong>?
+          This action cannot be undone.
+        </p>
+        <div className="flex gap-3">
+          <Button variant="secondary" fullWidth onClick={onClose}>
+            Cancel
+          </Button>
+          <Button variant="danger" fullWidth onClick={onConfirm}>
+            Delete
+          </Button>
         </div>
       </div>
-    </div>
+    </Modal>
   )
 }
 
 // ── Main Component ─────────────────────────────────────────
 function MentorResourcesPage() {
-  const [showUpload, setShowUpload] = useState(false)
+  const [resources, setResources]     = useState([])
+  const [subjects, setSubjects]       = useState([])
+  const [stats, setStats]             = useState({
+    total_uploads: 0, total_downloads: 0, total_views: 0
+  })
+  const [loading, setLoading]         = useState(true)
+  const [error, setError]             = useState("")
+  const [showUpload, setShowUpload]   = useState(false)
+  const [editResource, setEditResource] = useState(null)
+  const [deleteTarget, setDeleteTarget] = useState(null)
+  const [sortBy, setSortBy]           = useState("Newest First")
+
+  // ── Fetch on load ──────────────────────────────────────
+  useEffect(() => {
+    fetchAll()
+    fetchSubjects()
+  }, [])
+
+  async function fetchSubjects() {
+    try {
+      const response = await getSubjects()
+      setSubjects(response.data || [])
+    } catch (err) {
+      console.error("Failed to load subjects:", err)
+    }
+  }
+
+  async function fetchAll() {
+    try {
+      setLoading(true)
+      setError("")
+
+      const [resourcesRes, statsRes] = await Promise.all([
+        getMyResources(),
+        getMyStats(),
+      ])
+
+      setResources(resourcesRes.data || [])
+      setStats(statsRes.data || {
+        total_uploads: 0, total_downloads: 0, total_views: 0
+      })
+
+    } catch (err) {
+      setError("Failed to load resources. Please try again.")
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  // ── Delete resource ────────────────────────────────────
+  async function handleDelete() {
+    if (!deleteTarget) return
+    try {
+      await deleteResource(deleteTarget.id)
+      setDeleteTarget(null)
+      fetchAll()
+    } catch (err) {
+      setError("Failed to delete resource.")
+    }
+  }
+
+  // ── Stats data ─────────────────────────────────────────
+  const statsData = [
+    { label: "Total Uploads",    value: stats.total_uploads,   icon: "📁" },
+    { label: "Total Downloads",  value: stats.total_downloads, icon: "⬇️" },
+    { label: "Total Views",      value: stats.total_views,     icon: "👁️" },
+  ]
 
   return (
     <div className="space-y-5">
 
-      {showUpload && <UploadModal onClose={() => setShowUpload(false)} />}
+      {/* Modals */}
+      {showUpload && (
+        <UploadModal
+          onClose={() => setShowUpload(false)}
+          onSuccess={fetchAll}
+          subjects={subjects}
+        />
+      )}
+      {editResource && (
+        <UploadModal
+          onClose={() => setEditResource(null)}
+          onSuccess={fetchAll}
+          subjects={subjects}
+          editResource={editResource}
+        />
+      )}
+      {deleteTarget && (
+        <DeleteModal
+          onClose={() => setDeleteTarget(null)}
+          onConfirm={handleDelete}
+          title={deleteTarget.title}
+        />
+      )}
 
-      {/* ── Header ── */}
+      {/* Header */}
       <div className="flex items-start justify-between">
         <div>
           <h2 className="font-heading text-2xl font-bold text-[#0A1931]">
@@ -151,22 +331,24 @@ function MentorResourcesPage() {
             Manage and track your uploaded study materials
           </p>
         </div>
-        <button
-          onClick={() => setShowUpload(true)}
-          className="flex items-center gap-2 bg-[#1A3D63] text-white
-            font-body text-sm font-medium px-4 py-2.5 rounded-lg
-            hover:bg-[#4A7FA7] transition-colors"
-        >
-          <Plus size={16} />
+        <Button variant="primary" icon={Plus}
+          onClick={() => setShowUpload(true)}>
           Upload Resource
-        </button>
+        </Button>
       </div>
 
-      {/* ── Stats ── */}
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+      {/* Error */}
+      {error && (
+        <ErrorMessage message={error} onRetry={fetchAll}
+          onDismiss={() => setError("")} />
+      )}
+
+      {/* Stats */}
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
         {statsData.map((stat) => (
           <div key={stat.label}
-            className="bg-white rounded-2xl px-5 py-4 shadow-sm">
+            className="bg-white rounded-2xl px-5 py-4 shadow-sm
+              border border-gray-100">
             <div className="text-2xl mb-2">{stat.icon}</div>
             <p className="font-body text-xs text-gray-400">{stat.label}</p>
             <p className="font-heading text-2xl font-bold text-[#0A1931] mt-1">
@@ -176,103 +358,150 @@ function MentorResourcesPage() {
         ))}
       </div>
 
-      {/* ── Resources Table ── */}
+      {/* Resources Table */}
       <div className="bg-white rounded-2xl shadow-sm overflow-hidden">
 
-        <div className="px-5 py-3 border-b border-gray-100">
-          <h3 className="font-heading text-sm font-semibold text-[#0A1931]">
-            Uploaded Resources
-          </h3>
+        <div className="flex items-center justify-between px-5 py-3
+          border-b border-gray-100">
+          <div className="flex items-center gap-2">
+            <h3 className="font-heading text-sm font-semibold text-[#0A1931]">
+              Uploaded Resources
+            </h3>
+            <span className="font-body text-xs text-gray-400">
+              {resources.length} resources
+            </span>
+          </div>
+          <div className="flex items-center gap-2">
+            <span className="font-body text-xs text-gray-400">Sort by</span>
+            <select value={sortBy} onChange={(e) => setSortBy(e.target.value)}
+              className="border border-gray-200 rounded-lg px-2 py-1.5
+                font-body text-xs text-gray-600 focus:outline-none">
+              {sortOptions.map(s => <option key={s}>{s}</option>)}
+            </select>
+          </div>
         </div>
 
-        <div className="overflow-x-auto">
-          <table className="w-full">
-            <thead>
-              <tr className="border-b border-gray-100">
-                {["RESOURCE", "SUBJECT", "TYPE", "UPLOADED", "SIZE", "DOWNLOADS", "VIEWS", "ACTIONS"].map(h => (
-                  <th key={h}
-                    className="font-body text-[10px] font-semibold
-                      text-gray-400 text-left px-5 py-3 tracking-wider">
-                    {h}
-                  </th>
-                ))}
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-gray-50">
-              {myResources.map((resource) => (
-                <tr key={resource.id}
-                  className="hover:bg-gray-50 transition-colors">
-
-                  <td className="px-5 py-3.5">
-                    <div className="flex items-center gap-2">
-                      <div className="w-7 h-7 bg-gray-100 rounded
-                        flex items-center justify-center">📄</div>
-                      <span className="font-body text-sm text-[#0A1931]
-                        font-medium">
-                        {resource.title}
-                      </span>
-                    </div>
-                  </td>
-
-                  <td className="px-5 py-3.5">
-                    <span className="font-body text-xs font-semibold
-                      text-[#4A7FA7]">
-                      {resource.subject}
-                    </span>
-                  </td>
-
-                  <td className="px-5 py-3.5">
-                    <TypeBadge type={resource.type} />
-                  </td>
-
-                  <td className="px-5 py-3.5">
-                    <span className="font-body text-xs text-gray-400">
-                      {resource.uploaded}
-                    </span>
-                  </td>
-
-                  <td className="px-5 py-3.5">
-                    <span className="font-body text-xs text-gray-400">
-                      {resource.size}
-                    </span>
-                  </td>
-
-                  <td className="px-5 py-3.5">
-                    <span className="font-body text-xs font-medium
-                      text-[#0A1931]">
-                      {resource.downloads}
-                    </span>
-                  </td>
-
-                  <td className="px-5 py-3.5">
-                    <span className="font-body text-xs font-medium
-                      text-[#0A1931]">
-                      {resource.views}
-                    </span>
-                  </td>
-
-                  <td className="px-5 py-3.5">
-                    <div className="flex items-center gap-2">
-                      <button className="p-1.5 text-gray-400
-                        hover:text-[#1A3D63] transition-colors">
-                        <Eye size={15} />
-                      </button>
-                      <button className="p-1.5 text-gray-400
-                        hover:text-[#1A3D63] transition-colors">
-                        <Edit size={15} />
-                      </button>
-                      <button className="p-1.5 text-gray-400
-                        hover:text-red-500 transition-colors">
-                        <Trash2 size={15} />
-                      </button>
-                    </div>
-                  </td>
-
+        {/* Loading */}
+        {loading ? (
+          <div className="flex items-center justify-center py-16">
+            <LoadingSpinner size="lg" label="Loading resources..." />
+          </div>
+        ) : resources.length === 0 ? (
+          <div className="text-center py-16">
+            <p className="font-heading text-sm font-semibold text-gray-300">
+              No resources uploaded yet
+            </p>
+            <p className="font-body text-xs text-gray-200 mt-1">
+              Click "Upload Resource" to add your first resource
+            </p>
+          </div>
+        ) : (
+          <div className="overflow-x-auto">
+            <table className="w-full">
+              <thead>
+                <tr className="border-b border-gray-100">
+                  {["RESOURCE", "SUBJECT", "TYPE", "UPLOADED",
+                    "SIZE", "DOWNLOADS", "VIEWS", "ACTIONS"].map(h => (
+                    <th key={h}
+                      className="font-body text-[10px] font-semibold
+                        text-gray-400 text-left px-5 py-3 tracking-wider">
+                      {h}
+                    </th>
+                  ))}
                 </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
+              </thead>
+              <tbody className="divide-y divide-gray-50">
+                {resources.map((resource) => (
+                  <tr key={resource.id}
+                    className="hover:bg-gray-50 transition-colors">
+
+                    <td className="px-5 py-3.5">
+                      <div className="flex items-center gap-2">
+                        <div className="w-7 h-7 bg-gray-100 rounded
+                          flex items-center justify-center">📄</div>
+                        <span className="font-body text-sm text-[#0A1931]
+                          font-medium">
+                          {resource.title}
+                        </span>
+                      </div>
+                    </td>
+
+                    <td className="px-5 py-3.5">
+                      <span className="font-body text-xs font-semibold
+                        text-[#4A7FA7]">
+                        {resource.subject_name || "—"}
+                      </span>
+                    </td>
+
+                    <td className="px-5 py-3.5">
+                      <TypeBadge type={resource.file_type_name} />
+                    </td>
+
+                    <td className="px-5 py-3.5">
+                      <span className="font-body text-xs text-gray-400">
+                        {new Date(resource.uploaded_at)
+                          .toLocaleDateString("en-GB", {
+                            day: "2-digit", month: "short", year: "numeric"
+                          })}
+                      </span>
+                    </td>
+
+                    <td className="px-5 py-3.5">
+                      <span className="font-body text-xs text-gray-400">
+                        {resource.file_size_mb
+                          ? `${resource.file_size_mb} MB` : "—"}
+                      </span>
+                    </td>
+
+                    <td className="px-5 py-3.5">
+                      <span className="font-body text-xs font-medium
+                        text-[#0A1931]">
+                        {resource.download_count || 0}
+                      </span>
+                    </td>
+
+                    <td className="px-5 py-3.5">
+                      <span className="font-body text-xs font-medium
+                        text-[#0A1931]">
+                        {resource.view_count || 0}
+                      </span>
+                    </td>
+
+                    <td className="px-5 py-3.5">
+                      <div className="flex items-center gap-2">
+                        <Tooltip text="Preview">
+                          <button
+                            onClick={() => window.open(resource.file_url, "_blank")}
+                            className="p-1.5 text-gray-400
+                              hover:text-[#1A3D63] transition-colors">
+                            <Eye size={15} />
+                          </button>
+                        </Tooltip>
+                        <Tooltip text="Edit">
+                          <button
+                            onClick={() => setEditResource(resource)}
+                            className="p-1.5 text-gray-400
+                              hover:text-[#1A3D63] transition-colors">
+                            <Edit size={15} />
+                          </button>
+                        </Tooltip>
+                        <Tooltip text="Delete">
+                          <button
+                            onClick={() => setDeleteTarget(resource)}
+                            className="p-1.5 text-gray-400
+                              hover:text-red-500 transition-colors">
+                            <Trash2 size={15} />
+                          </button>
+                        </Tooltip>
+                      </div>
+                    </td>
+
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
 
       </div>
     </div>
