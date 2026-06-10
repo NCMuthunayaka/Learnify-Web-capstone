@@ -12,7 +12,7 @@ const ALL_USERS = [
   { id: "LNF-8821", name: "Dr. Sarah Jenkins",  email: "sarah.j@university.edu",  role: "Mentor",  status: "Active",   avatar: "SJ", avatarBg: "bg-blue-500"   },
   { id: "LI-LNF-7634", name: "Marcus Thorne",   email: "m.thorne@academic.org",   role: "Student", status: "Pending",  avatar: "MT", avatarBg: "bg-purple-500" },
   { id: "LI-LNF-7022", name: "Elara Vance",     email: "evance@leanify.edu",      role: "Mentor",  status: "Inactive", avatar: "EV", avatarBg: "bg-teal-500"   },
-  { id: "LNF-6712", name: "Kavindu Chamith",     email: "k.chamith@learn.io",      role: "Student", status: "Active",   avatar: "KC", avatarBg: "bg-green-500"  },
+  { id: "LNF-6712", name: "Athav Abiram",     email: "A.abiram@learn.io",      role: "Student", status: "Active",   avatar: "KC", avatarBg: "bg-green-500"  },
   { id: "LNF-6540", name: "Priya Nair",          email: "p.nair@edu.lk",           role: "Student", status: "Active",   avatar: "PN", avatarBg: "bg-rose-500"   },
   { id: "LNF-6201", name: "Prof. David Chen",    email: "d.chen@campus.edu",       role: "Mentor",  status: "Active",   avatar: "DC", avatarBg: "bg-indigo-500" },
   { id: "LNF-5988", name: "Ashani Weerasinghe",  email: "a.weera@student.edu",     role: "Student", status: "Active",   avatar: "AW", avatarBg: "bg-cyan-500"   },
