@@ -24,6 +24,9 @@ import AdminFeedbackDashboard from "../pages/admin/AdminFeedbackDashboard"
 import AdminUsersPage from "../pages/admin/AdminUsersPage"
 import AdminApprovalsPage from "../pages/admin/AdminApprovalsPage"
 import AdminSystemMonitoringPage from "../pages/admin/AdminSystemMonitoringPage"
+import AdminProfilePage from "../pages/admin/AdminProfilePage"
+import AdminEditProfilePage from "../pages/admin/AdminEditProfilePage"
+import AdminChangePasswordPage from "../pages/admin/AdminChangePasswordPage"
 
 function AppRoutes() {
   return (
@@ -126,6 +129,10 @@ function AppRoutes() {
             </PrivateRoute>
           } />
           <Route path="/admin/system" element={<PrivateRoute roles={["admin"]}><AdminSystemMonitoringPage /></PrivateRoute>} />
+
+          <Route path="/admin/profile" element={<PrivateRoute roles={["admin"]}><AdminProfilePage /></PrivateRoute>} />
+          <Route path="/admin/profile/edit" element={<PrivateRoute roles={["admin"]}><AdminEditProfilePage /></PrivateRoute>} />
+          <Route path="/admin/change-password" element={<PrivateRoute roles={["admin"]}><AdminChangePasswordPage /></PrivateRoute>} />
 
         </Route>
 
