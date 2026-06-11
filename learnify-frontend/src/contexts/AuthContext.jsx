@@ -1,4 +1,5 @@
-import { createContext, useState } from "react"
+import { createContext, useState, useEffect } from "react"
+import api from "../api/axiosInstance"
 
 export const AuthContext = createContext(null)
 
@@ -7,6 +8,27 @@ export function AuthProvider({ children }) {
   const [token, setToken] = useState(
     localStorage.getItem("access_token") || null
   )
+  const [loading, setLoading] = useState(!!localStorage.getItem("access_token"))
+
+  useEffect(() => {
+    async function restoreSession() {
+      const storedToken = localStorage.getItem("access_token")
+      if (storedToken) {
+        try {
+          const response = await api.get("/auth/me")
+          setUser(response.data.data)
+        } catch (err) {
+          console.error("Failed to restore user session on mount:", err)
+          logout()
+        } finally {
+          setLoading(false)
+        }
+      } else {
+        setLoading(false)
+      }
+    }
+    restoreSession()
+  }, [])
 
   function login(userData, accessToken, refreshToken) {
     setUser(userData)
@@ -24,8 +46,12 @@ export function AuthProvider({ children }) {
   }
 
   return (
-    <AuthContext.Provider value={{ user, token, login, logout }}>
-      {children}
+    <AuthContext.Provider value={{ user, token, login, logout, loading }}>
+      {!loading ? children : (
+        <div className="min-h-screen w-full flex items-center justify-center bg-[#0A1931]">
+          <div className="w-10 h-10 border-4 border-[#4A7FA7] border-t-transparent rounded-full animate-spin" />
+        </div>
+      )}
     </AuthContext.Provider>
   )
 }
