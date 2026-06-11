@@ -9,6 +9,7 @@ from app.models.notification      import Notification
 from app.models.notification_type import NotificationType
 from app.models.subject           import Subject
 from app.models.file_type         import FileType
+from app.models.token_blocklist   import TokenBlocklist
 
 
 def create_app(config_name="development"):
@@ -19,6 +20,15 @@ def create_app(config_name="development"):
     db.init_app(app)
     jwt.init_app(app)
     migrate.init_app(app, db)
+
+    # ── JWT Blocklist check ──
+    # Called on every @jwt_required() route to reject revoked tokens
+    @jwt.token_in_blocklist_loader
+    def check_if_token_revoked(jwt_header, jwt_payload):
+        jti = jwt_payload["jti"]
+        return db.session.query(
+            TokenBlocklist.query.filter_by(jti=jti).exists()
+        ).scalar()
     bcrypt.init_app(app)
     cors.init_app(app, resources={
         r"/api/*": {

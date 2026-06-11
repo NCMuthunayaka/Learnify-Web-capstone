@@ -1,7 +1,7 @@
 from flask import Blueprint, request, jsonify
 from flask_jwt_extended import (
     create_access_token, create_refresh_token,
-    jwt_required, get_jwt_identity
+    jwt_required, get_jwt_identity, get_jwt
 )
 from app.services.auth_service import register_user, login_user, google_auth_user
 from app.utils.response_utils import success_response, error_response
@@ -130,3 +130,39 @@ def refresh():
     user_id      = get_jwt_identity()
     access_token = create_access_token(identity=user_id)
     return success_response(data={"access_token": access_token})
+
+
+# ── Logout ────────────────────────────────────────────────
+# Revokes the current access token by adding its JTI to the blocklist.
+# The client must also send the refresh token in the X-Refresh-Token header
+# so both tokens are invalidated in one call.
+@bp.route("/logout", methods=["POST"])
+@jwt_required()
+def logout():
+    from app.extensions import db
+    from app.models.token_blocklist import TokenBlocklist
+    from datetime import datetime
+
+    user_id = int(get_jwt_identity())
+
+    # Revoke the access token
+    access_jti = get_jwt()["jti"]
+    db.session.add(TokenBlocklist(
+        jti=access_jti,
+        token_type="access",
+        user_id=user_id,
+        revoked_at=datetime.utcnow(),
+    ))
+
+    # Optionally revoke the refresh token too (sent in header)
+    refresh_jti = request.headers.get("X-Refresh-Token-JTI")
+    if refresh_jti:
+        db.session.add(TokenBlocklist(
+            jti=refresh_jti,
+            token_type="refresh",
+            user_id=user_id,
+            revoked_at=datetime.utcnow(),
+        ))
+
+    db.session.commit()
+    return success_response(message="Logged out successfully")

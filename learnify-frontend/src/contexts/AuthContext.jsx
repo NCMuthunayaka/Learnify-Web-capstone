@@ -37,7 +37,13 @@ export function AuthProvider({ children }) {
     localStorage.setItem("refresh_token", refreshToken)
   }
 
-  function logout() {
+  async function logout() {
+    // Revoke tokens server-side before clearing client state
+    try {
+      await api.post("/auth/logout")
+    } catch {
+      // Even if the server call fails, still clear the client session
+    }
     // Clear state
     setUser(null)
     setToken(null)

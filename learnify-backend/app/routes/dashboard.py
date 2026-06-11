@@ -3,6 +3,7 @@ from flask_jwt_extended import jwt_required, get_jwt_identity
 from app.extensions import db
 from app.models.user import User
 from app.utils.response_utils import success_response, error_response
+from app.services.analytics_service import get_analytics_bundle
 
 bp = Blueprint("dashboard", __name__)
 
@@ -35,6 +36,7 @@ def get_dashboard_stats():
     # ── Get today's tasks count ───────────────────────────
     from datetime import date
     try:
+        from sqlalchemy import text
         tasks_today = db.session.execute(
             text("SELECT COUNT(*) FROM tasks "
                  "WHERE student_id = :user_id "
@@ -46,6 +48,7 @@ def get_dashboard_stats():
 
     # ── Get completed tasks count ─────────────────────────
     try:
+        from sqlalchemy import text
         completed = db.session.execute(
             text("SELECT COUNT(*) FROM tasks "
                  "WHERE student_id = :user_id "
@@ -59,6 +62,7 @@ def get_dashboard_stats():
     # Get study sessions for last 7 days grouped by day
     try:
         from datetime import datetime, timedelta
+        from sqlalchemy import text
         week_ago = datetime.now() - timedelta(days=7)
         weekly_data = db.session.execute(
             text("SELECT DAYNAME(start_time) as day, "
@@ -108,6 +112,7 @@ def get_dashboard_stats():
     # ── Get upcoming deadlines ────────────────────────────
     try:
         from datetime import date as date_type
+        from sqlalchemy import text
         upcoming = db.session.execute(
             text("SELECT t.title, t.due_date, s.name as subject_name, "
                  "s.color_hex "
@@ -135,6 +140,7 @@ def get_dashboard_stats():
 
     # ── Get scheduled subjects ────────────────────────────
     try:
+        from sqlalchemy import text
         scheduled = db.session.execute(
             text("SELECT s.name, s.color_hex "
                  "FROM student_subjects ss "
@@ -152,12 +158,16 @@ def get_dashboard_stats():
     except Exception:
         scheduled_subjects = []
 
+    # ── Analytics bundle (streak, focus score, goal %) ───
+    analytics = get_analytics_bundle(user_id)
+
     return success_response(data={
         "stats": {
             "subjects":    int(subjects_count),
             "tasks_today": int(tasks_today),
             "completed":   int(completed),
         },
+        "analytics":          analytics,
         "weekly_chart":       weekly_chart,
         "deadlines":          deadlines,
         "scheduled_subjects": scheduled_subjects,
