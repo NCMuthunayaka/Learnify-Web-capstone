@@ -1,4 +1,4 @@
-import { BrowserRouter, Routes, Route } from "react-router-dom"
+import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom"
 import MainLayout from "../components/layout/MainLayout"
 import LandingLayout from "../components/layout/LandingLayout"
 import PrivateRoute from "./PrivateRoute"
@@ -28,6 +28,26 @@ import AdminProfilePage from "../pages/admin/AdminProfilePage"
 import AdminEditProfilePage from "../pages/admin/AdminEditProfilePage"
 import AdminChangePasswordPage from "../pages/admin/AdminChangePasswordPage"
 
+function DashboardDispatcher() {
+  const token = localStorage.getItem("access_token")
+  if (!token) {
+    return <Navigate to="/login" replace />
+  }
+  try {
+    const payload = JSON.parse(atob(token.split(".")[1]))
+    const role = payload.role
+    if (role === "mentor") {
+      return <Navigate to="/mentor/dashboard" replace />
+    }
+    if (role === "admin") {
+      return <Navigate to="/admin/dashboard" replace />
+    }
+  } catch (err) {
+    console.error("Failed to parse token in dispatcher:", err)
+  }
+  return <DashboardPage />
+}
+
 function AppRoutes() {
   return (
     <BrowserRouter>
@@ -50,7 +70,7 @@ function AppRoutes() {
           {/* Shared pages — all roles */}
           <Route path="/dashboard" element={
             <PrivateRoute roles={["student", "mentor", "admin"]}>
-              <DashboardPage />
+              <DashboardDispatcher />
             </PrivateRoute>
           } />
 
@@ -72,10 +92,22 @@ function AppRoutes() {
             </PrivateRoute>
           } />
 
+          <Route path="/help" element={
+            <PrivateRoute roles={["student", "mentor", "admin"]}>
+              <HelpPage />
+            </PrivateRoute>
+          } />
+
           {/* ── Student only pages ── */}
           <Route path="/scheduler" element={
             <PrivateRoute roles={["student"]}>
               <SchedulerPage />
+            </PrivateRoute>
+          } />
+
+          <Route path="/progress" element={
+            <PrivateRoute roles={["student"]}>
+              <ProgressPage />
             </PrivateRoute>
           } />
 
@@ -92,6 +124,12 @@ function AppRoutes() {
           } />
 
           {/* ── Mentor only pages ── */}
+          <Route path="/mentor/dashboard" element={
+            <PrivateRoute roles={["mentor", "admin"]}>
+              <MentorDashboardPage />
+            </PrivateRoute>
+          } />
+
           <Route path="/mentor/resources" element={
             <PrivateRoute roles={["mentor", "admin"]}>
               <MentorResourcesPage />
