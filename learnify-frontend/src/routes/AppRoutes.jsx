@@ -17,6 +17,7 @@ import RegisterPage from "../pages/auth/RegisterPage"
 import MentorResourcesPage from "../pages/mentor/MentorResourcesPage"
 import MentorProfilePage from "../pages/mentor/MentorProfilePage"
 import MentorDashboardPage from "../pages/mentor/MentorDashboardPage"
+import MentorRequestsPage from "../pages/mentor/MentorRequestsPage"
 import NotificationsPage from "../pages/NotificationsPage"
 import HelpPage from "../pages/HelpPage"
 import AdminAnalyticsPage from "../pages/admin/AdminAnalyticsPage"
@@ -127,6 +128,12 @@ function AppRoutes() {
           <Route path="/mentor/dashboard" element={
             <PrivateRoute roles={["mentor", "admin"]}>
               <MentorDashboardPage />
+            </PrivateRoute>
+          } />
+
+          <Route path="/mentor/requests" element={
+            <PrivateRoute roles={["mentor", "admin"]}>
+              <MentorRequestsPage />
             </PrivateRoute>
           } />
 

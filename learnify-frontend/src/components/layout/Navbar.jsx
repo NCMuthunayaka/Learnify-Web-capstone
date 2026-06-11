@@ -27,6 +27,7 @@ function getRoleFromToken() {
 const pageTitles = {
   "/dashboard": "Dashboard",
   "/mentor/dashboard": "Mentor Dashboard",
+  "/mentor/requests": "Student Requests",
   "/scheduler": "Study Scheduler",
   "/progress": "Progress",
   "/ai-chat": "AI Assistant",
