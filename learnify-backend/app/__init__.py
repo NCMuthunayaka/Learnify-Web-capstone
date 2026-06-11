@@ -65,16 +65,16 @@ def create_app(config_name="development"):
         from app.extensions import db, bcrypt
 
         if not email or "@" not in email:
-            click.echo("❌ Error: Invalid email address format.")
+            click.echo("Error: Invalid email address format.")
             return
 
         existing = User.query.filter_by(email=email).first()
         if existing:
-            click.echo(f"❌ Error: Email {email} is already registered.")
+            click.echo(f"Error: Email {email} is already registered.")
             return
 
         if len(password) < 8:
-            click.echo("❌ Error: Password must be at least 8 characters long.")
+            click.echo("Error: Password must be at least 8 characters long.")
             return
 
         try:
@@ -88,9 +88,9 @@ def create_app(config_name="development"):
             )
             db.session.add(admin)
             db.session.commit()
-            click.echo(f"✓ Administrator account {email} created successfully!")
+            click.echo(f"[OK] Administrator account {email} created successfully!")
         except Exception as e:
             db.session.rollback()
-            click.echo(f"❌ Failed to create administrator: {e}")
+            click.echo(f"[ERROR] Failed to create administrator: {e}")
 
     return app

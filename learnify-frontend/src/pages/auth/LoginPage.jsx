@@ -6,12 +6,14 @@ import { useAuth } from "../../hooks/useAuth"
 import { useGoogleLogin } from "@react-oauth/google"
 import LoadingSpinner from "../../components/common/LoadingSpinner"
 import ErrorMessage from "../../components/common/ErrorMessage"
+import { Eye, EyeOff } from "lucide-react"
 
 function LoginPage() {
   const navigate  = useNavigate()
   const { login } = useAuth()
 
   const [formData, setFormData] = useState({ email: "", password: "" })
+  const [showPassword, setShowPassword] = useState(false)
   const [loading, setLoading]   = useState(false)
   const [gLoading, setGLoading] = useState(false)
   const [error, setError]       = useState("")
@@ -157,18 +159,27 @@ function LoginPage() {
                 focus:outline-none focus:border-[#4A7FA7]
                 transition-colors duration-200"
             />
-            <input
-              type="password"
-              name="password"
-              placeholder="Password"
-              value={formData.password}
-              onChange={handleChange}
-              className="w-full bg-[#1A3D63] bg-opacity-60 text-white
-                placeholder-[#B3CFE5] font-body text-sm px-4 py-3
-                rounded-lg border border-[#4A7FA7] border-opacity-40
-                focus:outline-none focus:border-[#4A7FA7]
-                transition-colors duration-200"
-            />
+            <div className="relative">
+              <input
+                type={showPassword ? "text" : "password"}
+                name="password"
+                placeholder="Password"
+                value={formData.password}
+                onChange={handleChange}
+                className="w-full bg-[#1A3D63] bg-opacity-60 text-white
+                  placeholder-[#B3CFE5] font-body text-sm pl-4 pr-10 py-3
+                  rounded-lg border border-[#4A7FA7] border-opacity-40
+                  focus:outline-none focus:border-[#4A7FA7]
+                  transition-colors duration-200"
+              />
+              <button
+                type="button"
+                onClick={() => setShowPassword(!showPassword)}
+                className="absolute right-3 top-1/2 -translate-y-1/2 text-[#B3CFE5] hover:text-white focus:outline-none"
+              >
+                {showPassword ? <EyeOff size={18} /> : <Eye size={18} />}
+              </button>
+            </div>
             <div className="text-right">
               <Link to="/forgot-password"
                 className="font-body text-xs text-[#B3CFE5]
