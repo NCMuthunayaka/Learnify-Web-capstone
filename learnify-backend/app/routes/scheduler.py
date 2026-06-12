@@ -411,8 +411,14 @@ def generate_timetable():
             ),
             {"uid": user_id}
         ).fetchall()
-        subjects = [r[0] for r in rows] if rows else ["Mathematics", "Physics", "Chemistry"]
+        subjects = [r[0] for r in rows] if rows else []
     except Exception:
+        subjects = []
+
+    # Ensure focus_subject is included in AI context list
+    if focus_subject and focus_subject not in subjects:
+        subjects.append(focus_subject)
+    if not subjects:
         subjects = ["Mathematics", "Physics", "Chemistry"]
 
     # Call AI to generate schedule
@@ -462,7 +468,20 @@ def generate_timetable():
                     text("SELECT id FROM subjects WHERE name LIKE :name LIMIT 1"),
                     {"name": f"%{subj_name}%"}
                 ).fetchone()
-                subject_cache[subj_name] = int(row[0]) if row else None
+                if row:
+                    subject_cache[subj_name] = int(row[0])
+                else:
+                    # Dynamically create the subject if it doesn't exist
+                    import random
+                    default_colors = ["#4A90D9", "#E07C3A", "#2A9D8F", "#27AE60", "#7C5CBF", "#888888"]
+                    color = random.choice(default_colors)
+                    db.session.execute(
+                        text("INSERT INTO subjects (name, color_hex) VALUES (:name, :color)"),
+                        {"name": subj_name, "color": color}
+                    )
+                    db.session.commit()
+                    new_sub_id = db.session.execute(text("SELECT LAST_INSERT_ID()")).scalar()
+                    subject_cache[subj_name] = int(new_sub_id)
 
             subject_id = subject_cache.get(subj_name)
             if not subject_id:

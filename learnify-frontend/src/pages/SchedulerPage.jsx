@@ -6,6 +6,7 @@ import Button from "../components/common/Button"
 import Badge from "../components/common/Badge"
 import LoadingSpinner from "../components/common/LoadingSpinner"
 import { getTasks, getSchedulerStats, getTimetable, generateTimetable } from "../api/schedulerApi"
+import { getSubjects } from "../api/subjectsApi"
 
 // ── statsData is now built dynamically from API (see dynamicStats below)
 
@@ -156,6 +157,9 @@ function SchedulerPage() {
   const [examDate, setExamDate]   = useState("")
   const [generating, setGenerating] = useState(false)
   const [generateMsg, setGenerateMsg] = useState(null)
+  const [allSubjects, setAllSubjects] = useState([])
+  const [isCustomSubject, setIsCustomSubject] = useState(false)
+  const [customSubjectName, setCustomSubjectName] = useState("")
 
   // ── Live API state ────────────────────────────────────
   const [apiStats, setApiStats]           = useState(null)
@@ -167,19 +171,27 @@ function SchedulerPage() {
     async function loadSchedulerData() {
       try {
         setStatsLoading(true)
-        const [statsRes, tasksRes, timetableRes] = await Promise.allSettled([
+        const [statsRes, tasksRes, timetableRes, subjectsRes] = await Promise.allSettled([
           getSchedulerStats(),
           getTasks(),
           getTimetable(),
+          getSubjects(),
         ])
         if (statsRes.status === "fulfilled") setApiStats(statsRes.value.data)
         if (tasksRes.status === "fulfilled") setApiTasks(tasksRes.value.data?.tasks || [])
         if (timetableRes.status === "fulfilled") setApiTimetable(timetableRes.value.data?.sessions || [])
+        if (subjectsRes.status === "fulfilled") setAllSubjects(subjectsRes.value.data || [])
       } catch {}
       finally { setStatsLoading(false) }
     }
     loadSchedulerData()
   }, [])
+
+  useEffect(() => {
+    if (allSubjects.length > 0 && !subject) {
+      setSubject(allSubjects[0].name)
+    }
+  }, [allSubjects, subject])
 
   // Reload timetable data (called after AI generation)
   async function reloadTimetable() {
@@ -198,12 +210,17 @@ function SchedulerPage() {
   // AI generate handler
   async function handleGenerate() {
     if (generating) return
+    const finalSubject = isCustomSubject ? customSubjectName.trim() : subject
+    if (!finalSubject) {
+      setGenerateMsg({ type: "error", text: "❌ Please specify a focus subject name." })
+      return
+    }
     setGenerating(true)
     setGenerateMsg(null)
     try {
       const res = await generateTimetable({
         intensity,
-        focus_subject: subject,
+        focus_subject: finalSubject,
         exam_date: examDate,
       })
       const count = res?.data?.sessions_created || 0
@@ -246,27 +263,43 @@ function SchedulerPage() {
       color:   s.color_hex,
     }))
 
-  // Timetable study status logs state (initialised with logs to sum to exactly 24.5h and 18 completed sessions)
-  const [timetableLogs, setTimetableLogs] = useState({
-    "8:00 AM-Monday": { status: "Completed", hours: 2.0 },
-    "10:00 AM-Monday": { status: "Partially Completed", hours: 1.5 },
-    "1:00 PM-Monday": { status: "Completed", hours: 2.0 },
-    "3:00 PM-Monday": { status: "Partially Completed", hours: 0.5 },
-    "10:00 AM-Tuesday": { status: "Completed", hours: 2.0 },
-    "1:00 PM-Tuesday": { status: "Partially Completed", hours: 1.0 },
-    "3:00 PM-Tuesday": { status: "Partially Completed", hours: 1.5 },
-    "5:00 PM-Tuesday": { status: "Partially Completed", hours: 1.0 },
-    "8:00 AM-Wednesday": { status: "Completed", hours: 2.0 },
-    "10:00 AM-Wednesday": { status: "Partially Completed", hours: 1.0 },
-    "1:00 PM-Wednesday": { status: "Partially Completed", hours: 1.5 },
-    "5:00 PM-Wednesday": { status: "Partially Completed", hours: 1.0 },
-    "10:00 AM-Thursday": { status: "Partially Completed", hours: 1.5 },
-    "1:00 PM-Thursday": { status: "Completed", hours: 2.0 },
-    "3:00 PM-Thursday": { status: "Partially Completed", hours: 1.0 },
-    "5:00 PM-Thursday": { status: "Partially Completed", hours: 1.0 },
-    "8:00 AM-Friday": { status: "Partially Completed", hours: 1.5 },
-    "3:00 PM-Friday": { status: "Partially Completed", hours: 0.5 },
+  // Build dynamic timetable grid from apiTimetable
+  const dynamicTimetable = {}
+  timeSlots.forEach(slot => {
+    dynamicTimetable[slot] = {
+      Monday: null, Tuesday: null, Wednesday: null, Thursday: null, Friday: null, Saturday: null
+    }
   })
+
+  apiTimetable.forEach(session => {
+    if (!session.start_time) return
+    const dateObj = new Date(session.start_time)
+    const daysOfWeek = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"]
+    const dayName = daysOfWeek[dateObj.getDay()]
+    
+    const hour = dateObj.getHours()
+    let slot = null
+    if (hour === 8) slot = "8:00 AM"
+    else if (hour === 10) slot = "10:00 AM"
+    else if (hour === 12) slot = "12:00 PM"
+    else if (hour === 13 || hour === 1) slot = "1:00 PM"
+    else if (hour === 15 || hour === 3) slot = "3:00 PM"
+    else if (hour === 17 || hour === 5) slot = "5:00 PM"
+    
+    if (slot && dayName in dynamicTimetable[slot]) {
+      dynamicTimetable[slot][dayName] = {
+        id: session.id,
+        subject: session.subject_name,
+        detail: session.session_type,
+        completed: session.completed,
+        color_hex: session.color_hex,
+        raw: session
+      }
+    }
+  })
+
+  // Timetable study status logs state (initialised with logs to sum to exactly 24.5h and 18 completed sessions)
+  const [timetableLogs, setTimetableLogs] = useState({})
 
   // Modal control states
   const [isModalOpen, setIsModalOpen] = useState(false)
@@ -443,7 +476,7 @@ function SchedulerPage() {
                       </td>
                     ) : (
                       days.map((day) => {
-                        const cell = timetable[time]?.[day]
+                        const cell = dynamicTimetable[time]?.[day]
                         if (!cell) {
                           return (
                             <td key={day} className="py-1 px-1">
@@ -456,22 +489,25 @@ function SchedulerPage() {
 
                         const logKey = `${time}-${day}`
                         const log = timetableLogs[logKey]
-                        const hasLogged = !!log
-                        const isCompleted = log?.status === "Completed"
+                        const hasLogged = !!log || cell.completed
+                        const isCompleted = log ? log.status === "Completed" : cell.completed
                         const isPartial = log?.status === "Partially Completed"
                         const isSkipped = log?.status === "Skipped"
+
+                        const isDarkBg = cell.color_hex || cell.subject === "Mathematics" || cell.subject === "Physics"
 
                         return (
                           <td key={day} className="py-1 px-1">
                             <button
                               onClick={() => handleOpenModal(time, day, cell.subject, cell.detail)}
-                              className={`w-full text-left rounded-lg py-2 px-2 min-h-[58px] transition-all duration-200 hover:scale-[1.02] hover:shadow-md border border-transparent ${subjectColors[cell.subject] || "bg-gray-100"}`}
+                              style={cell.color_hex ? { backgroundColor: cell.color_hex } : undefined}
+                              className={`w-full text-left rounded-lg py-2 px-2 min-h-[58px] transition-all duration-200 hover:scale-[1.02] hover:shadow-md border border-transparent ${cell.color_hex ? "" : (subjectColors[cell.subject] || "bg-gray-100")}`}
                             >
                               <p className={`font-body font-semibold text-[11px] leading-tight ${
                                 isSkipped
                                   ? "line-through opacity-50"
                                   : ""
-                              } ${subjectTextColors[cell.subject] || "text-gray-700"}`}>
+                              } ${cell.color_hex ? "text-white" : (subjectTextColors[cell.subject] || "text-gray-700")}`}>
                                 {cell.subject}
                               </p>
                               {cell.detail && (
@@ -480,7 +516,7 @@ function SchedulerPage() {
                                     ? "line-through opacity-40"
                                     : ""
                                 } ${
-                                  cell.subject === "Mathematics" || cell.subject === "Physics"
+                                  isDarkBg
                                     ? "text-white/70"
                                     : "text-gray-500"
                                 }`}>
@@ -492,7 +528,7 @@ function SchedulerPage() {
                               <div className="mt-2 flex items-center gap-1">
                                 {isCompleted && (
                                   <span className={`text-[9px] font-bold px-1.5 py-0.5 rounded flex items-center gap-0.5 ${
-                                    cell.subject === "Mathematics" || cell.subject === "Physics"
+                                    isDarkBg
                                       ? "bg-green-500/20 text-green-300"
                                       : "bg-green-100 text-green-700"
                                   }`}>
@@ -501,7 +537,7 @@ function SchedulerPage() {
                                 )}
                                 {isPartial && (
                                   <span className={`text-[9px] font-bold px-1.5 py-0.5 rounded flex items-center gap-0.5 ${
-                                    cell.subject === "Mathematics" || cell.subject === "Physics"
+                                    isDarkBg
                                       ? "bg-amber-500/20 text-amber-300"
                                       : "bg-amber-100 text-amber-700"
                                   }`}>
@@ -510,7 +546,7 @@ function SchedulerPage() {
                                 )}
                                 {isSkipped && (
                                   <span className={`text-[9px] font-bold px-1.5 py-0.5 rounded flex items-center gap-0.5 ${
-                                    cell.subject === "Mathematics" || cell.subject === "Physics"
+                                    isDarkBg
                                       ? "bg-red-500/20 text-red-300"
                                       : "bg-red-100 text-red-700"
                                   }`}>
@@ -519,7 +555,7 @@ function SchedulerPage() {
                                 )}
                                 {!hasLogged && (
                                   <span className={`text-[9px] font-medium px-1.5 py-0.5 rounded border ${
-                                    cell.subject === "Mathematics" || cell.subject === "Physics"
+                                    isDarkBg
                                       ? "bg-white/10 text-white/40 border-white/10 hover:text-white/70"
                                       : "bg-gray-100 text-gray-400 border-gray-200 hover:text-gray-600"
                                   }`}>
@@ -582,18 +618,37 @@ function SchedulerPage() {
               </div>
 
               <div>
-                <label className="font-body text-xs text-[#B3CFE5] mb-1 block font-semibold">
-                  Focus subject
-                </label>
-                <select
-                  value={subject}
-                  onChange={(e) => setSubject(e.target.value)}
-                  className="w-full bg-[#0A1931] text-white font-body text-xs px-3 py-2.5 rounded-lg border border-white/10 focus:outline-none focus:border-[#4A7FA7] transition-colors"
-                >
-                  {["Mathematics", "Physics", "Chemistry", "Biology", "English"].map(s => (
-                    <option key={s}>{s}</option>
-                  ))}
-                </select>
+                <div className="flex justify-between items-center mb-1">
+                  <label className="font-body text-xs text-[#B3CFE5] block font-semibold">
+                    Focus Subject
+                  </label>
+                  <button
+                    type="button"
+                    onClick={() => setIsCustomSubject(!isCustomSubject)}
+                    className="font-body text-[10px] text-[#4A7FA7] hover:underline bg-transparent border-none cursor-pointer"
+                  >
+                    {isCustomSubject ? "Select existing" : "Type custom name"}
+                  </button>
+                </div>
+                {isCustomSubject ? (
+                  <input
+                    type="text"
+                    placeholder="e.g. Human Computer Interaction"
+                    value={customSubjectName}
+                    onChange={(e) => setCustomSubjectName(e.target.value)}
+                    className="w-full bg-[#0A1931] text-white font-body text-xs px-3 py-2.5 rounded-lg border border-white/10 focus:outline-none focus:border-[#4A7FA7] transition-colors"
+                  />
+                ) : (
+                  <select
+                    value={subject}
+                    onChange={(e) => setSubject(e.target.value)}
+                    className="w-full bg-[#0A1931] text-white font-body text-xs px-3 py-2.5 rounded-lg border border-white/10 focus:outline-none focus:border-[#4A7FA7] transition-colors"
+                  >
+                    {(allSubjects.length > 0 ? allSubjects.map(s => s.name) : ["Mathematics", "Physics", "Chemistry", "Biology", "English"]).map(s => (
+                      <option key={s}>{s}</option>
+                    ))}
+                  </select>
+                )}
               </div>
 
               <div>
