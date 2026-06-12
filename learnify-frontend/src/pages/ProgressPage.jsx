@@ -19,7 +19,7 @@ function SectionLabel({ children }) {
     );
 }
 
-export default function DashboardPage() {
+export default function ProgressPage() {
     return (
         <div>
             <div className="mb-7 flex flex-wrap items-end justify-between gap-3">
