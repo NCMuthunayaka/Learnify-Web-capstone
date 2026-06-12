@@ -7,6 +7,9 @@ import os
 import base64
 import json
 from typing import Optional
+from dotenv import load_dotenv
+
+load_dotenv()
 
 # ── Gemini (new SDK: google-genai) ────────────────────────────────────────────
 from google import genai
@@ -15,7 +18,7 @@ from google.genai import types as genai_types
 _gemini_key = os.getenv("GEMINI_API_KEY", "")
 gemini_client = genai.Client(api_key=_gemini_key) if _gemini_key else None
 
-GEMINI_MODEL = "gemini-2.0-flash"
+GEMINI_MODEL = "gemini-2.5-flash"
 
 # ── OpenAI (fallback) ─────────────────────────────────────────────────────────
 _openai_key    = os.getenv("OPENAI_API_KEY", "")
