@@ -10,6 +10,7 @@ from app.models.notification_type import NotificationType
 from app.models.subject           import Subject
 from app.models.file_type         import FileType
 from app.models.token_blocklist   import TokenBlocklist
+from app.models.chat_message      import ChatSession, ChatMessage
 
 
 def create_app(config_name="development"):

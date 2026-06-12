@@ -5,7 +5,7 @@ import ProgressBar from "../components/common/ProgressBar"
 import Button from "../components/common/Button"
 import Badge from "../components/common/Badge"
 import LoadingSpinner from "../components/common/LoadingSpinner"
-import { getTasks, getSchedulerStats, getTimetable } from "../api/schedulerApi"
+import { getTasks, getSchedulerStats, getTimetable, generateTimetable } from "../api/schedulerApi"
 
 // ── statsData is now built dynamically from API (see dynamicStats below)
 
@@ -154,6 +154,8 @@ function SchedulerPage() {
   const [intensity, setIntensity] = useState("Balanced (4–5 hrs/day)")
   const [subject, setSubject]     = useState("Mathematics")
   const [examDate, setExamDate]   = useState("")
+  const [generating, setGenerating] = useState(false)
+  const [generateMsg, setGenerateMsg] = useState(null)
 
   // ── Live API state ────────────────────────────────────
   const [apiStats, setApiStats]           = useState(null)
@@ -178,6 +180,41 @@ function SchedulerPage() {
     }
     loadSchedulerData()
   }, [])
+
+  // Reload timetable data (called after AI generation)
+  async function reloadTimetable() {
+    try {
+      const [statsRes, tasksRes, timetableRes] = await Promise.allSettled([
+        getSchedulerStats(),
+        getTasks(),
+        getTimetable(),
+      ])
+      if (statsRes.status === "fulfilled") setApiStats(statsRes.value.data)
+      if (tasksRes.status === "fulfilled") setApiTasks(tasksRes.value.data?.tasks || [])
+      if (timetableRes.status === "fulfilled") setApiTimetable(timetableRes.value.data?.sessions || [])
+    } catch {}
+  }
+
+  // AI generate handler
+  async function handleGenerate() {
+    if (generating) return
+    setGenerating(true)
+    setGenerateMsg(null)
+    try {
+      const res = await generateTimetable({
+        intensity,
+        focus_subject: subject,
+        exam_date: examDate,
+      })
+      const count = res?.data?.sessions_created || 0
+      setGenerateMsg({ type: "success", text: `✅ ${count} sessions generated for this week!` })
+      await reloadTimetable()
+    } catch (err) {
+      setGenerateMsg({ type: "error", text: "❌ Generation failed. Please try again." })
+    } finally {
+      setGenerating(false)
+    }
+  }
 
   // Upcoming deadlines: tasks not done, sorted by due_date
   const upcomingDeadlines = apiTasks
@@ -570,12 +607,21 @@ function SchedulerPage() {
                   className="w-full bg-[#0A1931] text-white font-body text-xs px-3 py-2.5 rounded-lg border border-white/10 focus:outline-none focus:border-[#4A7FA7] transition-colors"
                 />
               </div>
+              {generateMsg && (
+                <p className={`font-body text-[10px] text-center mt-1 ${
+                  generateMsg.type === "success" ? "text-green-400" : "text-red-400"
+                }`}>{generateMsg.text}</p>
+              )}
               <button
-                onClick={() => {}}
-                className="w-full bg-[#EAF0F6] hover:bg-[#CBDDF0] text-[#0D2440] font-body text-xs font-bold py-2.5 rounded-lg shadow-sm transition-colors duration-200 flex items-center justify-center gap-1.5 border-none"
+                onClick={handleGenerate}
+                disabled={generating}
+                className="w-full bg-[#EAF0F6] hover:bg-[#CBDDF0] text-[#0D2440] font-body text-xs font-bold py-2.5 rounded-lg shadow-sm transition-colors duration-200 flex items-center justify-center gap-1.5 border-none disabled:opacity-60"
               >
-                <Sparkles size={14} />
-                Generate My Schedule
+                {generating ? (
+                  <><div className="w-3 h-3 border-2 border-[#0D2440] border-t-transparent rounded-full animate-spin" /> Generating...</>
+                ) : (
+                  <><Sparkles size={14} /> Generate My Schedule</>
+                )}
               </button>
             </div>
           </div>

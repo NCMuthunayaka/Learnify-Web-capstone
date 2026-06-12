@@ -379,3 +379,130 @@ def get_scheduler_stats():
         })
     except Exception as e:
         return error_response("STATS_ERROR", str(e), status=500)
+
+
+# ═══════════════════════════════════════════════════════════
+# AI TIMETABLE GENERATION
+# ═══════════════════════════════════════════════════════════
+
+# ── POST /api/scheduler/generate ─────────────────────────
+# Ask Gemini to create a weekly study plan and save to DB
+@bp.route("/generate", methods=["POST"])
+@jwt_required()
+def generate_timetable():
+    from datetime import datetime, date, timedelta
+    from app.services.ai_service import generate_timetable as ai_generate
+
+    user_id = int(get_jwt_identity())
+    data    = request.get_json(silent=True) or {}
+
+    intensity     = data.get("intensity", "Balanced (4-5 hrs/day)")
+    focus_subject = data.get("focus_subject", "General")
+    exam_date     = data.get("exam_date", "")
+
+    # Fetch the user's enrolled subjects for context
+    try:
+        rows = db.session.execute(
+            text(
+                "SELECT s.name FROM subjects s "
+                "JOIN student_subjects ss ON ss.subject_id = s.id "
+                "JOIN student_profiles sp ON sp.id = ss.student_id "
+                "WHERE sp.user_id = :uid"
+            ),
+            {"uid": user_id}
+        ).fetchall()
+        subjects = [r[0] for r in rows] if rows else ["Mathematics", "Physics", "Chemistry"]
+    except Exception:
+        subjects = ["Mathematics", "Physics", "Chemistry"]
+
+    # Call AI to generate schedule
+    try:
+        sessions_data = ai_generate(
+            intensity=intensity,
+            focus_subject=focus_subject,
+            exam_date=exam_date,
+            subjects=subjects,
+        )
+    except RuntimeError as e:
+        return error_response("AI_ERROR", str(e), status=503)
+    except Exception as e:
+        return error_response("GENERATE_FAILED", f"AI generation error: {e}", status=500)
+
+    # Calculate the start of the current week (Monday)
+    today      = date.today()
+    week_start = today - timedelta(days=today.weekday())
+
+    DAY_MAP = {
+        "monday": 0, "tuesday": 1, "wednesday": 2,
+        "thursday": 3, "friday": 4, "saturday": 5, "sunday": 6,
+    }
+
+    # Resolve subject_id for each session
+    subject_cache = {}
+    saved_count   = 0
+    saved_sessions = []
+
+    for session in sessions_data:
+        try:
+            day_name   = session.get("day", "Monday").lower()
+            start_str  = session.get("start_time", "08:00")
+            end_str    = session.get("end_time",   "10:00")
+            subj_name  = session.get("subject", focus_subject)
+            sess_type  = session.get("session_type", "study")
+
+            day_offset  = DAY_MAP.get(day_name, 0)
+            session_date = week_start + timedelta(days=day_offset)
+            start_dt    = datetime.strptime(f"{session_date} {start_str}", "%Y-%m-%d %H:%M")
+            end_dt      = datetime.strptime(f"{session_date} {end_str}",   "%Y-%m-%d %H:%M")
+            duration    = int((end_dt - start_dt).total_seconds() / 60)
+
+            # Resolve subject_id (cache lookups)
+            if subj_name not in subject_cache:
+                row = db.session.execute(
+                    text("SELECT id FROM subjects WHERE name LIKE :name LIMIT 1"),
+                    {"name": f"%{subj_name}%"}
+                ).fetchone()
+                subject_cache[subj_name] = int(row[0]) if row else None
+
+            subject_id = subject_cache.get(subj_name)
+            if not subject_id:
+                continue
+
+            db.session.execute(
+                text(
+                    "INSERT INTO study_sessions "
+                    "(student_id, subject_id, start_time, end_time, duration_min, "
+                    "session_type, completed) "
+                    "VALUES (:sid, :subid, :start, :end, :dur, :type, 0)"
+                ),
+                {
+                    "sid":   user_id,
+                    "subid": subject_id,
+                    "start": start_dt,
+                    "end":   end_dt,
+                    "dur":   duration,
+                    "type":  sess_type,
+                }
+            )
+            saved_sessions.append({
+                "day":          session.get("day"),
+                "start_time":   start_str,
+                "end_time":     end_str,
+                "subject":      subj_name,
+                "session_type": sess_type,
+                "duration_min": duration,
+            })
+            saved_count += 1
+        except Exception:
+            continue
+
+    db.session.commit()
+
+    return success_response(
+        data={
+            "sessions_created": saved_count,
+            "sessions":         saved_sessions,
+            "week_start":       str(week_start),
+        },
+        message=f"AI generated {saved_count} study sessions for this week",
+    )

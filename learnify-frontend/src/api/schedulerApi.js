@@ -45,3 +45,14 @@ export async function getSchedulerStats() {
     const response = await api.get("/scheduler/stats")
     return response.data
 }
+
+// ── AI Timetable Generation ───────────────────────────────
+// POST /api/scheduler/generate
+export async function generateTimetable({ intensity, focus_subject, exam_date }) {
+    const response = await api.post("/scheduler/generate", {
+        intensity,
+        focus_subject,
+        exam_date,
+    })
+    return response.data
+}
