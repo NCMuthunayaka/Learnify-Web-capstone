@@ -5,6 +5,8 @@ import {
   Users, UserCheck, Monitor, MessageSquare, Settings
 } from "lucide-react"
 import sidebarBg from "../../assets/images/sidebar_img.jpg"
+import learnifyLogo from "../../assets/images/learnify_logo.png"
+
 
 // ── Nav items for each role ───────────────────────────────
 const studentNavItems = [
@@ -82,11 +84,11 @@ function Sidebar({ isOpen }) {
         {/* Logo */}
         <div className="flex items-center gap-3 px-6 py-5
           border-b border-white/10">
-          <div className="w-10 h-10 bg-white/20 rounded-lg flex
-            items-center justify-center font-bold text-white
-            border border-white/30">
-            L
-          </div>
+          <img
+            src={learnifyLogo}
+            alt="Learnify Logo"
+            className="w-10 h-10 object-contain"
+          />
           {isOpen && (
             <span className="font-semibold text-lg">Learnify</span>
           )}

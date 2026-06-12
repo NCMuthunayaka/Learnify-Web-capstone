@@ -80,7 +80,7 @@ def _gemini_chat(
     for msg in history:
         role = "user" if msg["role"] == "user" else "model"
         gemini_history.append(
-            genai_types.Content(role=role, parts=[genai_types.Part.from_text(msg["content"])])
+            genai_types.Content(role=role, parts=[genai_types.Part.from_text(text=msg["content"])])
         )
 
     # Build current user turn parts
@@ -90,14 +90,14 @@ def _gemini_chat(
         if file_mime == "application/pdf":
             # Extract text from PDF and add as inline text
             pdf_text = _extract_pdf_text(file_data)
-            parts.append(genai_types.Part.from_text(f"[Uploaded PDF content]:\n{pdf_text}\n\n"))
+            parts.append(genai_types.Part.from_text(text=f"[Uploaded PDF content]:\n{pdf_text}\n\n"))
         else:
             # Image — pass as inline data
             parts.append(
                 genai_types.Part.from_bytes(data=file_data, mime_type=file_mime)
             )
 
-    parts.append(genai_types.Part.from_text(user_message))
+    parts.append(genai_types.Part.from_text(text=user_message))
 
     response = gemini_client.models.generate_content(
         model=GEMINI_MODEL,
