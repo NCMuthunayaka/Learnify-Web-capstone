@@ -1,4 +1,4 @@
-import { useState } from "react"
+import { useState, useEffect, useCallback } from "react"
 import { useNavigate } from "react-router-dom"
 import {
   Users, Clock, UserCheck, Activity,
@@ -6,42 +6,37 @@ import {
   ChevronLeft, ChevronRight, X, ArrowRight,
   ShieldAlert
 } from "lucide-react"
-
-// ── Mock user data (10 per page, 3 pages shown) ──
-const ALL_USERS = [
-  { id: "LNF-8821", name: "Dr. Sarah Jenkins",  email: "sarah.j@university.edu",  role: "Mentor",  status: "Active",   avatar: "SJ", avatarBg: "bg-blue-500"   },
-  { id: "LI-LNF-7634", name: "Marcus Thorne",   email: "m.thorne@academic.org",   role: "Student", status: "Pending",  avatar: "MT", avatarBg: "bg-purple-500" },
-  { id: "LI-LNF-7022", name: "Elara Vance",     email: "evance@leanify.edu",      role: "Mentor",  status: "Inactive", avatar: "EV", avatarBg: "bg-teal-500"   },
-  { id: "LNF-6712", name: "Athav Abiram",     email: "A.abiram@learn.io",      role: "Student", status: "Active",   avatar: "KC", avatarBg: "bg-green-500"  },
-  { id: "LNF-6540", name: "Priya Nair",          email: "p.nair@edu.lk",           role: "Student", status: "Active",   avatar: "PN", avatarBg: "bg-rose-500"   },
-  { id: "LNF-6201", name: "Prof. David Chen",    email: "d.chen@campus.edu",       role: "Mentor",  status: "Active",   avatar: "DC", avatarBg: "bg-indigo-500" },
-  { id: "LNF-5988", name: "Ashani Weerasinghe",  email: "a.weera@student.edu",     role: "Student", status: "Active",   avatar: "AW", avatarBg: "bg-cyan-500"   },
-  { id: "LNF-5771", name: "Dr. Aisha Khan",      email: "aisha.k@academy.org",     role: "Mentor",  status: "Active",   avatar: "AK", avatarBg: "bg-amber-500"  },
-  { id: "LNF-5430", name: "Daniel Fernandez",    email: "d.fernandez@learn.io",    role: "Student", status: "Pending",  avatar: "DF", avatarBg: "bg-orange-500" },
-  { id: "LNF-5102", name: "Ruba Shalini",        email: "ruba.s@university.edu",   role: "Admin",   status: "Active",   avatar: "RS", avatarBg: "bg-[#0A1931]"  },
-]
+import {
+  getAllUsers, getAdminStats, updateUserStatus, deleteUser
+} from "../../api/adminApi"
 
 const ROLE_COLORS = {
-  Mentor:  "bg-teal-100 text-teal-700 border-teal-200",
-  Student: "bg-gray-100 text-gray-600 border-gray-200",
-  Admin:   "bg-[#0A1931] text-white border-transparent",
+  mentor:  "bg-teal-100 text-teal-700 border-teal-200",
+  student: "bg-gray-100 text-gray-600 border-gray-200",
+  admin:   "bg-[#0A1931] text-white border-transparent",
 }
 
 const STATUS_CONFIG = {
-  Active:   { dot: "bg-green-500", text: "text-green-600" },
-  Pending:  { dot: "bg-amber-400", text: "text-amber-600" },
-  Inactive: { dot: "bg-gray-300",  text: "text-gray-500"  },
+  active:   { dot: "bg-green-500", text: "text-green-600"  },
+  pending:  { dot: "bg-amber-400", text: "text-amber-600"  },
+  inactive: { dot: "bg-gray-300",  text: "text-gray-500"   },
 }
 
-const ROLES    = ["All", "Mentor", "Student", "Admin"]
-const STATUSES = ["All", "Active", "Pending", "Inactive"]
+const ROLES    = ["All", "mentor", "student", "admin"]
+const STATUSES = ["All", "active", "pending", "inactive"]
 
-const PAGE_SIZE = 10
-const TOTAL     = 12842
+const AVATAR_COLORS = [
+  "bg-blue-500", "bg-teal-500", "bg-purple-500", "bg-amber-500",
+  "bg-rose-500", "bg-cyan-500", "bg-indigo-500", "bg-green-500",
+]
 
-// ── Add User modal ──
+function getInitials(name) {
+  return name?.split(" ").map(w => w[0]).join("").slice(0, 2).toUpperCase() ?? "?"
+}
+
+// ── Add User modal (UI only – registration via auth flow) ──
 function AddUserModal({ onClose }) {
-  const [form, setForm] = useState({ name: "", email: "", role: "Student" })
+  const [form, setForm] = useState({ name: "", email: "", role: "student" })
 
   function handleSubmit(e) {
     e.preventDefault()
@@ -99,9 +94,9 @@ function AddUserModal({ onClose }) {
               className="w-full bg-gray-50 border border-gray-100 rounded-xl px-4 py-2.5 font-body
                 text-sm text-gray-700 focus:outline-none focus:border-[#4A7FA7] transition-colors"
             >
-              <option value="Student">Student</option>
-              <option value="Mentor">Mentor</option>
-              <option value="Admin">Admin</option>
+              <option value="student">Student</option>
+              <option value="mentor">Mentor</option>
+              <option value="admin">Admin</option>
             </select>
           </div>
 
@@ -149,7 +144,7 @@ function FilterPanel({ roleFilter, setRoleFilter, statusFilter, setStatusFilter,
             <button
               key={r}
               onClick={() => setRoleFilter(r)}
-              className={`font-body text-xs px-3 py-1.5 rounded-lg border transition-colors font-semibold ${
+              className={`font-body text-xs px-3 py-1.5 rounded-lg border transition-colors font-semibold capitalize ${
                 roleFilter === r
                   ? "bg-[#0A1931] text-white border-[#0A1931]"
                   : "bg-gray-50 text-gray-600 border-gray-100 hover:border-gray-300"
@@ -170,7 +165,7 @@ function FilterPanel({ roleFilter, setRoleFilter, statusFilter, setStatusFilter,
             <button
               key={s}
               onClick={() => setStatusFilter(s)}
-              className={`font-body text-xs px-3 py-1.5 rounded-lg border transition-colors font-semibold ${
+              className={`font-body text-xs px-3 py-1.5 rounded-lg border transition-colors font-semibold capitalize ${
                 statusFilter === s
                   ? "bg-[#0A1931] text-white border-[#0A1931]"
                   : "bg-gray-50 text-gray-600 border-gray-100 hover:border-gray-300"
@@ -188,22 +183,58 @@ function FilterPanel({ roleFilter, setRoleFilter, statusFilter, setStatusFilter,
 export default function AdminUsersPage() {
   const navigate = useNavigate()
 
+  const [users,        setUsers]        = useState([])
+  const [stats,        setStats]        = useState(null)
   const [page,         setPage]         = useState(1)
+  const [total,        setTotal]        = useState(0)
+  const [totalPages,   setTotalPages]   = useState(1)
+  const [loading,      setLoading]      = useState(true)
   const [showAdd,      setShowAdd]      = useState(false)
   const [showFilter,   setShowFilter]   = useState(false)
   const [roleFilter,   setRoleFilter]   = useState("All")
   const [statusFilter, setStatusFilter] = useState("All")
   const [goToPage,     setGoToPage]     = useState("1")
 
-  const filtered = ALL_USERS.filter(u => {
-    const matchRole   = roleFilter   === "All" || u.role   === roleFilter
-    const matchStatus = statusFilter === "All" || u.status === statusFilter
-    return matchRole && matchStatus
-  })
+  const PAGE_SIZE = 10
 
-  const totalPages = Math.ceil(TOTAL / PAGE_SIZE)
-  const startRow   = (page - 1) * PAGE_SIZE + 1
-  const endRow     = Math.min(page * PAGE_SIZE, TOTAL)
+  const fetchUsers = useCallback(() => {
+    setLoading(true)
+    getAllUsers(
+      page,
+      roleFilter   !== "All" ? roleFilter   : null,
+      statusFilter !== "All" ? statusFilter : null,
+    )
+      .then(res => {
+        setUsers(res.data?.users      ?? [])
+        setTotal(res.data?.total      ?? 0)
+        setTotalPages(res.data?.total_pages ?? 1)
+      })
+      .catch(() => {})
+      .finally(() => setLoading(false))
+  }, [page, roleFilter, statusFilter])
+
+  useEffect(() => {
+    getAdminStats().then(res => setStats(res.data)).catch(() => {})
+  }, [])
+
+  useEffect(() => {
+    fetchUsers()
+  }, [fetchUsers])
+
+  async function handleStatusChange(userId, status) {
+    try {
+      await updateUserStatus(userId, status)
+      fetchUsers()
+    } catch (_) {}
+  }
+
+  async function handleDelete(userId) {
+    if (!window.confirm("Delete this user? This cannot be undone.")) return
+    try {
+      await deleteUser(userId)
+      fetchUsers()
+    } catch (_) {}
+  }
 
   function handleGoToPage(e) {
     e.preventDefault()
@@ -211,7 +242,13 @@ export default function AdminUsersPage() {
     if (n >= 1 && n <= totalPages) setPage(n)
   }
 
-  const visiblePages = [1, 2, 3]
+  const startRow = (page - 1) * PAGE_SIZE + 1
+  const endRow   = Math.min(page * PAGE_SIZE, total)
+
+  const visiblePages = Array.from({ length: Math.min(3, totalPages) }, (_, i) => {
+    const start = Math.max(1, Math.min(page - 1, totalPages - 2))
+    return start + i
+  })
 
   return (
     <div className="space-y-6 max-w-7xl mx-auto pb-12 text-[#0A1931]">
@@ -220,23 +257,24 @@ export default function AdminUsersPage() {
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
         {[
           {
-            label: "Total Users",      value: "12,842", badge: "+12%",
+            label: "Total Users",      value: stats?.total_users?.toLocaleString() ?? "—", badge: null,
             badgeBg: "bg-blue-50 text-blue-600",
-            icon: Users,  iconBg: "bg-blue-50 text-blue-600",
+            icon: Users,     iconBg: "bg-blue-50 text-blue-600",
           },
           {
-            label: "Pending Approvals", value: "143", badge: "Urgent",
+            label: "Pending Approvals", value: stats?.pending_approvals?.toLocaleString() ?? "—",
+            badge: (stats?.pending_approvals ?? 0) > 0 ? "Urgent" : null,
             badgeBg: "bg-red-50 text-red-600",
-            icon: Clock,  iconBg: "bg-orange-50 text-orange-500",
+            icon: Clock,     iconBg: "bg-orange-50 text-orange-500",
           },
           {
-            label: "Active Mentors",   value: "892", badge: "Active",
+            label: "Active Mentors",   value: stats?.mentors?.toLocaleString() ?? "—", badge: "Active",
             badgeBg: "bg-teal-50 text-teal-600",
             icon: UserCheck, iconBg: "bg-teal-50 text-teal-600",
           },
           {
             label: "System Health",    value: "99.9%", dot: true,
-            icon: Activity, iconBg: "bg-green-50 text-green-600",
+            icon: Activity,  iconBg: "bg-green-50 text-green-600",
           },
         ].map((card) => {
           const Icon = card.icon
@@ -311,76 +349,90 @@ export default function AdminUsersPage() {
           </div>
 
           <span className="font-body text-xs text-gray-400 font-semibold ml-auto">
-            Showing {startRow}–{endRow} of {TOTAL.toLocaleString()}
+            {loading ? "Loading…" : `Showing ${startRow}–${endRow} of ${total.toLocaleString()}`}
           </span>
         </div>
 
         {/* Table */}
         <div className="overflow-x-auto">
-          <table className="w-full min-w-[640px]">
-            <thead>
-              <tr className="border-b border-gray-50">
-                {["User Profile", "Contact", "Role", "Status", "Actions"].map(h => (
-                  <th key={h}
-                    className="px-6 py-3 text-left font-body text-[10px] text-gray-400
-                      uppercase tracking-wider font-semibold">
-                    {h}
-                  </th>
-                ))}
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-gray-50">
-              {filtered.map(u => {
-                const sc = STATUS_CONFIG[u.status]
-                return (
-                  <tr key={u.id} className="hover:bg-gray-50/50 transition-colors group">
-                    <td className="px-6 py-4">
-                      <div className="flex items-center gap-3">
-                        <div className={`w-9 h-9 rounded-full ${u.avatarBg} text-white text-xs
-                          font-bold font-heading flex items-center justify-center flex-shrink-0 shadow-sm`}>
-                          {u.avatar}
-                        </div>
-                        <div>
-                          <p className="font-body text-sm font-semibold text-[#0A1931]">{u.name}</p>
-                          <p className="font-body text-[10px] text-gray-400 mt-0.5">ID: {u.id}</p>
-                        </div>
-                      </div>
-                    </td>
-                    <td className="px-6 py-4 font-body text-sm text-gray-500">{u.email}</td>
-                    <td className="px-6 py-4">
-                      <span className={`font-body text-[10px] font-bold px-2.5 py-1 rounded-md border ${ROLE_COLORS[u.role]}`}>
-                        {u.role}
-                      </span>
-                    </td>
-                    <td className="px-6 py-4">
-                      <div className="flex items-center gap-1.5">
-                        <span className={`w-1.5 h-1.5 rounded-full flex-shrink-0 ${sc.dot}`} />
-                        <span className={`font-body text-xs font-semibold ${sc.text}`}>{u.status}</span>
-                      </div>
-                    </td>
-                    <td className="px-6 py-4">
-                      <div className="flex items-center gap-2">
-                        <button
-                          className="w-7 h-7 rounded-lg border border-gray-100 flex items-center justify-center
-                            text-gray-400 hover:text-[#4A7FA7] hover:border-[#4A7FA7] transition-colors"
-                          title="Edit user"
-                        >
-                          <Edit3 size={13} />
-                        </button>
-                        <button
-                          className="w-7 h-7 rounded-lg border border-gray-100 flex items-center justify-center
-                            text-gray-400 hover:text-red-500 hover:border-red-200 transition-colors"
-                          title="Delete user"
-                        >
-                          <Trash2 size={13} />
-                        </button>
-                      </div>
+          {loading ? (
+            <div className="flex items-center justify-center py-16">
+              <div className="w-6 h-6 border-2 border-[#4A7FA7] border-t-transparent rounded-full animate-spin" />
+            </div>
+          ) : (
+            <table className="w-full min-w-[640px]">
+              <thead>
+                <tr className="border-b border-gray-50">
+                  {["User Profile", "Contact", "Role", "Status", "Actions"].map(h => (
+                    <th key={h}
+                      className="px-6 py-3 text-left font-body text-[10px] text-gray-400
+                        uppercase tracking-wider font-semibold">
+                      {h}
+                    </th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-gray-50">
+                {users.length === 0 ? (
+                  <tr>
+                    <td colSpan={5} className="px-6 py-12 text-center font-body text-sm text-gray-400">
+                      No users match the selected filters.
                     </td>
                   </tr>
-                )
-              })}
-            </tbody>
-          </table>
+                ) : users.map((u, i) => {
+                  const sc = STATUS_CONFIG[u.status] ?? STATUS_CONFIG.inactive
+                  return (
+                    <tr key={u.id} className="hover:bg-gray-50/50 transition-colors group">
+                      <td className="px-6 py-4">
+                        <div className="flex items-center gap-3">
+                          <div className={`w-9 h-9 rounded-full ${AVATAR_COLORS[i % AVATAR_COLORS.length]} text-white text-xs
+                            font-bold font-heading flex items-center justify-center flex-shrink-0 shadow-sm`}>
+                            {getInitials(u.name)}
+                          </div>
+                          <div>
+                            <p className="font-body text-sm font-semibold text-[#0A1931]">{u.name}</p>
+                            <p className="font-body text-[10px] text-gray-400 mt-0.5">ID: {u.id}</p>
+                          </div>
+                        </div>
+                      </td>
+                      <td className="px-6 py-4 font-body text-sm text-gray-500">{u.email}</td>
+                      <td className="px-6 py-4">
+                        <span className={`font-body text-[10px] font-bold px-2.5 py-1 rounded-md border capitalize ${ROLE_COLORS[u.role] ?? ROLE_COLORS.student}`}>
+                          {u.role}
+                        </span>
+                      </td>
+                      <td className="px-6 py-4">
+                        <div className="flex items-center gap-1.5">
+                          <span className={`w-1.5 h-1.5 rounded-full flex-shrink-0 ${sc.dot}`} />
+                          <span className={`font-body text-xs font-semibold capitalize ${sc.text}`}>{u.status}</span>
+                        </div>
+                      </td>
+                      <td className="px-6 py-4">
+                        <div className="flex items-center gap-2">
+                          <button
+                            onClick={() => handleStatusChange(u.id, u.status === "active" ? "inactive" : "active")}
+                            className="w-7 h-7 rounded-lg border border-gray-100 flex items-center justify-center
+                              text-gray-400 hover:text-[#4A7FA7] hover:border-[#4A7FA7] transition-colors"
+                            title={u.status === "active" ? "Deactivate" : "Activate"}
+                          >
+                            <Edit3 size={13} />
+                          </button>
+                          <button
+                            onClick={() => handleDelete(u.id)}
+                            className="w-7 h-7 rounded-lg border border-gray-100 flex items-center justify-center
+                              text-gray-400 hover:text-red-500 hover:border-red-200 transition-colors"
+                            title="Delete user"
+                          >
+                            <Trash2 size={13} />
+                          </button>
+                        </div>
+                      </td>
+                    </tr>
+                  )
+                })}
+              </tbody>
+            </table>
+          )}
         </div>
 
         {/* Pagination */}
@@ -450,8 +502,9 @@ export default function AdminUsersPage() {
               <div>
                 <h3 className="font-heading text-base font-bold">Institutional Insights</h3>
                 <p className="font-body text-sm text-[#B3CFE5] mt-2 leading-relaxed">
-                  You have 14 pending mentor applications waiting for verification. Quick
-                  approval can increase institutional throughput by 12%.
+                  {stats?.pending_approvals > 0
+                    ? `You have ${stats.pending_approvals} pending applications waiting for verification.`
+                    : "All mentor applications are up to date."}
                 </p>
               </div>
             </div>
@@ -489,7 +542,6 @@ export default function AdminUsersPage() {
         </div>
       </div>
 
-      {/* Add User Modal */}
       {showAdd && <AddUserModal onClose={() => setShowAdd(false)} />}
 
     </div>

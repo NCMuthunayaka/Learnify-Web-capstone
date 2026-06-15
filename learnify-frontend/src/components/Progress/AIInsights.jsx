@@ -52,7 +52,69 @@ const INSIGHTS = [
   },
 ];
 
-export function AIInsights() {
+export function AIInsights({ subjectProgress = [] }) {
+  // Build dynamic insights from real data
+  const sorted = [...subjectProgress].sort((a, b) => a.pct - b.pct);
+  const lowest  = sorted[0];
+  const highest = sorted[sorted.length - 1];
+
+  const insights = [
+    {
+      type: "tip",
+      icon: "⚡",
+      text: (
+        <>
+          Your peak focus window is <strong className="text-[#0A1931]">9–11 AM</strong>. Schedule your hardest
+          subjects in this slot for maximum retention.
+        </>
+      ),
+      badge: "Schedule Tip",
+      topBar: "linear-gradient(90deg,#4A7FA7,#B3CFE5)",
+      badgeStyle: "bg-[#deeef8] text-[#4A7FA7]",
+    },
+    lowest ? {
+      type: "warn",
+      icon: "⚠️",
+      text: (
+        <>
+          <strong className="text-[#0A1931]">{lowest.name}</strong> is at only{" "}
+          <strong className="text-[#0A1931]">{lowest.pct}%</strong> completion.
+          Recommend adding extra study sessions this week to catch up.
+        </>
+      ),
+      badge: "At Risk",
+      topBar: "linear-gradient(90deg,#b86a00,#f0b94a)",
+      badgeStyle: "bg-[#fff3e0] text-[#b86a00]",
+    } : {
+      type: "warn",
+      icon: "⚠️",
+      text: <>Complete some tasks to see personalised risk alerts.</>,
+      badge: "At Risk",
+      topBar: "linear-gradient(90deg,#b86a00,#f0b94a)",
+      badgeStyle: "bg-[#fff3e0] text-[#b86a00]",
+    },
+    highest ? {
+      type: "achieve",
+      icon: "🏆",
+      text: (
+        <>
+          Great work on <strong className="text-[#0A1931]">{highest.name}</strong>!
+          You're at <strong className="text-[#0A1931]">{highest.pct}%</strong> completion — keep it up!
+        </>
+      ),
+      badge: "Achievement",
+      topBar: "linear-gradient(90deg,#1a8a4a,#5dd87a)",
+      badgeStyle: "bg-[#e6f7ed] text-[#1a8a4a]",
+    } : {
+      type: "achieve",
+      icon: "🏆",
+      text: <>Finish your first tasks to unlock achievement insights.</>,
+      badge: "Achievement",
+      topBar: "linear-gradient(90deg,#1a8a4a,#5dd87a)",
+      badgeStyle: "bg-[#e6f7ed] text-[#1a8a4a]",
+    },
+  ];
+
   return (
     <div className="h-full bg-white rounded-[18px] border border-[#D0E3F0] overflow-hidden shadow-[0_2px_8px_rgba(10,25,49,0.07)]">
       {/* Header */}
@@ -65,14 +127,11 @@ export function AIInsights() {
             Generated based on your study patterns this month
           </div>
         </div>
-        <button className="text-[12px] font-semibold text-[#4A7FA7] bg-[#deeef8] px-3 py-1.5 rounded-[7px] hover:bg-[#cce3f3] transition-colors cursor-pointer border-none">
-          Refresh
-        </button>
       </div>
 
       {/* Cards */}
       <div className="px-6 py-5 grid grid-cols-1 sm:grid-cols-3 gap-4">
-        {INSIGHTS.map((ins) => (
+        {insights.map((ins) => (
           <div
             key={ins.type}
             className="relative rounded-[14px] border border-[#D0E3F0] bg-[#F6FAFD] p-5 overflow-hidden
@@ -112,7 +171,8 @@ const ACTIVITY = [
   { color: "bg-[#deeef8]", icon: "💬", title: "Mentor Reply Received",  desc: "Networks — IPv6 question",     time: "Apr 17"   },
 ];
 
-export function RecentActivity() {
+export function RecentActivity({ activities = [] }) {
+  const displayActivities = activities.length > 0 ? activities : ACTIVITY;
   return (
     <div className="flex-1 bg-white rounded-[18px] border border-[#D0E3F0] overflow-hidden shadow-[0_2px_8px_rgba(10,25,49,0.07)] flex flex-col">
       <div className="px-6 py-4 border-b border-[#D0E3F0] shrink-0">
@@ -124,7 +184,7 @@ export function RecentActivity() {
         </div>
       </div>
       <div className="px-6 divide-y divide-[#D0E3F0] flex-1 flex flex-col justify-center">
-        {ACTIVITY.map((a, i) => (
+        {displayActivities.map((a, i) => (
           <div key={i} className="flex items-start gap-3 py-3">
             <div className={`w-[34px] h-[34px] rounded-[10px] flex items-center justify-center text-[15px] shrink-0 ${a.color}`}>
               {a.icon}
@@ -156,8 +216,8 @@ const LB_ENTRIES = [
   { rank: 5, rankClass: "text-[#8AAABF]", initials: "KP", name: "Kasun Perera",     pts: "1,820", isMe: false },
 ];
 
-export function ClassLeaderboard({ entries = LB_ENTRIES }) {
-  const displayEntries = entries.slice(0, 5);
+export function ClassLeaderboard({ entries = [] }) {
+  const displayEntries = entries.length > 0 ? entries.slice(0, 5) : LB_ENTRIES;
   return (
     <div className="flex-1 bg-white rounded-[18px] border border-[#D0E3F0] overflow-hidden shadow-[0_2px_8px_rgba(10,25,49,0.07)] flex flex-col">
       <div className="px-6 py-4 border-b border-[#D0E3F0] shrink-0">
@@ -213,7 +273,7 @@ export function ClassLeaderboard({ entries = LB_ENTRIES }) {
 }
 
 // ── MonthlyScoreChart ──────────────────────────────────────────────────────────
-export function MonthlyScoreChart() {
+export function MonthlyScoreChart({ chartData }) {
   const canvasRef = useRef(null);
   const chartRef  = useRef(null);
 
@@ -222,15 +282,18 @@ export function MonthlyScoreChart() {
       if (!canvasRef.current) return;
       if (chartRef.current) chartRef.current.destroy();
 
+      const labels = chartData?.labels || ["Data Struct.", "Calculus", "Databases", "Soft. Eng.", "Networks", "Op. Systems"];
+      const datasets = chartData?.datasets || [
+        { label: "Jan", data: [72,65,78,50,80,60], backgroundColor: "rgba(179,207,229,0.75)", borderRadius: 5 },
+        { label: "Feb", data: [78,70,82,55,85,65], backgroundColor: "rgba(74,127,167,0.65)",  borderRadius: 5 },
+        { label: "Mar", data: [85,74,88,60,90,70], backgroundColor: "#1A3D63",                borderRadius: 5 },
+      ];
+
       chartRef.current = new Chart(canvasRef.current, {
         type: "bar",
         data: {
-          labels: ["Data Struct.", "Calculus", "Databases", "Soft. Eng.", "Networks", "Op. Systems"],
-          datasets: [
-            { label: "Jan", data: [72,65,78,50,80,60], backgroundColor: "rgba(179,207,229,0.75)", borderRadius: 5 },
-            { label: "Feb", data: [78,70,82,55,85,65], backgroundColor: "rgba(74,127,167,0.65)",  borderRadius: 5 },
-            { label: "Mar", data: [85,74,88,60,90,70], backgroundColor: "#1A3D63",                borderRadius: 5 },
-          ],
+          labels,
+          datasets,
         },
         options: {
           responsive: true,
@@ -269,7 +332,7 @@ export function MonthlyScoreChart() {
       });
     });
     return () => chartRef.current?.destroy();
-  }, []);
+  }, [chartData]);
 
   return (
     <div className="h-full bg-white rounded-[18px] border border-[#D0E3F0] overflow-hidden shadow-[0_2px_8px_rgba(10,25,49,0.07)] flex flex-col">

@@ -131,12 +131,41 @@ def get_tasks():
 @jwt_required()
 def create_task():
     user_id = int(get_jwt_identity())
-    data    = request.get_json()
+    data    = request.get_json(silent=True) or {}
 
     required = ["title", "subject_id", "due_date"]
     for field in required:
         if not data.get(field):
             return error_response("MISSING_FIELD", f"{field} is required", field, 400)
+
+    # Validations
+    title = data["title"].strip()
+    if not title:
+        return error_response("INVALID_TITLE", "title cannot be empty or spaces", status=400)
+
+    due_date = data["due_date"]
+    try:
+        from datetime import datetime
+        datetime.strptime(due_date, "%Y-%m-%d")
+    except (ValueError, TypeError):
+        return error_response("INVALID_DATE", "Date must be in YYYY-MM-DD format", status=400)
+
+    try:
+        subject_id = int(data["subject_id"])
+    except (ValueError, TypeError):
+        return error_response("INVALID_SUBJECT", "subject_id must be an integer", status=400)
+
+    # Check if subject exists
+    sub_exists = db.session.execute(
+        text("SELECT id FROM subjects WHERE id = :sid"),
+        {"sid": subject_id}
+    ).fetchone()
+    if not sub_exists:
+        return error_response("SUBJECT_NOT_FOUND", "Subject not found", status=400)
+
+    task_type = data.get("type", "assignment")
+    if task_type not in ('assignment', 'exam', 'project', 'lab_report'):
+        return error_response("INVALID_TYPE", "type must be assignment, exam, project, or lab_report", status=400)
 
     try:
         db.session.execute(
@@ -148,10 +177,10 @@ def create_task():
             ),
             {
                 "student_id": user_id,
-                "subject_id": int(data["subject_id"]),
-                "title":      data["title"].strip(),
-                "type":       data.get("type", "assignment"),
-                "due_date":   data["due_date"],
+                "subject_id": subject_id,
+                "title":      title,
+                "type":       task_type,
+                "due_date":   due_date,
             }
         )
         db.session.commit()
@@ -198,7 +227,7 @@ def create_task():
 @jwt_required()
 def update_task(task_id):
     user_id = int(get_jwt_identity())
-    data    = request.get_json()
+    data    = request.get_json(silent=True) or {}
 
     try:
         # Verify ownership
@@ -209,9 +238,89 @@ def update_task(task_id):
         if not row:
             return error_response("NOT_FOUND", "Task not found", status=404)
 
-        # Build dynamic SET clause from provided fields
-        allowed = ["title", "due_date", "type", "completion_pct", "status", "subject_id"]
-        updates = {k: v for k, v in data.items() if k in allowed}
+        # Build updates dict from allowed fields
+        updates = {}
+
+        if "title" in data:
+            title = data["title"]
+            if not title or not str(title).strip():
+                return error_response("INVALID_TITLE", "title cannot be empty", status=400)
+            updates["title"] = str(title).strip()
+
+        if "type" in data:
+            task_type = data["type"]
+            if task_type not in ('assignment', 'exam', 'project', 'lab_report'):
+                return error_response("INVALID_TYPE", "type must be assignment, exam, project, or lab_report", status=400)
+            updates["type"] = task_type
+
+        if "due_date" in data:
+            due_date = data["due_date"]
+            try:
+                from datetime import datetime
+                datetime.strptime(due_date, "%Y-%m-%d")
+            except (ValueError, TypeError):
+                return error_response("INVALID_DATE", "Date must be in YYYY-MM-DD format", status=400)
+            updates["due_date"] = due_date
+
+        if "subject_id" in data:
+            try:
+                subject_id = int(data["subject_id"])
+            except (ValueError, TypeError):
+                return error_response("INVALID_SUBJECT", "subject_id must be an integer", status=400)
+
+            sub_exists = db.session.execute(
+                text("SELECT id FROM subjects WHERE id = :sid"),
+                {"sid": subject_id}
+            ).fetchone()
+            if not sub_exists:
+                return error_response("SUBJECT_NOT_FOUND", "Subject not found", status=400)
+            updates["subject_id"] = subject_id
+
+        # Sync/Validation for status & completion_pct
+        new_status = data.get("status")
+        new_pct = data.get("completion_pct")
+
+        if new_status is not None:
+            if new_status not in ("todo", "in_progress", "done"):
+                return error_response("INVALID_STATUS", "status must be todo, in_progress, or done", status=400)
+
+        if new_pct is not None:
+            try:
+                pct_val = int(new_pct)
+                if not (0 <= pct_val <= 100):
+                    raise ValueError()
+            except (ValueError, TypeError):
+                return error_response("INVALID_COMPLETION", "completion_pct must be an integer between 0 and 100", status=400)
+
+        # Sync logic
+        if new_status is not None and new_pct is None:
+            if new_status == "done":
+                new_pct = 100
+            elif new_status == "in_progress":
+                new_pct = 50
+            else:
+                new_pct = 0
+        elif new_pct is not None and new_status is None:
+            pct_val = int(new_pct)
+            if pct_val == 100:
+                new_status = "done"
+            elif pct_val == 0:
+                new_status = "todo"
+            else:
+                new_status = "in_progress"
+        elif new_pct is not None and new_status is not None:
+            pct_val = int(new_pct)
+            if pct_val == 100 and new_status != "done":
+                new_status = "done"
+            elif pct_val == 0 and new_status != "todo":
+                new_status = "todo"
+            elif 0 < pct_val < 100 and new_status not in ("in_progress", "done"):
+                new_status = "in_progress"
+
+        if new_status is not None:
+            updates["status"] = new_status
+        if new_pct is not None:
+            updates["completion_pct"] = int(new_pct)
 
         if not updates:
             return error_response("NO_FIELDS", "No valid fields to update", status=400)
@@ -236,7 +345,7 @@ def update_task(task_id):
 @jwt_required()
 def update_task_status(task_id):
     user_id = int(get_jwt_identity())
-    data    = request.get_json()
+    data    = request.get_json(silent=True) or {}
     status  = data.get("status")
 
     if status not in ("todo", "in_progress", "done"):

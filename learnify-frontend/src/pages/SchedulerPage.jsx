@@ -5,12 +5,13 @@ import ProgressBar from "../components/common/ProgressBar"
 import Button from "../components/common/Button"
 import Badge from "../components/common/Badge"
 import LoadingSpinner from "../components/common/LoadingSpinner"
-import { getTasks, getSchedulerStats, getTimetable, generateTimetable } from "../api/schedulerApi"
+import { getTasks, getSchedulerStats, getTimetable, generateTimetable, createTask, updateTaskStatus } from "../api/schedulerApi"
 import { getSubjects } from "../api/subjectsApi"
+import { endSession } from "../api/trackingApi"
 
 // ── statsData is now built dynamically from API (see dynamicStats below)
 
-const days = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"]
+const days = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"]
 const timeSlots = ["8:00 AM", "10:00 AM", "12:00 PM", "1:00 PM", "3:00 PM", "5:00 PM"]
 
 const subjectColors = {
@@ -113,13 +114,7 @@ const todaysSessions = [
   },
 ]
 
-const subjectPerformance = [
-  { name: "Mathematics", percent: 82, color: "bg-blue-500" },
-  { name: "Physics", percent: 74, color: "bg-sky-500" },
-  { name: "Chemistry", percent: 91, color: "bg-cyan-500" },
-  { name: "Biology", percent: 67, color: "bg-teal-500" },
-  { name: "English", percent: 78, color: "bg-indigo-500" },
-]
+
 
 const aiTips = [
   {
@@ -177,10 +172,10 @@ function SchedulerPage() {
           getTimetable(),
           getSubjects(),
         ])
-        if (statsRes.status === "fulfilled") setApiStats(statsRes.value.data)
-        if (tasksRes.status === "fulfilled") setApiTasks(tasksRes.value.data?.tasks || [])
-        if (timetableRes.status === "fulfilled") setApiTimetable(timetableRes.value.data?.sessions || [])
-        if (subjectsRes.status === "fulfilled") setAllSubjects(subjectsRes.value.data || [])
+        if (statsRes.status === "fulfilled") setApiStats(statsRes.value?.data ?? statsRes.value)
+        if (tasksRes.status === "fulfilled") setApiTasks((tasksRes.value?.data ?? tasksRes.value)?.tasks || [])
+        if (timetableRes.status === "fulfilled") setApiTimetable((timetableRes.value?.data ?? timetableRes.value)?.sessions || [])
+        if (subjectsRes.status === "fulfilled") setAllSubjects((subjectsRes.value?.data ?? subjectsRes.value) || [])
       } catch {}
       finally { setStatsLoading(false) }
     }
@@ -201,9 +196,9 @@ function SchedulerPage() {
         getTasks(),
         getTimetable(),
       ])
-      if (statsRes.status === "fulfilled") setApiStats(statsRes.value.data)
-      if (tasksRes.status === "fulfilled") setApiTasks(tasksRes.value.data?.tasks || [])
-      if (timetableRes.status === "fulfilled") setApiTimetable(timetableRes.value.data?.sessions || [])
+      if (statsRes.status === "fulfilled") setApiStats(statsRes.value?.data ?? statsRes.value)
+      if (tasksRes.status === "fulfilled") setApiTasks((tasksRes.value?.data ?? tasksRes.value)?.tasks || [])
+      if (timetableRes.status === "fulfilled") setApiTimetable((timetableRes.value?.data ?? timetableRes.value)?.sessions || [])
     } catch {}
   }
 
@@ -223,11 +218,17 @@ function SchedulerPage() {
         focus_subject: finalSubject,
         exam_date: examDate,
       })
-      const count = res?.data?.sessions_created || 0
+      const resData = res?.data ?? res
+      const count = resData?.sessions_created || 0
       setGenerateMsg({ type: "success", text: `✅ ${count} sessions generated for this week!` })
       await reloadTimetable()
     } catch (err) {
-      setGenerateMsg({ type: "error", text: "❌ Generation failed. Please try again." })
+      const msg = err?.response?.data?.message || ""
+      if (msg.includes("503") || msg.toLowerCase().includes("demand") || msg.toLowerCase().includes("unavailable")) {
+        setGenerateMsg({ type: "error", text: "⏳ AI is temporarily busy. Please wait a moment and try again." })
+      } else {
+        setGenerateMsg({ type: "error", text: "❌ Generation failed. Please try again." })
+      }
     } finally {
       setGenerating(false)
     }
@@ -243,6 +244,7 @@ function SchedulerPage() {
         (new Date(t.due_date) - new Date()) / (1000 * 60 * 60 * 24)
       )
       return {
+        id:     t.id,
         title:  t.title,
         detail: t.subject_name,
         days:   Math.max(0, daysLeft),
@@ -267,7 +269,7 @@ function SchedulerPage() {
   const dynamicTimetable = {}
   timeSlots.forEach(slot => {
     dynamicTimetable[slot] = {
-      Monday: null, Tuesday: null, Wednesday: null, Thursday: null, Friday: null, Saturday: null
+      Monday: null, Tuesday: null, Wednesday: null, Thursday: null, Friday: null, Saturday: null, Sunday: null
     }
   })
 
@@ -282,9 +284,9 @@ function SchedulerPage() {
     if (hour === 8) slot = "8:00 AM"
     else if (hour === 10) slot = "10:00 AM"
     else if (hour === 12) slot = "12:00 PM"
-    else if (hour === 13 || hour === 1) slot = "1:00 PM"
-    else if (hour === 15 || hour === 3) slot = "3:00 PM"
-    else if (hour === 17 || hour === 5) slot = "5:00 PM"
+    else if (hour === 13) slot = "1:00 PM"
+    else if (hour === 15) slot = "3:00 PM"
+    else if (hour === 17) slot = "5:00 PM"
     
     if (slot && dayName in dynamicTimetable[slot]) {
       dynamicTimetable[slot][dayName] = {
@@ -306,24 +308,74 @@ function SchedulerPage() {
   const [selectedSlot, setSelectedSlot] = useState(null)
   const [tempStatus, setTempStatus] = useState("Completed") // "Completed", "Partially Completed", "Skipped"
   const [tempHours, setTempHours] = useState(2.0)
+  const [saveLoading, setSaveLoading] = useState(false)
+  const [saveError, setSaveError] = useState(null)
+
+  // Task Creation Modal States
+  const [isTaskModalOpen, setIsTaskModalOpen] = useState(false)
+  const [taskTitle, setTaskTitle] = useState("")
+  const [taskSubjectId, setTaskSubjectId] = useState("")
+  const [taskDueDate, setTaskDueDate] = useState("")
+  const [taskType, setTaskType] = useState("assignment")
+  const [taskCreateLoading, setTaskCreateLoading] = useState(false)
+  const [taskCreateError, setTaskCreateError] = useState(null)
+
+  // Submit task creation handler
+  async function handleCreateTaskSubmit() {
+    if (!taskTitle.trim()) {
+      setTaskCreateError("Task title is required.")
+      return
+    }
+    if (!taskSubjectId) {
+      setTaskCreateError("Subject is required.")
+      return
+    }
+    try {
+      setTaskCreateLoading(true)
+      setTaskCreateError(null)
+      await createTask({
+        title: taskTitle.trim(),
+        subject_id: taskSubjectId,
+        due_date: taskDueDate,
+        type: taskType
+      })
+      await reloadTimetable()
+      setIsTaskModalOpen(false)
+    } catch (err) {
+      setTaskCreateError("Failed to create task on server.")
+    } finally {
+      setTaskCreateLoading(false)
+    }
+  }
+
+  // Toggle task status checkbox handler
+  async function handleToggleTaskStatus(taskId) {
+    try {
+      await updateTaskStatus(taskId, "done")
+      await reloadTimetable()
+    } catch (err) {
+      alert("Failed to update task status.")
+    }
+  }
 
   // Open modal handler
-  function handleOpenModal(time, day, subject, detail) {
+  function handleOpenModal(time, day, subject, detail, id) {
     const slotKey = `${time}-${day}`
     const existingLog = timetableLogs[slotKey] || { status: "Untracked", hours: 0 }
     
-    setSelectedSlot({ time, day, subject, detail, key: slotKey })
+    setSelectedSlot({ time, day, subject, detail, key: slotKey, id })
     setTempStatus(existingLog.status === "Untracked" ? "Completed" : existingLog.status)
     setTempHours(existingLog.status === "Untracked" ? 2.0 : existingLog.hours)
     setIsModalOpen(true)
   }
 
   // Save progress handler
-  function handleSaveProgress() {
+  async function handleSaveProgress() {
     if (!selectedSlot) return
     
     const finalHours = tempStatus === "Completed" ? 2.0 : tempStatus === "Skipped" ? 0 : tempHours
     
+    // Optimistic local update
     setTimetableLogs({
       ...timetableLogs,
       [selectedSlot.key]: {
@@ -331,6 +383,20 @@ function SchedulerPage() {
         hours: finalHours
       }
     })
+
+    if (selectedSlot.id) {
+      try {
+        setSaveLoading(true)
+        setSaveError(null)
+        await endSession(selectedSlot.id, tempStatus, finalHours)
+        await reloadTimetable()
+      } catch (err) {
+        setSaveError("Failed to update progress on server.")
+        return // keep modal open on error
+      } finally {
+        setSaveLoading(false)
+      }
+    }
     setIsModalOpen(false)
   }
 
@@ -419,12 +485,11 @@ function SchedulerPage() {
         })}
       </div>
 
-      {/* ── Middle Row ── */}
+      {/* ── Middle Row: Timetable + Right Sidebar ── */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
 
-        {/* Weekly Timetable */}
-        <div className="lg:col-span-2 bg-white rounded-2xl p-5 shadow-lg
-          border border-gray-100">
+        {/* Weekly Timetable — spans 2 cols */}
+        <div className="lg:col-span-2 bg-white rounded-2xl p-6 shadow-lg border border-gray-100">
 
           <div className="flex items-center justify-between mb-4">
             <h3 className="font-heading text-sm font-semibold text-[#0A1931]">
@@ -450,11 +515,11 @@ function SchedulerPage() {
               <thead>
                 <tr>
                   <th className="font-body text-gray-400 font-medium
-                    text-left py-2 pr-3 w-20">Time</th>
+                    text-left py-2 pr-4 w-24">Time</th>
                   {days.map((day) => (
                     <th key={day}
-                      className="font-body text-gray-500 font-semibold
-                        text-center py-2 px-1">
+                      className="font-body text-gray-600 font-semibold
+                        text-center py-2 px-1 text-xs">
                       {day}
                     </th>
                   ))}
@@ -464,12 +529,12 @@ function SchedulerPage() {
                 {timeSlots.map((time) => (
                   <tr key={time}>
                     <td className="font-body text-gray-400 text-xs
-                      py-1.5 pr-3 whitespace-nowrap align-top pt-2">
+                      py-2 pr-4 whitespace-nowrap align-top pt-3 w-20">
                       {time}
                     </td>
 
                     {time === "12:00 PM" ? (
-                      <td colSpan={6}
+                      <td colSpan={7}
                         className="text-center font-body text-xs
                           text-gray-300 py-2 italic">
                         — Lunch Break —
@@ -479,8 +544,8 @@ function SchedulerPage() {
                         const cell = dynamicTimetable[time]?.[day]
                         if (!cell) {
                           return (
-                            <td key={day} className="py-1 px-1">
-                              <div className="border border-dashed border-[#B3CFE5] rounded-lg py-4 text-center text-[#B3CFE5] font-body text-[10px] font-bold min-h-[58px] flex items-center justify-center bg-transparent">
+                            <td key={day} className="py-1.5 px-1 align-top">
+                              <div className="border border-dashed border-[#B3CFE5] rounded-xl h-[80px] text-center text-[#B3CFE5] font-body text-[10px] font-bold flex items-center justify-center bg-transparent">
                                 Free
                               </div>
                             </td>
@@ -497,70 +562,49 @@ function SchedulerPage() {
                         const isDarkBg = cell.color_hex || cell.subject === "Mathematics" || cell.subject === "Physics"
 
                         return (
-                          <td key={day} className="py-1 px-1">
+                          <td key={day} className="py-1.5 px-1 align-top">
                             <button
-                              onClick={() => handleOpenModal(time, day, cell.subject, cell.detail)}
+                              onClick={() => handleOpenModal(time, day, cell.subject, cell.detail, cell.id)}
                               style={cell.color_hex ? { backgroundColor: cell.color_hex } : undefined}
-                              className={`w-full text-left rounded-lg py-2 px-2 min-h-[58px] transition-all duration-200 hover:scale-[1.02] hover:shadow-md border border-transparent ${cell.color_hex ? "" : (subjectColors[cell.subject] || "bg-gray-100")}`}
+                              className={`w-full text-left rounded-xl px-2.5 h-[80px] overflow-hidden transition-all duration-200 hover:scale-[1.02] hover:shadow-md border border-transparent flex flex-col justify-between py-2 ${cell.color_hex ? "" : (subjectColors[cell.subject] || "bg-gray-100")}`}
                             >
-                              <p className={`font-body font-semibold text-[11px] leading-tight ${
-                                isSkipped
-                                  ? "line-through opacity-50"
-                                  : ""
-                              } ${cell.color_hex ? "text-white" : (subjectTextColors[cell.subject] || "text-gray-700")}`}>
-                                {cell.subject}
-                              </p>
-                              {cell.detail && (
-                                <p className={`font-body text-[10px] leading-tight mt-0.5 ${
-                                  isSkipped
-                                    ? "line-through opacity-40"
-                                    : ""
-                                } ${
-                                  isDarkBg
-                                    ? "text-white/70"
-                                    : "text-gray-500"
-                                }`}>
-                                  {cell.detail}
+                              {/* Top: subject + detail always present */}
+                              <div className="flex-1 min-h-0">
+                                <p className={`font-body font-semibold text-[11px] leading-tight truncate ${
+                                  isSkipped ? "line-through opacity-50" : ""
+                                } ${cell.color_hex ? "text-white" : (subjectTextColors[cell.subject] || "text-gray-700")}`}>
+                                  {cell.subject}
                                 </p>
-                              )}
+                                <p className={`font-body text-[10px] leading-tight mt-0.5 truncate ${
+                                  isSkipped ? "line-through opacity-40" : ""
+                                } ${isDarkBg ? "text-white/60" : "text-gray-400"}`}>
+                                  {cell.detail || ""}
+                                </p>
+                              </div>
 
-                              {/* Progress Status Indicator */}
-                              <div className="mt-2 flex items-center gap-1">
+                              {/* Bottom: status badge — always at the bottom */}
+                              <div className="flex items-center gap-1 flex-shrink-0">
                                 {isCompleted && (
                                   <span className={`text-[9px] font-bold px-1.5 py-0.5 rounded flex items-center gap-0.5 ${
-                                    isDarkBg
-                                      ? "bg-green-500/20 text-green-300"
-                                      : "bg-green-100 text-green-700"
-                                  }`}>
-                                    ✓ 2.0h
-                                  </span>
+                                    isDarkBg ? "bg-green-500/20 text-green-300" : "bg-green-100 text-green-700"
+                                  }`}>✓ Done</span>
                                 )}
                                 {isPartial && (
                                   <span className={`text-[9px] font-bold px-1.5 py-0.5 rounded flex items-center gap-0.5 ${
-                                    isDarkBg
-                                      ? "bg-amber-500/20 text-amber-300"
-                                      : "bg-amber-100 text-amber-700"
-                                  }`}>
-                                    ◷ {log.hours}h
-                                  </span>
+                                    isDarkBg ? "bg-amber-500/20 text-amber-300" : "bg-amber-100 text-amber-700"
+                                  }`}>◷ {log.hours}h</span>
                                 )}
                                 {isSkipped && (
                                   <span className={`text-[9px] font-bold px-1.5 py-0.5 rounded flex items-center gap-0.5 ${
-                                    isDarkBg
-                                      ? "bg-red-500/20 text-red-300"
-                                      : "bg-red-100 text-red-700"
-                                  }`}>
-                                    ✗ Skipped
-                                  </span>
+                                    isDarkBg ? "bg-red-500/20 text-red-300" : "bg-red-100 text-red-700"
+                                  }`}>✗ Skip</span>
                                 )}
                                 {!hasLogged && (
                                   <span className={`text-[9px] font-medium px-1.5 py-0.5 rounded border ${
                                     isDarkBg
-                                      ? "bg-white/10 text-white/40 border-white/10 hover:text-white/70"
-                                      : "bg-gray-100 text-gray-400 border-gray-200 hover:text-gray-600"
-                                  }`}>
-                                    Track
-                                  </span>
+                                      ? "bg-white/10 text-white/40 border-white/10"
+                                      : "bg-gray-100 text-gray-400 border-gray-200"
+                                  }`}>Track</span>
                                 )}
                               </div>
                             </button>
@@ -573,22 +617,9 @@ function SchedulerPage() {
               </tbody>
             </table>
           </div>
-
-          {/* Legend */}
-          <div className="flex flex-wrap gap-3 mt-4 pt-3
-            border-t border-gray-100">
-            {legendItems.map((item) => (
-              <div key={item.label} className="flex items-center gap-1.5">
-                <span className={`w-2.5 h-2.5 rounded-sm ${item.color}`} />
-                <span className="font-body text-[11px] text-gray-400">
-                  {item.label}
-                </span>
-              </div>
-            ))}
-          </div>
         </div>
 
-        {/* Right Column */}
+        {/* Right Column: Auto-Generate + Today's Sessions */}
         <div className="space-y-4">
 
           {/* Auto Generate */}
@@ -682,144 +713,110 @@ function SchedulerPage() {
           </div>
 
           {/* Today's Sessions */}
-          <div className="bg-white rounded-2xl p-5 shadow-lg
-            border border-gray-100">
-            <div className="flex items-center justify-between mb-3">
-              <h3 className="font-heading text-sm font-semibold
-                text-[#0A1931]">
-                Today's Sessions
-              </h3>
-              <span className="font-body text-xs text-gray-400">
-                Sunday, Apr 19
-              </span>
-            </div>
-            <div className="space-y-3">
-              {todaysSessions.length === 0 ? (
-                <p className="font-body text-xs text-gray-400 text-center py-4">
-                  No sessions scheduled for today
-                </p>
-              ) : (
-                todaysSessions.map((session, i) => (
-                  <div key={i} className="flex items-start gap-2">
-                    <span
-                      className="w-2 h-2 rounded-full mt-1.5 flex-shrink-0"
-                      style={{ backgroundColor: session.color || "#4A7FA7" }}
-                    />
-                    <div className="flex-1 min-w-0">
-                      <p className="font-body text-xs text-[#0A1931]
-                        font-semibold leading-tight">
-                        {session.subject}
-                      </p>
-                      <p className="font-body text-[10px] text-gray-400">
-                        {session.detail}
-                      </p>
-                    </div>
-                    <div className="text-right flex-shrink-0">
-                      <p className="font-body text-[10px] text-gray-400">
-                        {session.time}
-                      </p>
-                      <p className={`font-body text-[10px] font-semibold
-                        ${session.statusColor}`}>
-                        {session.status}
-                      </p>
-                    </div>
-                  </div>
-                ))
-              )}
-            </div>
+          <div className="bg-white rounded-2xl p-5 shadow-lg border border-gray-100">
+          <div className="flex items-center justify-between mb-3">
+            <h3 className="font-heading text-sm font-semibold text-[#0A1931]">
+              Today's Sessions
+            </h3>
+            <span className="font-body text-xs text-gray-400">
+              {new Date().toLocaleDateString("en-US", { weekday: "long", month: "short", day: "numeric" })}
+            </span>
           </div>
-
-        </div>
-      </div>
-
-      {/* ── Bottom Row ── */}
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
-
-        {/* Subject Performance */}
-        <div className="bg-white rounded-2xl p-5 shadow-sm border border-gray-100">
-          <h3 className="font-heading text-sm font-semibold text-[#0A1931] mb-4">
-            Subject Performance
-          </h3>
           <div className="space-y-3">
-            {subjectPerformance.map((item) => (
-              <ProgressBar
-                key={item.name}
-                value={item.percent}
-                label={item.name}
-                showPercent
-                color={
-                  item.name === "Mathematics" ? "primary" :
-                    item.name === "Physics" ? "accent" :
-                      item.name === "Chemistry" ? "success" :
-                        item.name === "Biology" ? "warning" : "purple"
-                }
-              />
-            ))}
-          </div>
-        </div>
-
-        {/* AI Study Tips */}
-        <div className="bg-white rounded-2xl p-5 shadow-lg
-          border border-gray-100">
-          <h3 className="font-heading text-sm font-semibold
-            text-[#0A1931] mb-4">
-            AI Study Tips
-          </h3>
-          <div className="space-y-4">
-            {aiTips.map((tip, i) => (
-              <div key={i} className="flex items-start gap-3">
-                <span className="text-xl flex-shrink-0">{tip.icon}</span>
-                <div>
-                  <p className="font-body text-xs font-semibold
-                    text-[#0A1931] leading-tight">
-                    {tip.tip}
-                  </p>
-                  <p className="font-body text-xs text-gray-400 mt-0.5">
-                    {tip.detail}
-                  </p>
-                </div>
-              </div>
-            ))}
-          </div>
-        </div>
-
-        {/* Upcoming Deadlines */}
-        <div className="bg-white rounded-2xl p-5 shadow-lg
-          border border-gray-100">
-          <h3 className="font-heading text-sm font-semibold
-            text-[#0A1931] mb-4">
-            Upcoming Deadlines
-          </h3>
-          <div className="space-y-3">
-            {upcomingDeadlines.length === 0 ? (
+            {todaysSessions.length === 0 ? (
               <p className="font-body text-xs text-gray-400 text-center py-4">
-                No upcoming deadlines 🎉
+                No sessions scheduled for today
               </p>
             ) : (
-              upcomingDeadlines.map((item, i) => (
-                <div key={i} className="flex items-start justify-between
-                  border-l-4 border-[#1A3D63] pl-3 py-1">
-                  <div>
-                    <p className="font-body text-xs font-semibold
-                      text-[#0A1931]">
-                      {item.title}
+              todaysSessions.map((session, i) => (
+                <div key={i} className="flex items-start gap-2">
+                  <span
+                    className="w-2 h-2 rounded-full mt-1.5 flex-shrink-0"
+                    style={{ backgroundColor: session.color || "#4A7FA7" }}
+                  />
+                  <div className="flex-1 min-w-0">
+                    <p className="font-body text-xs text-[#0A1931] font-semibold leading-tight">
+                      {session.subject}
                     </p>
                     <p className="font-body text-[10px] text-gray-400">
-                      {item.detail}
+                      {session.detail}
                     </p>
                   </div>
-                  <div className="text-right flex-shrink-0 ml-2">
-                    <p className="font-heading text-lg font-bold
-                      text-[#1A3D63]">
-                      {item.days}
-                    </p>
-                    <p className="font-body text-[10px] text-gray-400">
-                      days left
+                  <div className="text-right flex-shrink-0">
+                    <p className="font-body text-[10px] text-gray-400">{session.time}</p>
+                    <p className={`font-body text-[10px] font-semibold ${session.statusColor}`}>
+                      {session.status}
                     </p>
                   </div>
                 </div>
               ))
             )}
+          </div>
+          </div>
+        </div>
+      </div>
+
+      {/* ── Bottom Row: Deadlines + AI Tips ── */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+
+        {/* Upcoming Deadlines */}
+        <div className="bg-white rounded-2xl p-5 shadow-lg border border-gray-100">
+          <div className="flex items-center justify-between mb-4">
+            <h3 className="font-heading text-sm font-semibold text-[#0A1931]">Upcoming Deadlines</h3>
+            <button
+              onClick={() => {
+                setTaskTitle("")
+                setTaskSubjectId(allSubjects[0]?.id || "")
+                setTaskDueDate(new Date().toISOString().slice(0, 10))
+                setTaskType("assignment")
+                setTaskCreateError(null)
+                setIsTaskModalOpen(true)
+              }}
+              className="flex items-center gap-1 text-[11px] font-body font-bold text-[#4A7FA7] hover:text-[#0A1931] bg-transparent border-none cursor-pointer"
+            >
+              <Plus size={12} /> Add Task
+            </button>
+          </div>
+          <div className="space-y-3">
+            {upcomingDeadlines.length === 0 ? (
+              <p className="font-body text-xs text-gray-400 text-center py-4">No upcoming deadlines 🎉</p>
+            ) : (
+              upcomingDeadlines.map((item, i) => (
+                <div key={i} className="flex items-start justify-between border-l-4 border-[#1A3D63] pl-3 py-1">
+                  <div className="flex items-start gap-2.5">
+                    <input
+                      type="checkbox"
+                      onChange={() => handleToggleTaskStatus(item.id)}
+                      className="w-4 h-4 rounded text-[#1A3D63] focus:ring-[#4A7FA7] border-gray-300 cursor-pointer mt-0.5"
+                    />
+                    <div>
+                      <p className="font-body text-xs font-semibold text-[#0A1931]">{item.title}</p>
+                      <p className="font-body text-[10px] text-gray-400">{item.detail}</p>
+                    </div>
+                  </div>
+                  <div className="text-right flex-shrink-0 ml-2">
+                    <p className="font-heading text-lg font-bold text-[#1A3D63]">{item.days}</p>
+                    <p className="font-body text-[10px] text-gray-400">days left</p>
+                  </div>
+                </div>
+              ))
+            )}
+          </div>
+        </div>
+
+        {/* AI Study Tips */}
+        <div className="bg-white rounded-2xl p-5 shadow-lg border border-gray-100">
+          <h3 className="font-heading text-sm font-semibold text-[#0A1931] mb-4">AI Study Tips</h3>
+          <div className="space-y-4">
+            {aiTips.map((tip, i) => (
+              <div key={i} className="flex items-start gap-3">
+                <span className="text-xl flex-shrink-0">{tip.icon}</span>
+                <div>
+                  <p className="font-body text-xs font-semibold text-[#0A1931] leading-tight">{tip.tip}</p>
+                  <p className="font-body text-xs text-gray-400 mt-0.5">{tip.detail}</p>
+                </div>
+              </div>
+            ))}
           </div>
         </div>
 
@@ -958,22 +955,121 @@ function SchedulerPage() {
 
             </div>
 
+            {saveError && (
+              <p className="font-body text-[10px] text-red-500 text-center mt-2">{saveError}</p>
+            )}
+
             {/* Actions */}
             <div className="flex items-center gap-3 pt-6 border-t border-gray-50 mt-6">
               <button
                 onClick={() => setIsModalOpen(false)}
-                className="flex-1 border border-gray-200 text-gray-500 hover:bg-gray-50 font-body text-xs font-semibold py-2.5 px-4 rounded-xl transition-colors duration-200"
+                disabled={saveLoading}
+                className="flex-1 border border-gray-200 text-gray-500 hover:bg-gray-50 font-body text-xs font-semibold py-2.5 px-4 rounded-xl transition-colors duration-200 disabled:opacity-50"
               >
                 Cancel
               </button>
               <button
                 onClick={handleSaveProgress}
-                className="flex-1 bg-[#0A1931] hover:bg-[#1A3D63] text-white font-body text-xs font-semibold py-2.5 px-4 rounded-xl shadow-sm transition-colors duration-200"
+                disabled={saveLoading}
+                className="flex-1 bg-[#0A1931] hover:bg-[#1A3D63] text-white font-body text-xs font-semibold py-2.5 px-4 rounded-xl shadow-sm transition-colors duration-200 flex items-center justify-center gap-1.5 disabled:opacity-50"
               >
-                Save Progress
+                {saveLoading ? (
+                  <><div className="w-3 h-3 border-2 border-white border-t-transparent rounded-full animate-spin" /> Saving...</>
+                ) : (
+                  "Save Progress"
+                )}
               </button>
             </div>
 
+          </div>
+        </div>
+      )}
+
+      {/* ── 5. Add Task Modal ── */}
+      {isTaskModalOpen && (
+        <div className="fixed inset-0 bg-[#0A1931]/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+          <div className="bg-white rounded-2xl max-w-sm w-full p-6 shadow-2xl border border-gray-100 animate-in fade-in zoom-in duration-200">
+            <h3 className="font-heading text-sm font-bold text-[#0A1931] border-b border-gray-50 pb-3">
+              Add New Task
+            </h3>
+            
+            <div className="space-y-4 pt-4 font-body text-xs text-gray-600">
+              <div>
+                <label className="font-semibold text-gray-700 block mb-1">Task Title</label>
+                <input
+                  type="text"
+                  placeholder="e.g. Solve Math Homework"
+                  value={taskTitle}
+                  onChange={(e) => setTaskTitle(e.target.value)}
+                  className="w-full bg-white text-gray-800 px-3 py-2 rounded-xl border border-gray-200 focus:outline-none focus:border-[#4A7FA7]"
+                />
+              </div>
+
+              <div>
+                <label className="font-semibold text-gray-700 block mb-1">Subject</label>
+                <select
+                  value={taskSubjectId}
+                  onChange={(e) => setTaskSubjectId(e.target.value)}
+                  className="w-full bg-white text-gray-800 px-3 py-2 rounded-xl border border-gray-200 focus:outline-none focus:border-[#4A7FA7]"
+                >
+                  <option value="" disabled>Select Subject</option>
+                  {allSubjects.map(s => (
+                    <option key={s.id} value={s.id}>{s.name}</option>
+                  ))}
+                </select>
+              </div>
+
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="font-semibold text-gray-700 block mb-1">Due Date</label>
+                  <input
+                    type="date"
+                    value={taskDueDate}
+                    onChange={(e) => setTaskDueDate(e.target.value)}
+                    className="w-full bg-white text-gray-800 px-3 py-2 rounded-xl border border-gray-200 focus:outline-none focus:border-[#4A7FA7]"
+                  />
+                </div>
+                <div>
+                  <label className="font-semibold text-gray-700 block mb-1">Type</label>
+                  <select
+                    value={taskType}
+                    onChange={(e) => setTaskType(e.target.value)}
+                    className="w-full bg-white text-gray-800 px-3 py-2 rounded-xl border border-gray-200 focus:outline-none focus:border-[#4A7FA7]"
+                  >
+                    <option value="assignment">Assignment</option>
+                    <option value="exam">Exam</option>
+                    <option value="project">Project</option>
+                    <option value="lab_report">Lab Report</option>
+                  </select>
+                </div>
+              </div>
+
+              {taskCreateError && (
+                <p className="font-body text-[10px] text-red-500 text-center mt-2">{taskCreateError}</p>
+              )}
+            </div>
+
+            {/* Actions */}
+            <div className="flex items-center gap-3 pt-6 border-t border-gray-50 mt-6">
+              <button
+                onClick={() => setIsTaskModalOpen(false)}
+                disabled={taskCreateLoading}
+                className="flex-1 border border-gray-200 text-gray-500 hover:bg-gray-50 font-body text-xs font-semibold py-2.5 px-4 rounded-xl transition-colors duration-200 disabled:opacity-50"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleCreateTaskSubmit}
+                disabled={taskCreateLoading}
+                className="flex-1 bg-[#0A1931] hover:bg-[#1A3D63] text-white font-body text-xs font-semibold py-2.5 px-4 rounded-xl shadow-sm transition-colors duration-200 flex items-center justify-center gap-1.5 disabled:opacity-50"
+              >
+                {taskCreateLoading ? (
+                  <><div className="w-3 h-3 border-2 border-white border-t-transparent rounded-full animate-spin" /> Saving...</>
+                ) : (
+                  "Create Task"
+                )}
+              </button>
+            </div>
           </div>
         </div>
       )}
