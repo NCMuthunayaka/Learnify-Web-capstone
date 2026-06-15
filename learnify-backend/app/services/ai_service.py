@@ -1,9 +1,10 @@
 """
 AI Service — Learnify
-Primary  : Google Gemini 2.0 Flash (via google-genai SDK)
+Primary  : Google Gemini 2.5 Flash (via google-genai SDK)
 Fallback : OpenAI GPT-4  (only if OPENAI_API_KEY is set and Gemini fails)
 """
 import os
+import re
 import base64
 import json
 from typing import Optional
@@ -158,35 +159,67 @@ def _build_timetable_prompt(intensity, focus_subject, exam_date, subjects):
         f"Generate a weekly study timetable for a university student.\n"
         f"Study intensity: {intensity}\n"
         f"Focus subject: {focus_subject}\n"
-        f"Exam date: {exam_date}\n"
+        f"Exam date: {exam_date if exam_date else 'not specified'}\n"
         f"Subjects: {subjects_str}\n\n"
-        f"Return ONLY a valid JSON array with NO markdown, NO code fences, NO explanation.\n"
-        f'Each element must have exactly these keys: '
+        f"Rules:\n"
+        f"- Return ONLY a valid JSON array. No markdown, no code fences, no explanation.\n"
+        f"- Include 2-3 sessions per day, Monday through Sunday.\n"
+        f"- Each session must have exactly these keys: "
         f'"day" (Monday-Sunday), "start_time" (HH:MM 24h), "end_time" (HH:MM 24h), '
         f'"subject" (must match one of the listed subjects), '
-        f'"session_type" (study|revision|practice|rest)'
+        f'"session_type" (study|revision|practice|rest)\n'
+        f"- Keep subject names short (exactly as listed).\n"
+        f"- Output must be valid JSON parseable by Python json.loads()."
     )
+
+
+def _extract_json_array(raw: str) -> list:
+    """Robustly extract a JSON array from an AI response that may contain
+    markdown fences, prose before/after, or ```json tags."""
+    raw = raw.strip()
+
+    # 1. Try to strip ```json ... ``` or ``` ... ``` fences first
+    fence_match = re.search(r"```(?:json)?\s*([\s\S]*?)```", raw)
+    if fence_match:
+        raw = fence_match.group(1).strip()
+
+    # 2. If still not a JSON array, extract the first [...] block
+    if not raw.startswith("["):
+        arr_match = re.search(r"(\[.*\])", raw, re.DOTALL)
+        if arr_match:
+            raw = arr_match.group(1).strip()
+
+    return json.loads(raw)
 
 
 def _gemini_timetable(prompt: str) -> list:
     if not gemini_client:
         raise RuntimeError("Gemini client not configured")
 
-    response = gemini_client.models.generate_content(
-        model=GEMINI_MODEL,
-        contents=prompt,
-        config=genai_types.GenerateContentConfig(
-            system_instruction="You are a study planning assistant. Return only valid JSON arrays with no extra text.",
-            max_output_tokens=2048,
-            temperature=0.4,
-        ),
-    )
-    raw = response.text.strip()
-    # Strip markdown fences if present
-    if raw.startswith("```"):
-        lines = raw.split("\n")
-        raw = "\n".join(lines[1:-1])
-    return json.loads(raw)
+    import time
+    last_err = None
+    for attempt in range(3):  # retry up to 3 times on 503
+        try:
+            response = gemini_client.models.generate_content(
+                model=GEMINI_MODEL,
+                contents=prompt,
+                config=genai_types.GenerateContentConfig(
+                    system_instruction="You are a study planning assistant. Return only valid JSON arrays with no extra text, no markdown fences.",
+                    max_output_tokens=4096,
+                    temperature=0.3,
+                ),
+            )
+            return _extract_json_array(response.text)
+        except Exception as e:
+            last_err = e
+            err_str = str(e)
+            if "503" in err_str or "UNAVAILABLE" in err_str or "429" in err_str:
+                wait = 2 ** attempt  # 1s, 2s, 4s
+                print(f"[ai_service] Gemini 503/429, retrying in {wait}s (attempt {attempt+1}/3)")
+                time.sleep(wait)
+                continue
+            raise  # non-retriable error, raise immediately
+    raise last_err
 
 
 def _openai_timetable(prompt: str) -> list:
@@ -199,11 +232,7 @@ def _openai_timetable(prompt: str) -> list:
         max_tokens=2048,
         temperature=0.4,
     )
-    raw = response.choices[0].message.content.strip()
-    if raw.startswith("```"):
-        lines = raw.split("\n")
-        raw = "\n".join(lines[1:-1])
-    return json.loads(raw)
+    return _extract_json_array(response.choices[0].message.content)
 
 
 # ═════════════════════════════════════════════════════════════════════════════
