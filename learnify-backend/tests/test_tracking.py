@@ -176,6 +176,32 @@ class TrackingTestCase(unittest.TestCase):
         self.assertIsNotNone(snap)
         self.assertEqual(float(snap[0]), 1.5)
 
+    def test_end_session_awards_streak_achievement(self):
+        # Update study streak to 14 in student_profile to trigger achievement
+        db.session.execute(
+            text("UPDATE student_profiles SET study_streak_days = 14 WHERE user_id = :uid"),
+            {"uid": self.user_id}
+        )
+        db.session.commit()
+
+        # End study session
+        response = self.client.post(
+            f"/api/tracking/sessions/{self.session_id}/end",
+            headers=self.headers,
+            data=json.dumps({"status": "Completed", "hours": 2.0})
+        )
+        self.assertEqual(response.status_code, 200)
+        data = json.loads(response.data.decode("utf-8"))
+        self.assertTrue(data["success"])
+        self.assertIn("Study Streak 14", data["data"]["achievements_earned"])
+
+        # Verify DB user_achievements table
+        ach = db.session.execute(
+            text("SELECT COUNT(*) FROM user_achievements WHERE user_id = :uid"),
+            {"uid": self.user_id}
+        ).scalar()
+        self.assertEqual(ach, 1)
+
 
 if __name__ == "__main__":
     unittest.main()

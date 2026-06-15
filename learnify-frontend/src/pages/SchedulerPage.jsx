@@ -7,6 +7,7 @@ import Badge from "../components/common/Badge"
 import LoadingSpinner from "../components/common/LoadingSpinner"
 import { getTasks, getSchedulerStats, getTimetable, generateTimetable } from "../api/schedulerApi"
 import { getSubjects } from "../api/subjectsApi"
+import { endSession } from "../api/trackingApi"
 
 // ── statsData is now built dynamically from API (see dynamicStats below)
 
@@ -306,24 +307,27 @@ function SchedulerPage() {
   const [selectedSlot, setSelectedSlot] = useState(null)
   const [tempStatus, setTempStatus] = useState("Completed") // "Completed", "Partially Completed", "Skipped"
   const [tempHours, setTempHours] = useState(2.0)
+  const [saveLoading, setSaveLoading] = useState(false)
+  const [saveError, setSaveError] = useState(null)
 
   // Open modal handler
-  function handleOpenModal(time, day, subject, detail) {
+  function handleOpenModal(time, day, subject, detail, id) {
     const slotKey = `${time}-${day}`
     const existingLog = timetableLogs[slotKey] || { status: "Untracked", hours: 0 }
     
-    setSelectedSlot({ time, day, subject, detail, key: slotKey })
+    setSelectedSlot({ time, day, subject, detail, key: slotKey, id })
     setTempStatus(existingLog.status === "Untracked" ? "Completed" : existingLog.status)
     setTempHours(existingLog.status === "Untracked" ? 2.0 : existingLog.hours)
     setIsModalOpen(true)
   }
 
   // Save progress handler
-  function handleSaveProgress() {
+  async function handleSaveProgress() {
     if (!selectedSlot) return
     
     const finalHours = tempStatus === "Completed" ? 2.0 : tempStatus === "Skipped" ? 0 : tempHours
     
+    // Optimistic local update
     setTimetableLogs({
       ...timetableLogs,
       [selectedSlot.key]: {
@@ -331,6 +335,20 @@ function SchedulerPage() {
         hours: finalHours
       }
     })
+
+    if (selectedSlot.id) {
+      try {
+        setSaveLoading(true)
+        setSaveError(null)
+        await endSession(selectedSlot.id, tempStatus, finalHours)
+        await reloadTimetable()
+      } catch (err) {
+        setSaveError("Failed to update progress on server.")
+        return // keep modal open on error
+      } finally {
+        setSaveLoading(false)
+      }
+    }
     setIsModalOpen(false)
   }
 
@@ -499,7 +517,7 @@ function SchedulerPage() {
                         return (
                           <td key={day} className="py-1 px-1">
                             <button
-                              onClick={() => handleOpenModal(time, day, cell.subject, cell.detail)}
+                              onClick={() => handleOpenModal(time, day, cell.subject, cell.detail, cell.id)}
                               style={cell.color_hex ? { backgroundColor: cell.color_hex } : undefined}
                               className={`w-full text-left rounded-lg py-2 px-2 min-h-[58px] transition-all duration-200 hover:scale-[1.02] hover:shadow-md border border-transparent ${cell.color_hex ? "" : (subjectColors[cell.subject] || "bg-gray-100")}`}
                             >
@@ -958,19 +976,29 @@ function SchedulerPage() {
 
             </div>
 
+            {saveError && (
+              <p className="font-body text-[10px] text-red-500 text-center mt-2">{saveError}</p>
+            )}
+
             {/* Actions */}
             <div className="flex items-center gap-3 pt-6 border-t border-gray-50 mt-6">
               <button
                 onClick={() => setIsModalOpen(false)}
-                className="flex-1 border border-gray-200 text-gray-500 hover:bg-gray-50 font-body text-xs font-semibold py-2.5 px-4 rounded-xl transition-colors duration-200"
+                disabled={saveLoading}
+                className="flex-1 border border-gray-200 text-gray-500 hover:bg-gray-50 font-body text-xs font-semibold py-2.5 px-4 rounded-xl transition-colors duration-200 disabled:opacity-50"
               >
                 Cancel
               </button>
               <button
                 onClick={handleSaveProgress}
-                className="flex-1 bg-[#0A1931] hover:bg-[#1A3D63] text-white font-body text-xs font-semibold py-2.5 px-4 rounded-xl shadow-sm transition-colors duration-200"
+                disabled={saveLoading}
+                className="flex-1 bg-[#0A1931] hover:bg-[#1A3D63] text-white font-body text-xs font-semibold py-2.5 px-4 rounded-xl shadow-sm transition-colors duration-200 flex items-center justify-center gap-1.5 disabled:opacity-50"
               >
-                Save Progress
+                {saveLoading ? (
+                  <><div className="w-3 h-3 border-2 border-white border-t-transparent rounded-full animate-spin" /> Saving...</>
+                ) : (
+                  "Save Progress"
+                )}
               </button>
             </div>
 

@@ -79,56 +79,23 @@ def end_session(session_id):
         )
         db.session.commit()
         
-        # Update daily progress snapshot study hours
+        # Update daily progress snapshot study hours and completion
         session_date = session_row[3].date()
         subject_id = session_row[2]
         
-        # Sum completed study session durations for this student, subject, and date
-        total_min_row = db.session.execute(
-            text(
-                "SELECT COALESCE(SUM(duration_min), 0) "
-                "FROM study_sessions "
-                "WHERE student_id = :uid AND subject_id = :subid "
-                "AND DATE(start_time) = :sdate AND completed = 1"
-            ),
-            {"uid": user_id, "subid": subject_id, "sdate": session_date}
-        ).fetchone()
+        from app.services.analytics_service import update_daily_progress_snapshot, check_and_award_achievements
+        update_daily_progress_snapshot(user_id, subject_id, session_date)
         
-        total_hours = float(total_min_row[0]) / 60.0
-        
-        # Upsert progress snapshot
-        snap_row = db.session.execute(
-            text(
-                "SELECT id FROM progress_snapshots "
-                "WHERE student_id = :uid AND subject_id = :subid AND snapshot_date = :sdate"
-            ),
-            {"uid": user_id, "subid": subject_id, "sdate": session_date}
-        ).fetchone()
-        
-        if snap_row:
-            db.session.execute(
-                text(
-                    "UPDATE progress_snapshots SET study_hours = :hours "
-                    "WHERE id = :sid"
-                ),
-                {"hours": total_hours, "sid": snap_row[0]}
-            )
-        else:
-            db.session.execute(
-                text(
-                    "INSERT INTO progress_snapshots (student_id, subject_id, snapshot_date, study_hours, completion_pct) "
-                    "VALUES (:uid, :subid, :sdate, :hours, 0.0)"
-                ),
-                {"uid": user_id, "subid": subject_id, "sdate": session_date, "hours": total_hours}
-            )
-        db.session.commit()
+        # Check and award achievements
+        achievements_earned = check_and_award_achievements(user_id)
         
         return success_response(
             data={
                 "id": session_id,
                 "completed": bool(completed_val),
                 "duration_min": actual_duration_min,
-                "focus_rating": round(focus_rating, 1)
+                "focus_rating": round(focus_rating, 1),
+                "achievements_earned": achievements_earned
             },
             message="Study session updated successfully"
         )
