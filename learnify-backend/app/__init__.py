@@ -1,4 +1,4 @@
-from flask import Flask
+from flask import Flask, send_from_directory
 from app.extensions import db, jwt, migrate, bcrypt, cors
 from app.routes import auth, chat, scheduler, tracking, feedback, resources, admin, notifications, users, subjects, dashboard, progress
 from app.config import config
@@ -10,6 +10,7 @@ from app.models.notification_type import NotificationType
 from app.models.subject           import Subject
 from app.models.file_type         import FileType
 from app.models.token_blocklist   import TokenBlocklist
+import os
 from app.models.chat_message      import ChatSession, ChatMessage
 from app.models.feedback          import Feedback
 
@@ -23,8 +24,6 @@ def create_app(config_name="development"):
     jwt.init_app(app)
     migrate.init_app(app, db)
     bcrypt.init_app(app)
-
-    # ── CORS — allow frontend requests ────────────────────
     cors.init_app(app,
         resources={r"/api/*": {"origins": "*"}},
         supports_credentials=True,
@@ -41,6 +40,13 @@ def create_app(config_name="development"):
         response.headers["Access-Control-Allow-Headers"] = "Content-Type, Authorization"
         response.headers["Access-Control-Allow-Methods"] = "GET, POST, PUT, PATCH, DELETE, OPTIONS"
         return response
+
+    # ── Serve uploaded files ──────────────────────────────
+    # This makes /uploads/filename.pdf accessible from browser
+    @app.route("/uploads/<path:filename>")
+    def serve_file(filename):
+        upload_folder = app.config["UPLOAD_FOLDER"]
+        return send_from_directory(upload_folder, filename)
 
     # Register blueprints
     app.register_blueprint(auth.bp,          url_prefix="/api/auth")
