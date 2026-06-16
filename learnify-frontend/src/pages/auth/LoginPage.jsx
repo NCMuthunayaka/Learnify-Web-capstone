@@ -34,7 +34,7 @@ function LoginPage() {
 
     try {
       setLoading(true)
-      const response                          = await loginUser(formData.email, formData.password)
+      const response = await loginUser(formData.email, formData.password)
       const { user, access_token, refresh_token } = response.data
       login(user, access_token, refresh_token)
       navigate("/dashboard")
