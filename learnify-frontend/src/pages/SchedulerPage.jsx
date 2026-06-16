@@ -7,7 +7,7 @@ import Badge from "../components/common/Badge"
 import LoadingSpinner from "../components/common/LoadingSpinner"
 import { getTasks, getSchedulerStats, getTimetable, generateTimetable, createTask, updateTaskStatus } from "../api/schedulerApi"
 import { getSubjects } from "../api/subjectsApi"
-import { endSession } from "../api/trackingApi"
+import { startSession, endSession } from "../api/trackingApi"
 
 // ── statsData is now built dynamically from API (see dynamicStats below)
 
@@ -161,6 +161,77 @@ function SchedulerPage() {
   const [apiTasks, setApiTasks]           = useState([])
   const [apiTimetable, setApiTimetable]   = useState([])
   const [statsLoading, setStatsLoading]   = useState(true)
+
+  // ── Live Timer States ──────────────────────────────────
+  const [activeTimer, setActiveTimer]     = useState(null) // { id, subject, detail, startTime, elapsedSeconds, isPaused }
+  const [modalTab, setModalTab]           = useState("log") // "log" or "timer"
+  const [timerLoading, setTimerLoading]   = useState(false)
+
+  // Live Timer Ticking Effect
+  useEffect(() => {
+    let intervalId = null
+    if (activeTimer && !activeTimer.isPaused) {
+      intervalId = setInterval(() => {
+        setActiveTimer(prev => {
+          if (!prev) return null
+          return {
+            ...prev,
+            elapsedSeconds: prev.elapsedSeconds + 1
+          }
+        })
+      }, 1000)
+    }
+    return () => {
+      if (intervalId) clearInterval(intervalId)
+    }
+  }, [activeTimer?.isPaused, !!activeTimer])
+
+  // Format elapsed seconds to time string
+  const formatTime = (secs) => {
+    const h = Math.floor(secs / 3600)
+    const m = Math.floor((secs % 3600) / 60)
+    const s = secs % 60
+    return `${h > 0 ? h + ":" : ""}${String(m).padStart(2, "0")}:${String(s).padStart(2, "0")}`
+  }
+
+  // Switch to the active timer's timetable slot
+  const handleSwitchToActiveTimer = () => {
+    if (!activeTimer) return
+    const activeSession = apiTimetable.find(s => s.id === activeTimer.id)
+    if (activeSession) {
+      const dateObj = new Date(activeSession.start_time)
+      const daysOfWeek = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"]
+      const dayName = daysOfWeek[dateObj.getDay()]
+      
+      const hour = dateObj.getHours()
+      let slot = null
+      if (hour === 8) slot = "8:00 AM"
+      else if (hour === 10) slot = "10:00 AM"
+      else if (hour === 12) slot = "12:00 PM"
+      else if (hour === 13) slot = "1:00 PM"
+      else if (hour === 15) slot = "3:00 PM"
+      else if (hour === 17) slot = "5:00 PM"
+
+      handleOpenModal(
+        slot || "",
+        dayName || "",
+        activeSession.subject_name,
+        activeSession.session_type,
+        activeSession.id,
+        activeSession
+      )
+    } else {
+      setSelectedSlot({
+        time: "",
+        day: "",
+        subject: activeTimer.subject,
+        detail: activeTimer.detail,
+        key: `timer-${activeTimer.id}`,
+        id: activeTimer.id
+      })
+      setModalTab("timer")
+    }
+  }
 
   useEffect(() => {
     async function loadSchedulerData() {
@@ -359,13 +430,22 @@ function SchedulerPage() {
   }
 
   // Open modal handler
-  function handleOpenModal(time, day, subject, detail, id) {
+  function handleOpenModal(time, day, subject, detail, id, rawSession) {
     const slotKey = `${time}-${day}`
     const existingLog = timetableLogs[slotKey] || { status: "Untracked", hours: 0 }
     
-    setSelectedSlot({ time, day, subject, detail, key: slotKey, id })
+    setSelectedSlot({ time, day, subject, detail, key: slotKey, id, raw: rawSession })
     setTempStatus(existingLog.status === "Untracked" ? "Completed" : existingLog.status)
-    setTempHours(existingLog.status === "Untracked" ? 2.0 : existingLog.hours)
+    
+    const schedHours = rawSession?.duration_min ? (rawSession.duration_min / 60.0) : 2.0
+    setTempHours(existingLog.status === "Untracked" ? schedHours : existingLog.hours)
+    
+    if (activeTimer && activeTimer.id === id) {
+      setModalTab("timer")
+    } else {
+      setModalTab("log")
+    }
+    
     setIsModalOpen(true)
   }
 
@@ -373,7 +453,8 @@ function SchedulerPage() {
   async function handleSaveProgress() {
     if (!selectedSlot) return
     
-    const finalHours = tempStatus === "Completed" ? 2.0 : tempStatus === "Skipped" ? 0 : tempHours
+    const schedHours = selectedSlot.raw?.duration_min ? (selectedSlot.raw.duration_min / 60.0) : 2.0
+    const finalHours = tempStatus === "Completed" ? schedHours : tempStatus === "Skipped" ? 0 : tempHours
     
     // Optimistic local update
     setTimetableLogs({
@@ -564,7 +645,7 @@ function SchedulerPage() {
                         return (
                           <td key={day} className="py-1.5 px-1 align-top">
                             <button
-                              onClick={() => handleOpenModal(time, day, cell.subject, cell.detail, cell.id)}
+                              onClick={() => handleOpenModal(time, day, cell.subject, cell.detail, cell.id, cell.raw)}
                               style={cell.color_hex ? { backgroundColor: cell.color_hex } : undefined}
                               className={`w-full text-left rounded-xl px-2.5 h-[80px] overflow-hidden transition-all duration-200 hover:scale-[1.02] hover:shadow-md border border-transparent flex flex-col justify-between py-2 ${cell.color_hex ? "" : (subjectColors[cell.subject] || "bg-gray-100")}`}
                             >
@@ -829,8 +910,32 @@ function SchedulerPage() {
             <h3 className="font-heading text-sm font-bold text-[#0A1931] border-b border-gray-50 pb-3">
               Track Study Progress
             </h3>
+
+            {/* Tab navigation */}
+            <div className="flex border-b border-gray-100 mt-2 mb-4">
+              <button
+                onClick={() => setModalTab("log")}
+                className={`flex-1 text-center py-2 font-body text-xs font-bold transition-colors border-b-2 ${
+                  modalTab === "log"
+                    ? "border-[#0A1931] text-[#0A1931]"
+                    : "border-transparent text-gray-400 hover:text-gray-600"
+                }`}
+              >
+                Quick Log
+              </button>
+              <button
+                onClick={() => setModalTab("timer")}
+                className={`flex-1 text-center py-2 font-body text-xs font-bold transition-colors border-b-2 ${
+                  modalTab === "timer"
+                    ? "border-[#0A1931] text-[#0A1931]"
+                    : "border-transparent text-gray-400 hover:text-gray-600"
+                }`}
+              >
+                Live Focus Timer
+              </button>
+            </div>
             
-            <div className="space-y-4 pt-4 font-body text-xs text-gray-600">
+            <div className="space-y-4 font-body text-xs text-gray-600">
               <div>
                 <span className="text-[10px] uppercase font-bold text-[#4A7FA7] tracking-wider block">Subject</span>
                 <p className="font-heading text-sm font-bold text-[#1A3D63] mt-0.5">
@@ -839,146 +944,276 @@ function SchedulerPage() {
                 <p className="text-[11px] text-gray-400 font-medium">{selectedSlot.detail}</p>
               </div>
 
-              <div className="grid grid-cols-2 gap-3 bg-[#F6FAFD] p-3 rounded-xl border border-gray-100">
-                <div>
-                  <span className="text-[10px] uppercase font-bold text-gray-400 tracking-wider block">Day</span>
-                  <p className="font-bold text-gray-700 mt-0.5">{selectedSlot.day}</p>
-                </div>
-                <div>
-                  <span className="text-[10px] uppercase font-bold text-gray-400 tracking-wider block">Time Slot</span>
-                  <p className="font-bold text-gray-700 mt-0.5">{selectedSlot.time}</p>
-                </div>
-              </div>
-
-              {/* Status Choices Card list */}
-              <div className="space-y-2">
-                <span className="text-[10px] uppercase font-bold text-gray-400 tracking-wider block">How did you do?</span>
-                <div className="flex flex-col gap-2">
-                  
-                  {/* Option 1: Completed */}
-                  <button
-                    onClick={() => {
-                      setTempStatus("Completed")
-                      setTempHours(2.0)
-                    }}
-                    className={`flex items-center gap-3 p-3 rounded-xl border text-left transition-all duration-200 ${
-                      tempStatus === "Completed"
-                        ? "bg-green-50/50 border-green-300 text-green-800 shadow-sm"
-                        : "bg-white border-gray-100 text-gray-500 hover:border-gray-200"
-                    }`}
-                  >
-                    <span className={`w-5 h-5 rounded-full border flex items-center justify-center font-bold text-xs ${
-                      tempStatus === "Completed" ? "bg-green-500 border-green-500 text-white" : "border-gray-200"
-                    }`}>
-                      {tempStatus === "Completed" && "✓"}
-                    </span>
-                    <div className="flex-1 min-w-0">
-                      <p className="font-bold text-xs">Completed Completely</p>
-                      <p className="text-[10px] text-gray-400 mt-0.5 leading-tight">Studied the entire session (2.0 hrs)</p>
-                    </div>
-                  </button>
-
-                  {/* Option 2: Partially Completed */}
-                  <button
-                    onClick={() => {
-                      setTempStatus("Partially Completed")
-                      if (tempHours === 2.0 || tempHours === 0) setTempHours(1.0)
-                    }}
-                    className={`flex items-center gap-3 p-3 rounded-xl border text-left transition-all duration-200 ${
-                      tempStatus === "Partially Completed"
-                        ? "bg-amber-50/50 border-amber-300 text-amber-800 shadow-sm"
-                        : "bg-white border-gray-100 text-gray-500 hover:border-gray-200"
-                    }`}
-                  >
-                    <span className={`w-5 h-5 rounded-full border flex items-center justify-center font-bold text-xs ${
-                      tempStatus === "Partially Completed" ? "bg-amber-500 border-amber-500 text-white" : "border-gray-200"
-                    }`}>
-                      {tempStatus === "Partially Completed" && "◷"}
-                    </span>
-                    <div className="flex-1 min-w-0">
-                      <p className="font-bold text-xs">Partially Completed</p>
-                      <p className="text-[10px] text-gray-400 mt-0.5 leading-tight">Studied for a portion of the session</p>
-                    </div>
-                  </button>
-
-                  {/* Option 3: Skipped */}
-                  <button
-                    onClick={() => {
-                      setTempStatus("Skipped")
-                      setTempHours(0)
-                    }}
-                    className={`flex items-center gap-3 p-3 rounded-xl border text-left transition-all duration-200 ${
-                      tempStatus === "Skipped"
-                        ? "bg-red-50/50 border-red-300 text-red-800 shadow-sm"
-                        : "bg-white border-gray-100 text-gray-500 hover:border-gray-200"
-                    }`}
-                  >
-                    <span className={`w-5 h-5 rounded-full border flex items-center justify-center font-bold text-xs ${
-                      tempStatus === "Skipped" ? "bg-red-500 border-red-500 text-white" : "border-gray-200"
-                    }`}>
-                      {tempStatus === "Skipped" && "✗"}
-                    </span>
-                    <div className="flex-1 min-w-0">
-                      <p className="font-bold text-xs">Skipped / Did not study</p>
-                      <p className="text-[10px] text-gray-400 mt-0.5 leading-tight">Was not able to study this session (0 hrs)</p>
-                    </div>
-                  </button>
-
-                </div>
-              </div>
-
-              {/* Slider (shown only if status is Partial) */}
-              {tempStatus === "Partially Completed" && (
-                <div className="space-y-2 bg-amber-50/30 p-3 rounded-xl border border-amber-100/40 animate-in slide-in-from-top-2 duration-200 mt-3">
-                  <div className="flex justify-between items-center">
-                    <span className="text-[10px] uppercase font-bold text-amber-800 tracking-wider">Specify study time</span>
-                    <span className="font-heading text-xs font-bold text-amber-800 bg-amber-100 px-2 py-0.5 rounded border border-amber-200">
-                      {tempHours} hrs / 2.0 hrs max
-                    </span>
+              {selectedSlot.day && selectedSlot.time && (
+                <div className="grid grid-cols-2 gap-3 bg-[#F6FAFD] p-3 rounded-xl border border-gray-100">
+                  <div>
+                    <span className="text-[10px] uppercase font-bold text-gray-400 tracking-wider block">Day</span>
+                    <p className="font-bold text-gray-700 mt-0.5">{selectedSlot.day}</p>
                   </div>
-                  <input
-                    type="range"
-                    min="0.25"
-                    max="2.0"
-                    step="0.25"
-                    value={tempHours}
-                    onChange={(e) => setTempHours(parseFloat(e.target.value))}
-                    className="w-full h-1.5 bg-gray-200 rounded-lg appearance-none cursor-pointer accent-amber-500"
-                  />
-                  <div className="flex justify-between text-[9px] text-gray-400 font-semibold px-0.5 mt-1">
-                    <span>15 mins</span>
-                    <span>1 hour</span>
-                    <span>2 hours</span>
+                  <div>
+                    <span className="text-[10px] uppercase font-bold text-gray-400 tracking-wider block">Time Slot</span>
+                    <p className="font-bold text-gray-700 mt-0.5">{selectedSlot.time}</p>
                   </div>
                 </div>
               )}
 
-            </div>
+              {modalTab === "log" ? (
+                <>
+                  {/* Status Choices Card list */}
+                  <div className="space-y-2">
+                    <span className="text-[10px] uppercase font-bold text-gray-400 tracking-wider block">How did you do?</span>
+                    <div className="flex flex-col gap-2">
+                      
+                      {/* Option 1: Completed */}
+                      <button
+                        onClick={() => {
+                          setTempStatus("Completed")
+                          const schedHours = selectedSlot.raw?.duration_min ? (selectedSlot.raw.duration_min / 60.0) : 2.0
+                          setTempHours(schedHours)
+                        }}
+                        className={`flex items-center gap-3 p-3 rounded-xl border text-left transition-all duration-200 ${
+                          tempStatus === "Completed"
+                            ? "bg-green-50/50 border-green-300 text-green-800 shadow-sm"
+                            : "bg-white border-gray-100 text-gray-500 hover:border-gray-200"
+                        }`}
+                      >
+                        <span className={`w-5 h-5 rounded-full border flex items-center justify-center font-bold text-xs ${
+                          tempStatus === "Completed" ? "bg-green-500 border-green-500 text-white" : "border-gray-200"
+                        }`}>
+                          {tempStatus === "Completed" && "✓"}
+                        </span>
+                        <div className="flex-1 min-w-0">
+                          <p className="font-bold text-xs">Completed Completely</p>
+                          <p className="text-[10px] text-gray-400 mt-0.5 leading-tight">
+                            Studied the entire session ({selectedSlot.raw?.duration_min ? (selectedSlot.raw.duration_min / 60.0) : 2.0} hrs)
+                          </p>
+                        </div>
+                      </button>
 
-            {saveError && (
-              <p className="font-body text-[10px] text-red-500 text-center mt-2">{saveError}</p>
-            )}
+                      {/* Option 2: Partially Completed */}
+                      <button
+                        onClick={() => {
+                          setTempStatus("Partially Completed")
+                          const schedHours = selectedSlot.raw?.duration_min ? (selectedSlot.raw.duration_min / 60.0) : 2.0
+                          if (tempHours === schedHours || tempHours === 0) {
+                            setTempHours(schedHours / 2.0)
+                          }
+                        }}
+                        className={`flex items-center gap-3 p-3 rounded-xl border text-left transition-all duration-200 ${
+                          tempStatus === "Partially Completed"
+                            ? "bg-amber-50/50 border-amber-300 text-amber-800 shadow-sm"
+                            : "bg-white border-gray-100 text-gray-500 hover:border-gray-200"
+                        }`}
+                      >
+                        <span className={`w-5 h-5 rounded-full border flex items-center justify-center font-bold text-xs ${
+                          tempStatus === "Partially Completed" ? "bg-amber-500 border-amber-500 text-white" : "border-gray-200"
+                        }`}>
+                          {tempStatus === "Partially Completed" && "◷"}
+                        </span>
+                        <div className="flex-1 min-w-0">
+                          <p className="font-bold text-xs">Partially Completed</p>
+                          <p className="text-[10px] text-gray-400 mt-0.5 leading-tight">Studied for a portion of the session</p>
+                        </div>
+                      </button>
 
-            {/* Actions */}
-            <div className="flex items-center gap-3 pt-6 border-t border-gray-50 mt-6">
-              <button
-                onClick={() => setIsModalOpen(false)}
-                disabled={saveLoading}
-                className="flex-1 border border-gray-200 text-gray-500 hover:bg-gray-50 font-body text-xs font-semibold py-2.5 px-4 rounded-xl transition-colors duration-200 disabled:opacity-50"
-              >
-                Cancel
-              </button>
-              <button
-                onClick={handleSaveProgress}
-                disabled={saveLoading}
-                className="flex-1 bg-[#0A1931] hover:bg-[#1A3D63] text-white font-body text-xs font-semibold py-2.5 px-4 rounded-xl shadow-sm transition-colors duration-200 flex items-center justify-center gap-1.5 disabled:opacity-50"
-              >
-                {saveLoading ? (
-                  <><div className="w-3 h-3 border-2 border-white border-t-transparent rounded-full animate-spin" /> Saving...</>
-                ) : (
-                  "Save Progress"
-                )}
-              </button>
+                      {/* Option 3: Skipped */}
+                      <button
+                        onClick={() => {
+                          setTempStatus("Skipped")
+                          setTempHours(0)
+                        }}
+                        className={`flex items-center gap-3 p-3 rounded-xl border text-left transition-all duration-200 ${
+                          tempStatus === "Skipped"
+                            ? "bg-red-50/50 border-red-300 text-red-800 shadow-sm"
+                            : "bg-white border-gray-100 text-gray-500 hover:border-gray-200"
+                        }`}
+                      >
+                        <span className={`w-5 h-5 rounded-full border flex items-center justify-center font-bold text-xs ${
+                          tempStatus === "Skipped" ? "bg-red-500 border-red-500 text-white" : "border-gray-200"
+                        }`}>
+                          {tempStatus === "Skipped" && "✗"}
+                        </span>
+                        <div className="flex-1 min-w-0">
+                          <p className="font-bold text-xs">Skipped / Did not study</p>
+                          <p className="text-[10px] text-gray-400 mt-0.5 leading-tight">Was not able to study this session (0 hrs)</p>
+                        </div>
+                      </button>
+
+                    </div>
+                  </div>
+
+                  {/* Slider (shown only if status is Partial) */}
+                  {tempStatus === "Partially Completed" && (
+                    <div className="space-y-2 bg-amber-50/30 p-3 rounded-xl border border-amber-100/40 animate-in slide-in-from-top-2 duration-200 mt-3">
+                      <div className="flex justify-between items-center">
+                        <span className="text-[10px] uppercase font-bold text-amber-800 tracking-wider">Specify study time</span>
+                        <span className="font-heading text-xs font-bold text-amber-800 bg-amber-100 px-2 py-0.5 rounded border border-amber-200">
+                          {tempHours} hrs / {selectedSlot.raw?.duration_min ? (selectedSlot.raw.duration_min / 60.0) : 2.0} hrs max
+                        </span>
+                      </div>
+                      <input
+                        type="range"
+                        min="0.25"
+                        max={selectedSlot.raw?.duration_min ? (selectedSlot.raw.duration_min / 60.0) : 2.0}
+                        step="0.25"
+                        value={tempHours}
+                        onChange={(e) => setTempHours(parseFloat(e.target.value))}
+                        className="w-full h-1.5 bg-gray-200 rounded-lg appearance-none cursor-pointer accent-amber-500"
+                      />
+                      <div className="flex justify-between text-[9px] text-gray-400 font-semibold px-0.5 mt-1">
+                        <span>15 mins</span>
+                        <span>{selectedSlot.raw?.duration_min ? (selectedSlot.raw.duration_min / 120.0) : 1.0} hour</span>
+                        <span>{selectedSlot.raw?.duration_min ? (selectedSlot.raw.duration_min / 60.0) : 2.0} hours</span>
+                      </div>
+                    </div>
+                  )}
+
+                  {saveError && (
+                    <p className="font-body text-[10px] text-red-500 text-center mt-2">{saveError}</p>
+                  )}
+
+                  {/* Actions */}
+                  <div className="flex items-center gap-3 pt-6 border-t border-gray-50 mt-6">
+                    <button
+                      onClick={() => setIsModalOpen(false)}
+                      disabled={saveLoading}
+                      className="flex-1 border border-gray-200 text-gray-500 hover:bg-gray-50 font-body text-xs font-semibold py-2.5 px-4 rounded-xl transition-colors duration-200 disabled:opacity-50"
+                    >
+                      Cancel
+                    </button>
+                    <button
+                      onClick={handleSaveProgress}
+                      disabled={saveLoading}
+                      className="flex-1 bg-[#0A1931] hover:bg-[#1A3D63] text-white font-body text-xs font-semibold py-2.5 px-4 rounded-xl shadow-sm transition-colors duration-200 flex items-center justify-center gap-1.5 disabled:opacity-50"
+                    >
+                      {saveLoading ? (
+                        <><div className="w-3 h-3 border-2 border-white border-t-transparent rounded-full animate-spin" /> Saving...</>
+                      ) : (
+                        "Save Progress"
+                      )}
+                    </button>
+                  </div>
+                </>
+              ) : (
+                /* Timer tab content */
+                <div className="flex flex-col items-center justify-center pt-2 pb-4 space-y-5">
+                  {activeTimer && activeTimer.id !== selectedSlot.id ? (
+                    /* Another timer active warning */
+                    <div className="text-center space-y-4 py-4 px-2">
+                      <div className="text-red-500 text-3xl font-bold">⚠️</div>
+                      <p className="font-body text-xs text-gray-500 leading-relaxed">
+                        A study session is already active for <strong className="text-gray-700">{activeTimer.subject}</strong>.
+                      </p>
+                      <p className="font-body text-[11px] text-gray-400 leading-relaxed">
+                        Please pause or log that session before starting a new one.
+                      </p>
+                      <button
+                        onClick={handleSwitchToActiveTimer}
+                        className="bg-[#0A1931] hover:bg-[#1A3D63] text-white font-body text-xs font-semibold px-4 py-2.5 rounded-xl transition-colors shadow-sm"
+                      >
+                        Go to Active Session
+                      </button>
+                    </div>
+                  ) : activeTimer && activeTimer.id === selectedSlot.id ? (
+                    /* Active timer content */
+                    <div className="w-full flex flex-col items-center space-y-6">
+                      {/* Pulse Circle display */}
+                      <div className="relative w-40 h-40 flex items-center justify-center rounded-full border-4 border-gray-100 shadow-inner">
+                        <div className={`absolute inset-0 rounded-full border-4 border-[#4E8EB9] transition-transform duration-1000 ${
+                          activeTimer.isPaused ? "" : "animate-pulse"
+                        }`} />
+                        <span className="font-heading text-3xl font-extrabold text-[#0A1931]">
+                          {formatTime(activeTimer.elapsedSeconds)}
+                        </span>
+                      </div>
+
+                      <div className="flex items-center gap-3 w-full">
+                        <button
+                          onClick={() => {
+                            setActiveTimer(prev => ({ ...prev, isPaused: !prev.isPaused }))
+                          }}
+                          className={`flex-1 font-body text-xs font-semibold py-2.5 px-4 rounded-xl border transition-colors ${
+                            activeTimer.isPaused
+                              ? "bg-green-50 text-green-700 border-green-200 hover:bg-green-100"
+                              : "bg-amber-50 text-amber-700 border-amber-200 hover:bg-amber-100"
+                          }`}
+                        >
+                          {activeTimer.isPaused ? "▶ Resume" : "⏸ Pause"}
+                        </button>
+                        <button
+                          onClick={() => {
+                            // Convert elapsed time to hours
+                            const elapsedHours = activeTimer.elapsedSeconds / 3600.0
+                            const schedHours = selectedSlot.raw?.duration_min ? (selectedSlot.raw.duration_min / 60.0) : 2.0
+                            
+                            // Pre-fill state based on timer values
+                            setTempHours(parseFloat(elapsedHours.toFixed(2)))
+                            
+                            if (elapsedHours >= schedHours * 0.9) {
+                              setTempStatus("Completed")
+                            } else if (elapsedHours > 0.001) {
+                              setTempStatus("Partially Completed")
+                            } else {
+                              setTempStatus("Skipped")
+                            }
+
+                            // Switch to log tab for user review & saving
+                            setModalTab("log")
+                            setActiveTimer(null)
+                          }}
+                          className="flex-1 bg-red-50 text-red-700 border border-red-200 hover:bg-red-100 font-body text-xs font-semibold py-2.5 px-4 rounded-xl transition-colors"
+                        >
+                          ⏹ End & Log
+                        </button>
+                      </div>
+                    </div>
+                  ) : (
+                    /* No active timer - Ready to start */
+                    <div className="text-center py-6 space-y-4">
+                      <div className="w-16 h-16 rounded-full bg-[#F6FAFD] flex items-center justify-center text-2xl text-[#4A7FA7] mx-auto border border-gray-100">
+                        ⏱
+                      </div>
+                      <div className="space-y-1">
+                        <p className="font-heading text-xs font-bold text-[#0A1931]">
+                          Live Focus Session
+                        </p>
+                        <p className="font-body text-[10px] text-gray-400 max-w-[200px] leading-relaxed mx-auto">
+                          Ready to start timing this study session? This will log your progress on the server in real-time.
+                        </p>
+                      </div>
+                      <button
+                        onClick={async () => {
+                          if (!selectedSlot?.id) return
+                          try {
+                            setTimerLoading(true)
+                            await startSession(selectedSlot.id)
+                            setActiveTimer({
+                              id: selectedSlot.id,
+                              subject: selectedSlot.subject,
+                              detail: selectedSlot.detail,
+                              startTime: Date.now(),
+                              elapsedSeconds: 0,
+                              isPaused: false
+                            })
+                          } catch (err) {
+                            alert("Failed to start study session on server.")
+                          } finally {
+                            setTimerLoading(false)
+                          }
+                        }}
+                        disabled={timerLoading}
+                        className="bg-[#0A1931] hover:bg-[#1A3D63] text-white font-body text-xs font-semibold px-6 py-2.5 rounded-xl transition-colors inline-flex items-center gap-1.5 shadow-sm disabled:opacity-50"
+                      >
+                        {timerLoading ? (
+                          <><div className="w-3 h-3 border-2 border-white border-t-transparent rounded-full animate-spin" /> Starting...</>
+                        ) : (
+                          "▶ Start Focus Timer"
+                        )}
+                      </button>
+                    </div>
+                  )}
+                </div>
+              )}
             </div>
 
           </div>
@@ -1070,6 +1305,32 @@ function SchedulerPage() {
                 )}
               </button>
             </div>
+          </div>
+        </div>
+      )}
+
+      {/* Floating Timer Widget */}
+      {activeTimer && (
+        <div 
+          onClick={handleSwitchToActiveTimer}
+          className="fixed bottom-6 right-6 bg-gradient-to-r from-[#1A3D63] to-[#0A1931] text-white px-5 py-3 rounded-2xl shadow-2xl border border-white/10 flex items-center gap-4 cursor-pointer hover:scale-105 transition-all duration-200 z-40 group hover:-translate-y-1"
+        >
+          <div className="relative flex items-center justify-center">
+            <span className="flex h-3 w-3 relative">
+              <span className={`animate-ping absolute inline-flex h-full w-full rounded-full opacity-75 ${activeTimer.isPaused ? "bg-amber-400" : "bg-green-400"}`}></span>
+              <span className={`relative inline-flex rounded-full h-3 w-3 ${activeTimer.isPaused ? "bg-amber-500" : "bg-green-500"}`}></span>
+            </span>
+          </div>
+          <div className="flex-1 min-w-0">
+            <p className="font-heading text-xs font-bold truncate max-w-[150px]">
+              {activeTimer.subject}
+            </p>
+            <p className="font-body text-[10px] text-[#B3CFE5]">
+              {activeTimer.isPaused ? "Paused" : "Focusing..."}
+            </p>
+          </div>
+          <div className="font-heading text-sm font-bold bg-white/10 px-2.5 py-1 rounded-lg">
+            {formatTime(activeTimer.elapsedSeconds)}
           </div>
         </div>
       )}
