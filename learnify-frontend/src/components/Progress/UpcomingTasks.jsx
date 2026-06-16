@@ -1,13 +1,4 @@
-import { useState } from "react";
-
-// ── UpcomingTasks ─────────────────────────────────────────────────────────────
-const DEFAULT_TASKS = [
-  { id: 1, name: "DS Assignment 3",    subject: "Data Structures",     due: "Today",    dueType: "ok",     done: true  },
-  { id: 2, name: "Calculus Quiz Prep", subject: "Calculus III",        due: "Tomorrow", dueType: "urgent", done: false },
-  { id: 3, name: "ER Diagram Draft",   subject: "Database Systems",    due: "Apr 21",   dueType: "soon",   done: false },
-  { id: 4, name: "Lab Report #4",      subject: "Computer Networks",   due: "Apr 23",   dueType: "soon",   done: false },
-  { id: 5, name: "SRS Document",       subject: "Software Engineering",due: "Apr 25",   dueType: "ok",     done: false },
-];
+import { useState, useEffect } from "react";
 
 const DUE_STYLES = {
   urgent: "bg-[#fdecea] text-[#c0392b]",
@@ -15,8 +6,13 @@ const DUE_STYLES = {
   ok:     "bg-[#deeef8] text-[#4A7FA7]",
 };
 
-export function UpcomingTasks({ tasks: initialTasks = DEFAULT_TASKS }) {
+export function UpcomingTasks({ tasks: initialTasks = [] }) {
   const [tasks, setTasks] = useState(initialTasks);
+
+  // Sync if prop changes (parent reloads data)
+  useEffect(() => {
+    setTasks(initialTasks);
+  }, [initialTasks]);
 
   const toggle = (id) =>
     setTasks((prev) => prev.map((t) => (t.id === id ? { ...t, done: !t.done } : t)));
@@ -40,7 +36,12 @@ export function UpcomingTasks({ tasks: initialTasks = DEFAULT_TASKS }) {
 
       {/* List */}
       <div className="px-5 py-4 flex flex-col gap-2">
-        {tasks.map((t) => (
+        {tasks.length === 0 ? (
+          <p className="text-[13px] text-[#8AAABF] text-center py-6" style={{ fontFamily: "Inter, sans-serif" }}>
+            No upcoming tasks 🎉
+          </p>
+        ) : (
+          tasks.map((t) => (
           <div
             key={t.id}
             className="flex items-center gap-3 px-3 py-2.5 rounded-[11px] bg-[#F6FAFD] border border-[#D0E3F0] hover:bg-[#E4EEF7] transition-colors cursor-default"
@@ -88,7 +89,7 @@ export function UpcomingTasks({ tasks: initialTasks = DEFAULT_TASKS }) {
               {t.due}
             </span>
           </div>
-        ))}
+        )))}
       </div>
     </div>
   );
@@ -106,14 +107,7 @@ const INTENSITY = {
 };
 
 // rows[week][day 0=Mon..6=Sun] = intensity 0-5
-const DEFAULT_WEEKS = [
-  [2, 3, 4, 3, 5, 2, 1],
-  [4, 5, 4, 3, 5, 1, 2],
-  [3, 4, 5, 4, 5, 3, 4],
-  [5, 4, 5, 0, 0, 0, 0], // today is Wed (index 2) of last week
-];
-
-export function StudyStreak({ streakDays = 14, bestDays = 21, weeks = DEFAULT_WEEKS }) {
+export function StudyStreak({ streakDays = 0, bestDays = 0, weeks = [[0,0,0,0,0,0,0],[0,0,0,0,0,0,0],[0,0,0,0,0,0,0],[0,0,0,0,0,0,0]] }) {
   const days = ["Mo", "Tu", "We", "Th", "Fr", "Sa", "Su"];
 
   return (

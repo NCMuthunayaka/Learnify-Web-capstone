@@ -1,4 +1,4 @@
-import { useState } from "react"
+import { useState, useEffect, useCallback } from "react"
 import {
   MessageSquare, Star, ThumbsUp, ThumbsDown, Minus,
   Filter, Search, TrendingUp, BarChart2, ChevronDown
@@ -7,139 +7,7 @@ import {
   LineChart, Line, XAxis, YAxis, Tooltip,
   ResponsiveContainer, CartesianGrid
 } from "recharts"
-
-// ── Static data ──
-
-const feedbackStats = [
-  {
-    label: "Total Feedback",
-    value: "1,847",
-    change: "+23 this week",
-    icon: MessageSquare,
-    iconBg: "bg-blue-50 text-blue-600",
-    changeBg: "text-blue-600",
-  },
-  {
-    label: "Avg Rating",
-    value: "4.6★",
-    change: "+0.2 vs last month",
-    icon: Star,
-    iconBg: "bg-amber-50 text-amber-500",
-    changeBg: "text-green-600",
-  },
-  {
-    label: "Positive",
-    value: "1,324",
-    change: "71.7%",
-    icon: ThumbsUp,
-    iconBg: "bg-green-50 text-green-600",
-    changeBg: "text-green-600",
-  },
-  {
-    label: "Needs Attention",
-    value: "187",
-    change: "10.1%",
-    icon: ThumbsDown,
-    iconBg: "bg-red-50 text-red-500",
-    changeBg: "text-red-500",
-  },
-]
-
-const trendData = [
-  { week: "W1", positive: 82, negative: 12, neutral: 18 },
-  { week: "W2", positive: 95, negative: 8,  neutral: 22 },
-  { week: "W3", positive: 78, negative: 15, neutral: 20 },
-  { week: "W4", positive: 110, negative: 10, neutral: 25 },
-  { week: "W5", positive: 98,  negative: 14, neutral: 21 },
-  { week: "W6", positive: 125, negative: 9,  neutral: 28 },
-]
-
-const feedbackItems = [
-  {
-    id: 1,
-    user: "Ashani Weerasinghe",
-    initials: "AW",
-    avatarBg: "bg-blue-500",
-    role: "Student",
-    subject: "Calculus",
-    mentor: "Prof. David Chen",
-    rating: 5,
-    sentiment: "positive",
-    category: "Mentor Quality",
-    comment: "Prof. Chen explained integration by parts so clearly. I finally understand the concept after struggling for weeks. His patience and approach are outstanding.",
-    date: "2 hours ago",
-  },
-  {
-    id: 2,
-    user: "Marcus Thorne",
-    initials: "MT",
-    avatarBg: "bg-purple-500",
-    role: "Student",
-    subject: "Statistics",
-    mentor: "Dr. Aisha Khan",
-    rating: 4,
-    sentiment: "positive",
-    category: "Session Quality",
-    comment: "Great session on regression analysis. Could have gone a bit deeper into the assumptions but overall very helpful.",
-    date: "5 hours ago",
-  },
-  {
-    id: 3,
-    user: "Kavindu Chamith",
-    initials: "KC",
-    avatarBg: "bg-teal-500",
-    role: "Student",
-    subject: "Platform",
-    mentor: null,
-    rating: 2,
-    sentiment: "negative",
-    category: "Platform Issue",
-    comment: "The video call kept dropping during my session. Very frustrating when trying to go through problems. Needs fixing urgently.",
-    date: "1 day ago",
-  },
-  {
-    id: 4,
-    user: "Ruba Shalini",
-    initials: "RS",
-    avatarBg: "bg-amber-500",
-    role: "Student",
-    subject: "Algebra",
-    mentor: "Michael Scott",
-    rating: 5,
-    sentiment: "positive",
-    category: "Mentor Quality",
-    comment: "Michael is phenomenal at breaking down matrix operations. My exam is tomorrow and I feel completely prepared now.",
-    date: "1 day ago",
-  },
-  {
-    id: 5,
-    user: "Priya Nair",
-    initials: "PN",
-    avatarBg: "bg-rose-500",
-    role: "Student",
-    subject: "AI Chat",
-    mentor: null,
-    rating: 3,
-    sentiment: "neutral",
-    category: "AI Assistant",
-    comment: "The AI assistant is helpful for basic questions but sometimes gives generic answers that aren't specific enough to my problem.",
-    date: "2 days ago",
-  },
-  {
-    id: 6,
-    user: "Daniel Fernandez",
-    initials: "DF",
-    avatarBg: "bg-cyan-500",
-    role: "Student",
-    subject: "Geometry",
-    mentor: "Sarah Palmer",
-    rating: 4,
-    sentiment: "positive",
-    category: "Session Quality",
-    comment: "Sarah made the proof by contradiction concept click for me. The visual approach she uses is really effective.",
-    date: "3 days ago",
-  },
-]
+import { getAllFeedback, getFeedbackStats } from "../../api/adminApi"
 
 const SENTIMENT_COLORS = {
   positive: { bg: "bg-green-50",  text: "text-green-700",  border: "border-green-200",  dot: "bg-green-500",  label: "Positive" },
@@ -147,8 +15,17 @@ const SENTIMENT_COLORS = {
   neutral:  { bg: "bg-amber-50",  text: "text-amber-700",  border: "border-amber-200",  dot: "bg-amber-400",  label: "Neutral"  },
 }
 
-const CATEGORY_OPTIONS = ["All", "Mentor Quality", "Session Quality", "Platform Issue", "AI Assistant"]
+const CATEGORY_OPTIONS  = ["All", "Mentor Quality", "Session Quality", "Platform Issue", "AI Assistant", "General"]
 const SENTIMENT_OPTIONS = ["All", "positive", "negative", "neutral"]
+
+const AVATAR_COLORS = [
+  "bg-blue-500", "bg-purple-500", "bg-teal-500", "bg-amber-500",
+  "bg-rose-500", "bg-cyan-500",  "bg-indigo-500", "bg-green-500",
+]
+
+function getInitials(name) {
+  return name?.split(" ").map(w => w[0]).join("").slice(0, 2).toUpperCase() ?? "?"
+}
 
 function StarRow({ rating }) {
   return (
@@ -181,21 +58,91 @@ function CustomTooltip({ active, payload, label }) {
 }
 
 export default function AdminFeedbackDashboard() {
-  const [search,    setSearch]    = useState("")
-  const [category,  setCategory]  = useState("All")
-  const [sentiment, setSentiment] = useState("All")
-  const [showCatDrop, setShowCatDrop]  = useState(false)
+  const [stats,      setStats]      = useState(null)
+  const [feedback,   setFeedback]   = useState([])
+  const [total,      setTotal]      = useState(0)
+  const [loading,    setLoading]    = useState(true)
+  const [search,     setSearch]     = useState("")
+  const [category,   setCategory]   = useState("All")
+  const [sentiment,  setSentiment]  = useState("All")
+  const [showCatDrop,  setShowCatDrop]  = useState(false)
   const [showSentDrop, setShowSentDrop] = useState(false)
 
-  const filtered = feedbackItems.filter(f => {
-    const matchSearch = !search ||
-      f.user.toLowerCase().includes(search.toLowerCase()) ||
-      f.comment.toLowerCase().includes(search.toLowerCase()) ||
-      f.subject.toLowerCase().includes(search.toLowerCase())
-    const matchCat  = category  === "All" || f.category  === category
-    const matchSent = sentiment === "All" || f.sentiment === sentiment
-    return matchSearch && matchCat && matchSent
-  })
+  useEffect(() => {
+    getFeedbackStats()
+      .then(res => setStats(res.data))
+      .catch(() => {})
+  }, [])
+
+  const fetchFeedback = useCallback(() => {
+    setLoading(true)
+    const filters = {}
+    if (category  !== "All") filters.category  = category
+    if (sentiment !== "All") filters.sentiment = sentiment
+    if (search.trim())       filters.search    = search.trim()
+
+    getAllFeedback(1, filters)
+      .then(res => {
+        setFeedback(res.data?.feedback ?? [])
+        setTotal(res.data?.total ?? 0)
+      })
+      .catch(() => {})
+      .finally(() => setLoading(false))
+  }, [category, sentiment, search])
+
+  useEffect(() => {
+    const timer = setTimeout(fetchFeedback, 300)
+    return () => clearTimeout(timer)
+  }, [fetchFeedback])
+
+  const trendData  = stats?.trend ?? []
+  const posCount   = stats?.positive ?? 0
+  const neuCount   = stats?.neutral  ?? 0
+  const negCount   = stats?.negative ?? 0
+  const totalCount = stats?.total    ?? 0
+  const avgRating  = stats?.avg_rating ?? 0
+
+  const posPct = totalCount > 0 ? ((posCount / totalCount) * 100).toFixed(1) : "0.0"
+  const neuPct = totalCount > 0 ? ((neuCount / totalCount) * 100).toFixed(1) : "0.0"
+  const negPct = totalCount > 0 ? ((negCount / totalCount) * 100).toFixed(1) : "0.0"
+  const satisfactionPct = totalCount > 0
+    ? (((posCount + neuCount) / totalCount) * 100).toFixed(1)
+    : "0.0"
+
+  const feedbackStats = [
+    {
+      label: "Total Feedback",
+      value: totalCount.toLocaleString(),
+      change: `${posCount} positive`,
+      icon: MessageSquare,
+      iconBg: "bg-blue-50 text-blue-600",
+      changeBg: "text-blue-600",
+    },
+    {
+      label: "Avg Rating",
+      value: `${avgRating}★`,
+      change: `Out of 5`,
+      icon: Star,
+      iconBg: "bg-amber-50 text-amber-500",
+      changeBg: "text-green-600",
+    },
+    {
+      label: "Positive",
+      value: posCount.toLocaleString(),
+      change: `${posPct}%`,
+      icon: ThumbsUp,
+      iconBg: "bg-green-50 text-green-600",
+      changeBg: "text-green-600",
+    },
+    {
+      label: "Needs Attention",
+      value: negCount.toLocaleString(),
+      change: `${negPct}%`,
+      icon: ThumbsDown,
+      iconBg: "bg-red-50 text-red-500",
+      changeBg: "text-red-500",
+    },
+  ]
 
   return (
     <div className="space-y-6 max-w-7xl mx-auto pb-12 text-[#0A1931]">
@@ -309,9 +256,9 @@ export default function AdminFeedbackDashboard() {
 
           <div className="space-y-5">
             {[
-              { label: "Positive", value: 71.7, count: 1324, color: "bg-green-500", text: "text-green-700", bg: "bg-green-50" },
-              { label: "Neutral",  value: 18.2, count: 336,  color: "bg-amber-400", text: "text-amber-700", bg: "bg-amber-50" },
-              { label: "Negative", value: 10.1, count: 187,  color: "bg-red-500",   text: "text-red-700",   bg: "bg-red-50"   },
+              { label: "Positive", value: parseFloat(posPct), count: posCount, color: "bg-green-500", text: "text-green-700", bg: "bg-green-50" },
+              { label: "Neutral",  value: parseFloat(neuPct), count: neuCount, color: "bg-amber-400", text: "text-amber-700", bg: "bg-amber-50" },
+              { label: "Negative", value: parseFloat(negPct), count: negCount, color: "bg-red-500",   text: "text-red-700",   bg: "bg-red-50"   },
             ].map(s => (
               <div key={s.label}>
                 <div className="flex items-center justify-between mb-2">
@@ -338,11 +285,11 @@ export default function AdminFeedbackDashboard() {
 
           <div className="mt-6 pt-4 border-t border-gray-50 grid grid-cols-2 gap-3">
             <div className="bg-[#F6FAFD] rounded-xl p-3 text-center">
-              <span className="font-heading text-lg font-extrabold text-[#0A1931]">4.6</span>
+              <span className="font-heading text-lg font-extrabold text-[#0A1931]">{avgRating}</span>
               <p className="font-body text-[10px] text-gray-400 uppercase tracking-wide mt-0.5">Avg Rating</p>
             </div>
             <div className="bg-[#F6FAFD] rounded-xl p-3 text-center">
-              <span className="font-heading text-lg font-extrabold text-green-600">89.9%</span>
+              <span className="font-heading text-lg font-extrabold text-green-600">{satisfactionPct}%</span>
               <p className="font-body text-[10px] text-gray-400 uppercase tracking-wide mt-0.5">Satisfaction</p>
             </div>
           </div>
@@ -359,7 +306,7 @@ export default function AdminFeedbackDashboard() {
             Feedback Feed
             <span className="font-body text-xs font-semibold bg-[#EBF3F9] text-[#1A3D63]
               px-2.5 py-0.5 rounded-full border border-[#D5E6F2]">
-              {filtered.length} items
+              {total} items
             </span>
           </h2>
 
@@ -446,47 +393,47 @@ export default function AdminFeedbackDashboard() {
 
         {/* Feedback list */}
         <div className="divide-y divide-gray-50">
-          {filtered.length === 0 ? (
+          {loading ? (
+            <div className="py-12 flex items-center justify-center">
+              <div className="w-6 h-6 border-2 border-[#4A7FA7] border-t-transparent rounded-full animate-spin" />
+            </div>
+          ) : feedback.length === 0 ? (
             <div className="py-16 text-center">
               <MessageSquare size={32} className="mx-auto text-gray-200 mb-3" />
               <p className="font-body text-sm text-gray-400">No feedback matches your filters.</p>
             </div>
           ) : (
-            filtered.map((fb) => {
-              const sent = SENTIMENT_COLORS[fb.sentiment]
+            feedback.map((fb, i) => {
+              const sent = SENTIMENT_COLORS[fb.sentiment] ?? SENTIMENT_COLORS.neutral
+              const date = new Date(fb.created_at).toLocaleDateString("en-US", {
+                month: "short", day: "numeric", year: "numeric"
+              })
               return (
                 <div key={fb.id} className="px-6 py-5 hover:bg-gray-50/50 transition-colors">
                   <div className="flex items-start gap-4">
-                    <div className={`w-9 h-9 rounded-full ${fb.avatarBg} text-white text-xs font-bold
+                    <div className={`w-9 h-9 rounded-full ${AVATAR_COLORS[i % AVATAR_COLORS.length]} text-white text-xs font-bold
                       font-heading flex items-center justify-center flex-shrink-0`}>
-                      {fb.initials}
+                      {getInitials(fb.user_name)}
                     </div>
                     <div className="flex-1 min-w-0">
                       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 mb-2">
                         <div className="flex flex-wrap items-center gap-2">
                           <span className="font-body text-sm font-semibold text-[#0A1931]">
-                            {fb.user}
-                          </span>
-                          <span className="font-body text-[10px] text-gray-400 bg-gray-50
-                            border border-gray-100 px-2 py-0.5 rounded-md">
-                            {fb.role}
+                            {fb.user_name ?? "Unknown"}
                           </span>
                           <span className="font-body text-[10px] text-[#4A7FA7] bg-[#EBF3F9]
                             border border-[#D5E6F2] px-2 py-0.5 rounded-md font-semibold">
                             {fb.subject}
                           </span>
-                          {fb.mentor && (
-                            <span className="font-body text-[10px] text-gray-500">
-                              → {fb.mentor}
-                            </span>
-                          )}
                         </div>
                         <div className="flex items-center gap-2 flex-shrink-0">
                           <StarRow rating={fb.rating} />
-                          <span className={`font-body text-[10px] font-bold px-2 py-0.5 rounded-md border
-                            ${sent.bg} ${sent.text} ${sent.border}`}>
-                            {sent.label}
-                          </span>
+                          {fb.sentiment && (
+                            <span className={`font-body text-[10px] font-bold px-2 py-0.5 rounded-md border
+                              ${sent.bg} ${sent.text} ${sent.border}`}>
+                              {sent.label}
+                            </span>
+                          )}
                         </div>
                       </div>
                       <p className="font-body text-sm text-gray-600 leading-relaxed">{fb.comment}</p>
@@ -494,7 +441,7 @@ export default function AdminFeedbackDashboard() {
                         <span className="font-body text-[10px] text-gray-300 font-semibold uppercase tracking-wide">
                           {fb.category}
                         </span>
-                        <span className="font-body text-[10px] text-gray-400">{fb.date}</span>
+                        <span className="font-body text-[10px] text-gray-400">{date}</span>
                       </div>
                     </div>
                   </div>

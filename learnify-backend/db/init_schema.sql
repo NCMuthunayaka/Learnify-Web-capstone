@@ -75,6 +75,9 @@ CREATE TABLE users (
     university    VARCHAR(200) NULL,
     faculty       VARCHAR(200) NULL,
     year          VARCHAR(20) NULL,
+    department    VARCHAR(200) NULL,
+    subject       VARCHAR(100) NULL,
+    experience    VARCHAR(50) NULL,
     created_at    DATETIME     NOT NULL DEFAULT CURRENT_TIMESTAMP,
     last_login    DATETIME     NULL,
     PRIMARY KEY (id),
@@ -454,28 +457,30 @@ CREATE TABLE user_achievements (
 
 
 -- ai assistant conversation started by a user
-CREATE TABLE ai_chat_sessions (
-    id            INT      NOT NULL AUTO_INCREMENT,
-    user_id       INT      NOT NULL,
-    started_at    DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    ended_at      DATETIME NULL,
-    message_count INT      NOT NULL DEFAULT 0,
+CREATE TABLE chat_sessions (
+    id         INT          NOT NULL AUTO_INCREMENT,
+    user_id    INT          NOT NULL,
+    title      VARCHAR(200) NOT NULL DEFAULT 'New Chat',
+    created_at DATETIME     NOT NULL DEFAULT CURRENT_TIMESTAMP,
     PRIMARY KEY (id),
-    INDEX idx_acs_user (user_id),
-    CONSTRAINT fk_acs_user FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+    INDEX idx_cs_user (user_id),
+    CONSTRAINT fk_cs_user FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
 ) ENGINE = InnoDB;
 
 
 -- individual messages inside an ai chat session
-CREATE TABLE ai_chat_messages (
-    id         INT      NOT NULL AUTO_INCREMENT,
-    session_id INT      NOT NULL,
-    sender     ENUM('user', 'ai') NOT NULL,
-    content    TEXT     NOT NULL,
-    sent_at    DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+CREATE TABLE chat_messages (
+    id         INT          NOT NULL AUTO_INCREMENT,
+    session_id INT          NOT NULL,
+    role       VARCHAR(20)  NOT NULL,
+    content    TEXT         NOT NULL,
+    file_url   VARCHAR(500) NULL,
+    file_name  VARCHAR(255) NULL,
+    file_type  VARCHAR(50)  NULL,
+    created_at DATETIME     NOT NULL DEFAULT CURRENT_TIMESTAMP,
     PRIMARY KEY (id),
-    INDEX idx_acm_session (session_id),
-    CONSTRAINT fk_acm_session FOREIGN KEY (session_id) REFERENCES ai_chat_sessions(id) ON DELETE CASCADE
+    INDEX idx_cm_session (session_id),
+    CONSTRAINT fk_cm_session FOREIGN KEY (session_id) REFERENCES chat_sessions(id) ON DELETE CASCADE
 ) ENGINE = InnoDB;
 
 
@@ -493,6 +498,29 @@ CREATE TABLE admin_audit_logs (
     INDEX idx_aal_entity (target_entity),
     CONSTRAINT fk_aal_admin FOREIGN KEY (admin_id) REFERENCES users(id)
 ) ENGINE = InnoDB;
+
+
+-- platform feedback submitted by students with AI sentiment scoring
+CREATE TABLE feedback (
+    id         INT          NOT NULL AUTO_INCREMENT,
+    user_id    INT          NOT NULL,
+    subject    VARCHAR(100) NOT NULL,
+    mentor_id  INT          NULL,
+    rating     TINYINT      NOT NULL CHECK (rating BETWEEN 1 AND 5),
+    category   ENUM('Mentor Quality', 'Session Quality', 'Platform Issue', 'AI Assistant', 'General')
+               NOT NULL DEFAULT 'General',
+    comment    TEXT         NOT NULL,
+    sentiment  ENUM('positive', 'neutral', 'negative') NULL,
+    confidence DECIMAL(4,3) NULL,
+    created_at DATETIME     NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    PRIMARY KEY (id),
+    INDEX idx_fb_user      (user_id),
+    INDEX idx_fb_mentor    (mentor_id),
+    INDEX idx_fb_sentiment (sentiment),
+    CONSTRAINT fk_fb_user   FOREIGN KEY (user_id)   REFERENCES users(id) ON DELETE CASCADE,
+    CONSTRAINT fk_fb_mentor FOREIGN KEY (mentor_id) REFERENCES users(id) ON DELETE SET NULL
+) ENGINE = InnoDB;
+
 
 -- blocklist for revoked JWTs
 CREATE TABLE token_blocklist (

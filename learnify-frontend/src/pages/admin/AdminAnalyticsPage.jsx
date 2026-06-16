@@ -1,4 +1,4 @@
-import { useState } from "react"
+import { useState, useEffect } from "react"
 import { useNavigate } from "react-router-dom"
 import {
   Users, GraduationCap, UserCheck, AlertCircle,
@@ -9,117 +9,20 @@ import {
   ResponsiveContainer, Cell
 } from "recharts"
 import { useAuth } from "../../hooks/useAuth"
+import { getAdminStats, getPlatformAnalytics } from "../../api/adminApi"
 
-// ── Static data (replace with API calls once backend routes are ready) ──
-
-const statsCards = [
-  {
-    label: "Total Users",
-    value: "12,482",
-    change: "+12%",
-    icon: Users,
-    iconBg: "bg-blue-50 text-blue-600",
-    changeBg: "text-green-600 bg-green-50",
-  },
-  {
-    label: "Students",
-    value: "10,120",
-    change: "+4.2%",
-    icon: GraduationCap,
-    iconBg: "bg-indigo-50 text-indigo-600",
-    changeBg: "text-green-600 bg-green-50",
-  },
-  {
-    label: "Mentors",
-    value: "2,450",
-    change: "+8.2%",
-    icon: UserCheck,
-    iconBg: "bg-teal-50 text-teal-600",
-    changeBg: "text-green-600 bg-green-50",
-  },
-  {
-    label: "Active Requests",
-    value: "272",
-    badge: "URGENT",
-    icon: AlertCircle,
-    iconBg: "bg-red-50 text-red-600",
-    changeBg: "text-red-600 bg-red-50",
-  },
-]
-
-const recentUsers = [
-  { name: "Sarah Jenkins",   email: "sarah.j@edu.com",   role: "MENTOR",  status: "Active",  initials: "SJ" },
-  { name: "Marcus Thorne",   email: "m.thorne@learn.io", role: "STUDENT", status: "Pending", initials: "MT" },
-  { name: "Elena Rodriguez", email: "e.rod@academy.org", role: "MENTOR",  status: "Active",  initials: "ER" },
-]
-
-const growthData = [
-  { day: "MON", value: 42 },
-  { day: "TUE", value: 68 },
-  { day: "WED", value: 95 },
-  { day: "THU", value: 62 },
-  { day: "FRI", value: 78 },
-  { day: "SAT", value: 55 },
-]
-
-const platformEvents = [
-  {
-    color: "bg-blue-500",
-    title: "New mentor onboarded",
-    desc: "Dr. Sarah Khan joined Computer Science",
-    time: "2 MINUTES AGO",
-    isAlert: false,
-  },
-  {
-    color: "bg-green-500",
-    title: "Course accreditation approved",
-    desc: '"Advanced AI Ethics" moved to active status',
-    time: "45 MINUTES AGO",
-    isAlert: false,
-  },
-  {
-    color: "bg-red-500",
-    title: "Security Alert",
-    desc: "Multiple failed login attempts from IP: 192.168.1.1",
-    time: "1 HOUR AGO",
-    isAlert: true,
-  },
-  {
-    color: "bg-gray-400",
-    title: "System Maintenance",
-    desc: "Weekly database optimization completed",
-    time: "3 HOURS AGO",
-    isAlert: false,
-  },
-]
-
-const mentorPerformance = [
-  { name: "Prof. David Chen", score: 98, initials: "DC", color: "bg-blue-500" },
-  { name: "Dr. Aisha Khan",   score: 94, initials: "AK", color: "bg-teal-500" },
-  { name: "Michael Scott",    score: 89, initials: "MS", color: "bg-purple-500" },
-  { name: "Sarah Palmer",     score: 82, initials: "SP", color: "bg-amber-500" },
-]
-
-const systemResources = [
-  { label: "CPU",      value: 64, color: "text-blue-600",  bar: "bg-blue-500" },
-  { label: "STORAGE",  value: 41, color: "text-green-600", bar: "bg-green-500" },
-  { label: "AI USAGE", value: 92, color: "text-red-600",   bar: "bg-red-500" },
-]
-
-// ── Recharts custom tooltip ──
 function CustomTooltip({ active, payload, label }) {
   if (active && payload?.length) {
     return (
       <div className="bg-white border border-gray-100 rounded-xl px-3 py-2 shadow-lg text-xs font-body">
         <p className="font-bold text-[#0A1931]">{label}</p>
-        <p className="text-[#4A7FA7]">{payload[0].value} sessions</p>
+        <p className="text-[#4A7FA7]">{payload[0].value} registrations</p>
       </div>
     )
   }
   return null
 }
 
-// ── SVG circular gauge ──
 function CircularGauge({ percent }) {
   const r    = 54
   const circ = 2 * Math.PI * r
@@ -149,15 +52,87 @@ function CircularGauge({ percent }) {
         textAnchor="middle"
         style={{ fontSize: 9, fill: "#94A3B8", fontWeight: 600, letterSpacing: 1, fontFamily: "inherit" }}
       >
-        TOTAL LOAD
+        ACTIVE RATE
       </text>
     </svg>
   )
 }
 
+const AVATAR_COLORS = [
+  "bg-blue-500", "bg-teal-500", "bg-purple-500", "bg-amber-500",
+  "bg-rose-500", "bg-cyan-500", "bg-indigo-500", "bg-green-500",
+]
+
 export default function AdminAnalyticsPage() {
   const navigate    = useNavigate()
   const [activeBar, setActiveBar] = useState(null)
+  const [stats,     setStats]     = useState(null)
+  const [analytics, setAnalytics] = useState(null)
+  const [loading,   setLoading]   = useState(true)
+
+  useEffect(() => {
+    Promise.all([getAdminStats(), getPlatformAnalytics()])
+      .then(([statsRes, analyticsRes]) => {
+        setStats(statsRes.data)
+        setAnalytics(analyticsRes.data)
+      })
+      .catch(() => {})
+      .finally(() => setLoading(false))
+  }, [])
+
+  const statsCards = stats ? [
+    {
+      label: "Total Users",
+      value: stats.total_users?.toLocaleString() ?? "—",
+      change: `${stats.students} students`,
+      icon: Users,
+      iconBg: "bg-blue-50 text-blue-600",
+      changeBg: "text-green-600 bg-green-50",
+    },
+    {
+      label: "Students",
+      value: stats.students?.toLocaleString() ?? "—",
+      change: "Enrolled",
+      icon: GraduationCap,
+      iconBg: "bg-indigo-50 text-indigo-600",
+      changeBg: "text-green-600 bg-green-50",
+    },
+    {
+      label: "Mentors",
+      value: stats.mentors?.toLocaleString() ?? "—",
+      change: "Registered",
+      icon: UserCheck,
+      iconBg: "bg-teal-50 text-teal-600",
+      changeBg: "text-green-600 bg-green-50",
+    },
+    {
+      label: "Active Requests",
+      value: stats.pending_approvals?.toLocaleString() ?? "—",
+      badge: stats.pending_approvals > 0 ? "URGENT" : null,
+      icon: AlertCircle,
+      iconBg: "bg-red-50 text-red-600",
+      changeBg: "text-red-600 bg-red-50",
+    },
+  ] : []
+
+  const recentUsers      = analytics?.recent_users      ?? []
+  const growthData       = analytics?.growth_data       ?? []
+  const mentorPerformance = analytics?.mentor_performance ?? []
+  const activeRate = stats ? Math.round((stats.active_users / Math.max(stats.total_users, 1)) * 100) : 0
+
+  const systemResources = [
+    { label: "USERS",   value: activeRate, color: "text-blue-600",  bar: "bg-blue-500" },
+    { label: "MENTORS", value: stats ? Math.round((stats.mentors  / Math.max(stats.total_users, 1)) * 100) : 0, color: "text-green-600", bar: "bg-green-500" },
+    { label: "PENDING", value: stats ? Math.round((stats.pending_approvals / Math.max(stats.total_users, 1)) * 100) : 0, color: "text-red-600",   bar: "bg-red-500"   },
+  ]
+
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center h-64">
+        <div className="w-7 h-7 border-2 border-[#4A7FA7] border-t-transparent rounded-full animate-spin" />
+      </div>
+    )
+  }
 
   return (
     <div className="space-y-6 max-w-7xl mx-auto pb-12 text-[#0A1931]">
@@ -202,10 +177,10 @@ export default function AdminAnalyticsPage() {
       {/* ── 2. User Management Table + Platform Growth ── */}
       <div className="grid grid-cols-1 lg:grid-cols-5 gap-6">
 
-        {/* User Management */}
+        {/* Recent Users */}
         <div className="lg:col-span-3 bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden">
           <div className="flex items-center justify-between px-6 py-5 border-b border-gray-50">
-            <h2 className="font-heading text-base font-bold text-[#0A1931]">User Management</h2>
+            <h2 className="font-heading text-base font-bold text-[#0A1931]">Recent Users</h2>
             <button
               onClick={() => navigate("/admin/users")}
               className="font-body text-xs font-bold text-[#4A7FA7] hover:text-[#1A3D63]
@@ -230,59 +205,75 @@ export default function AdminAnalyticsPage() {
               </tr>
             </thead>
             <tbody className="divide-y divide-gray-50">
-              {recentUsers.map((u) => (
-                <tr key={u.email} className="hover:bg-gray-50/50 transition-colors">
-                  <td className="px-6 py-4">
-                    <div className="flex items-center gap-3">
-                      <div className="w-8 h-8 rounded-full bg-[#EBF3F9] text-[#1A3D63]
-                        text-xs font-bold font-heading flex items-center justify-center flex-shrink-0">
-                        {u.initials}
+              {recentUsers.map((u, i) => {
+                const initials = u.name?.split(" ").map(w => w[0]).join("").slice(0, 2).toUpperCase() ?? "?"
+                const color    = AVATAR_COLORS[i % AVATAR_COLORS.length]
+                return (
+                  <tr key={u.id} className="hover:bg-gray-50/50 transition-colors">
+                    <td className="px-6 py-4">
+                      <div className="flex items-center gap-3">
+                        <div className={`w-8 h-8 rounded-full ${color} text-white
+                          text-xs font-bold font-heading flex items-center justify-center flex-shrink-0`}>
+                          {initials}
+                        </div>
+                        <span className="font-body text-sm font-semibold text-[#0A1931]">{u.name}</span>
                       </div>
-                      <span className="font-body text-sm font-semibold text-[#0A1931]">{u.name}</span>
-                    </div>
-                  </td>
-                  <td className="px-6 py-4 font-body text-sm text-gray-500">{u.email}</td>
-                  <td className="px-6 py-4">
-                    <span className={`font-body text-[10px] font-bold px-2.5 py-1 rounded-md uppercase tracking-wide ${
-                      u.role === "MENTOR"
-                        ? "bg-[#0A1931] text-white"
-                        : "bg-gray-100 text-gray-600"
-                    }`}>
-                      {u.role}
-                    </span>
-                  </td>
-                  <td className="px-6 py-4">
-                    <div className="flex items-center gap-1.5">
-                      <span className={`w-1.5 h-1.5 rounded-full ${
-                        u.status === "Active" ? "bg-green-500" : "bg-amber-400"
-                      }`} />
-                      <span className={`font-body text-xs font-medium ${
-                        u.status === "Active" ? "text-green-600" : "text-amber-600"
+                    </td>
+                    <td className="px-6 py-4 font-body text-sm text-gray-500">{u.email}</td>
+                    <td className="px-6 py-4">
+                      <span className={`font-body text-[10px] font-bold px-2.5 py-1 rounded-md uppercase tracking-wide ${
+                        u.role === "mentor"
+                          ? "bg-[#0A1931] text-white"
+                          : u.role === "admin"
+                            ? "bg-purple-100 text-purple-700"
+                            : "bg-gray-100 text-gray-600"
                       }`}>
-                        {u.status}
+                        {u.role}
                       </span>
-                    </div>
-                  </td>
-                  <td className="px-6 py-4">
-                    <div className="flex items-center gap-2">
-                      <button
-                        className="w-7 h-7 rounded-lg border border-gray-100 flex items-center justify-center
-                          text-gray-400 hover:text-[#4A7FA7] hover:border-[#4A7FA7] transition-colors"
-                        title="Edit user"
-                      >
-                        <Edit3 size={13} />
-                      </button>
-                      <button
-                        className="w-7 h-7 rounded-lg border border-gray-100 flex items-center justify-center
-                          text-gray-400 hover:text-red-500 hover:border-red-200 transition-colors"
-                        title="Suspend user"
-                      >
-                        <Ban size={13} />
-                      </button>
-                    </div>
+                    </td>
+                    <td className="px-6 py-4">
+                      <div className="flex items-center gap-1.5">
+                        <span className={`w-1.5 h-1.5 rounded-full ${
+                          u.status === "active" ? "bg-green-500" :
+                          u.status === "pending" ? "bg-amber-400" : "bg-gray-300"
+                        }`} />
+                        <span className={`font-body text-xs font-medium ${
+                          u.status === "active" ? "text-green-600" :
+                          u.status === "pending" ? "text-amber-600" : "text-gray-400"
+                        }`}>
+                          {u.status.charAt(0).toUpperCase() + u.status.slice(1)}
+                        </span>
+                      </div>
+                    </td>
+                    <td className="px-6 py-4">
+                      <div className="flex items-center gap-2">
+                        <button
+                          onClick={() => navigate("/admin/users")}
+                          className="w-7 h-7 rounded-lg border border-gray-100 flex items-center justify-center
+                            text-gray-400 hover:text-[#4A7FA7] hover:border-[#4A7FA7] transition-colors"
+                          title="Edit user"
+                        >
+                          <Edit3 size={13} />
+                        </button>
+                        <button
+                          className="w-7 h-7 rounded-lg border border-gray-100 flex items-center justify-center
+                            text-gray-400 hover:text-red-500 hover:border-red-200 transition-colors"
+                          title="Suspend user"
+                        >
+                          <Ban size={13} />
+                        </button>
+                      </div>
+                    </td>
+                  </tr>
+                )
+              })}
+              {recentUsers.length === 0 && (
+                <tr>
+                  <td colSpan={5} className="px-6 py-10 text-center font-body text-sm text-gray-400">
+                    No users yet.
                   </td>
                 </tr>
-              ))}
+              )}
             </tbody>
           </table>
         </div>
@@ -293,7 +284,7 @@ export default function AdminAnalyticsPage() {
             <h2 className="font-heading text-base font-bold text-[#0A1931]">Platform Growth</h2>
             <TrendingUp size={18} className="text-[#4A7FA7]" />
           </div>
-          <p className="font-body text-xs text-gray-400 mb-5">Daily student engagement trends</p>
+          <p className="font-body text-xs text-gray-400 mb-5">Daily new registrations (last 7 days)</p>
 
           <div className="flex-1 min-h-0">
             <ResponsiveContainer width="100%" height={160}>
@@ -329,66 +320,35 @@ export default function AdminAnalyticsPage() {
 
           <div className="mt-4 pt-4 border-t border-gray-50 space-y-2">
             <div className="flex items-center justify-between font-body text-xs">
-              <span className="font-semibold text-gray-600">Weekly Goal</span>
-              <span className="font-bold text-[#0A1931]">82%</span>
+              <span className="font-semibold text-gray-600">Active User Rate</span>
+              <span className="font-bold text-[#0A1931]">{activeRate}%</span>
             </div>
             <div className="w-full bg-gray-100 h-2 rounded-full overflow-hidden">
-              <div className="h-full bg-[#0A1931] rounded-full" style={{ width: "82%" }} />
+              <div className="h-full bg-[#0A1931] rounded-full transition-all duration-500" style={{ width: `${activeRate}%` }} />
             </div>
           </div>
         </div>
       </div>
 
-      {/* ── 3. Events + System Resources + Mentor Performance ── */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-
-        {/* Recent Platform Events */}
-        <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-6">
-          <div className="flex items-center justify-between mb-5 border-b border-gray-50 pb-4">
-            <h2 className="font-heading text-sm font-bold text-[#0A1931]">Recent Platform Events</h2>
-            <Activity size={16} className="text-[#4A7FA7]" />
-          </div>
-          <div className="space-y-4">
-            {platformEvents.map((ev, i) => (
-              <div key={i} className="flex items-start gap-3">
-                <div className="flex flex-col items-center gap-1 flex-shrink-0 mt-0.5">
-                  <span className={`w-2.5 h-2.5 rounded-full ${ev.color}`} />
-                  {i < platformEvents.length - 1 && (
-                    <span className="w-px h-5 bg-gray-100" />
-                  )}
-                </div>
-                <div className="min-w-0 -mt-0.5">
-                  <p className={`font-body text-xs font-semibold leading-snug ${
-                    ev.isAlert ? "text-red-600" : "text-[#0A1931]"
-                  }`}>
-                    {ev.title}
-                  </p>
-                  <p className="font-body text-[10px] text-gray-400 mt-0.5 leading-relaxed">{ev.desc}</p>
-                  <p className="font-body text-[9px] text-gray-300 mt-1 uppercase tracking-wide font-semibold">
-                    {ev.time}
-                  </p>
-                </div>
-              </div>
-            ))}
-          </div>
-        </div>
+      {/* ── 3. System Resources + Mentor Performance ── */}
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
 
         {/* System Resources */}
         <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-6 flex flex-col">
           <div className="mb-4 border-b border-gray-50 pb-4">
-            <h2 className="font-heading text-sm font-bold text-[#0A1931]">System Resources</h2>
-            <p className="font-body text-[10px] text-gray-400 mt-0.5">Real-time hardware utilization</p>
+            <h2 className="font-heading text-sm font-bold text-[#0A1931]">User Distribution</h2>
+            <p className="font-body text-[10px] text-gray-400 mt-0.5">Breakdown of platform user roles</p>
           </div>
 
           <div className="flex flex-col items-center flex-1">
-            <CircularGauge percent={82} />
+            <CircularGauge percent={activeRate} />
 
             <div className="grid grid-cols-3 gap-3 w-full mt-4">
               {systemResources.map((res) => (
                 <div key={res.label} className="text-center">
                   <div className="w-full bg-gray-100 h-1.5 rounded-full overflow-hidden mb-1.5">
                     <div
-                      className={`h-full rounded-full ${res.bar}`}
+                      className={`h-full rounded-full ${res.bar} transition-all duration-500`}
                       style={{ width: `${res.value}%` }}
                     />
                   </div>
@@ -406,12 +366,13 @@ export default function AdminAnalyticsPage() {
         <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-6 flex flex-col">
           <div className="flex items-center justify-between mb-5 border-b border-gray-50 pb-4">
             <h2 className="font-heading text-sm font-bold text-[#0A1931]">Mentor Performance</h2>
+            <Activity size={16} className="text-[#4A7FA7]" />
           </div>
 
           <div className="space-y-4 flex-1">
-            {mentorPerformance.map((m) => (
+            {mentorPerformance.length > 0 ? mentorPerformance.map((m, i) => (
               <div key={m.name} className="flex items-center gap-3">
-                <div className={`w-8 h-8 rounded-full ${m.color} text-white text-xs font-bold
+                <div className={`w-8 h-8 rounded-full ${AVATAR_COLORS[i % AVATAR_COLORS.length]} text-white text-xs font-bold
                   font-heading flex items-center justify-center flex-shrink-0`}>
                   {m.initials}
                 </div>
@@ -426,13 +387,17 @@ export default function AdminAnalyticsPage() {
                   </div>
                   <div className="w-full bg-gray-100 h-1.5 rounded-full overflow-hidden">
                     <div
-                      className={`h-full rounded-full ${m.color}`}
+                      className={`h-full rounded-full ${AVATAR_COLORS[i % AVATAR_COLORS.length]} transition-all duration-500`}
                       style={{ width: `${m.score}%` }}
                     />
                   </div>
                 </div>
               </div>
-            ))}
+            )) : (
+              <p className="font-body text-sm text-gray-400 text-center py-8">
+                No mentor feedback data yet.
+              </p>
+            )}
           </div>
 
           <button
@@ -441,7 +406,7 @@ export default function AdminAnalyticsPage() {
               py-2.5 rounded-xl hover:bg-gray-50 transition-colors flex items-center justify-center gap-1.5"
           >
             <Download size={13} />
-            Download Full Performance Report
+            View Full User Report
           </button>
         </div>
       </div>
