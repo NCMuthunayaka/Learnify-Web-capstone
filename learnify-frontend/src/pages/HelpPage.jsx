@@ -1,119 +1,80 @@
-import { useState } from "react"
+import { useState, useEffect } from "react"
 import { Paperclip, Send, Users, User, ArrowRight, CheckCircle2, AlertCircle, Clock, Sparkles, GraduationCap } from "lucide-react"
 import Avatar from "../components/common/Avatar"
 import Badge from "../components/common/Badge"
 import Button from "../components/common/Button"
 import helpImg from "../assets/images/help.png"
 import profileImg from "../assets/icons/profile.png"
-
-const availableHelpers = [
-  {
-    name: "Mr. Kavindu",
-    role: "Mentor",
-    time: "Mon, Wed • 9AM-12PM",
-    initials: "KK",
-    color: "primary",
-    avatar: null
-  },
-  {
-    name: "Miss. Shalu",
-    role: "Mentor",
-    time: "Tue, Thu • 2PM-5PM",
-    initials: "SS",
-    color: "accent",
-    avatar: null
-  },
-  {
-    name: "Peer: Nayana",
-    role: "Student",
-    time: "Fri • 10AM-1PM",
-    initials: "NC",
-    color: "green",
-    avatar: null
-  }
-]
-
-const initialRequests = [
-  {
-    id: 1,
-    subject: "Mathematics",
-    status: "Accepted",
-    title: "Help with Integration Formulas",
-    desc: "I'm struggling with integration by parts for the exam. Specifically Chapter 5, Exercise 3B in the...",
-    helperName: "Mr. Kavindu",
-    helperRole: "Mentor",
-    helperInitials: "KK",
-    helperColor: "primary",
-    date: "Apr 18, 2026",
-    badgeColor: "success"
-  },
-  {
-    id: 2,
-    subject: "Physics",
-    status: "Pending",
-    title: "Newton's Laws Confusion",
-    desc: "I can't understand the difference between Newton's 2nd and 3rd law when applied to real-...",
-    helperName: "Miss. Shalu",
-    helperRole: "Mentor",
-    helperInitials: "SS",
-    helperColor: "accent",
-    date: "Apr 19, 2026",
-    badgeColor: "warning"
-  },
-  {
-    id: 3,
-    subject: "Chemistry",
-    status: "Resolved",
-    title: "Balancing Chemical Equations",
-    desc: "Needed help with redox reactions and how to balance them step by step. Got full clarity now!",
-    helperName: "Peer: Nayana",
-    helperRole: "Student",
-    helperInitials: "NC",
-    helperColor: "green",
-    date: "Apr 15, 2026",
-    badgeColor: "success",
-    reply: "Great question! Start by assigning oxidation numbers to each element, then identify what's oxidized and reduced. Check Chapter 9 notes I uploaded for a step-by-step guide."
-  }
-]
+import { getHelpRequests, createHelpRequest, getAvailableMentors } from "../api/helpRequestsApi"
 
 function HelpPage() {
-  const [requests, setRequests] = useState(initialRequests)
-  const [selectedMentor, setSelectedMentor] = useState("Mr. Ashan — Mon, Wed (9AM-12PM)")
+  const [requests, setRequests] = useState([])
+  const [mentors, setMentors] = useState([])
+  const [selectedMentor, setSelectedMentor] = useState("")
   const [subject, setSubject] = useState("Mathematics")
   const [requestType, setRequestType] = useState("Mentor") // "Mentor" or "Peer"
   const [title, setTitle] = useState("")
   const [description, setDescription] = useState("")
   const [priority, setPriority] = useState("Medium") // "Low", "Medium", "High"
   const [successMsg, setSuccessMsg] = useState(false)
+  const [loading, setLoading] = useState(true)
+
+  // Load help requests and available mentors on mount
+  useEffect(() => {
+    async function loadData() {
+      try {
+        setLoading(true)
+        const reqRes = await getHelpRequests()
+        setRequests(reqRes.data.requests)
+
+        const mentorRes = await getAvailableMentors()
+        const mentorList = mentorRes.data.mentors
+        setMentors(mentorList)
+        if (mentorList.length > 0) {
+          setSelectedMentor(mentorList[0].display)
+        }
+      } catch (err) {
+        console.error("Failed to load help page data:", err)
+      } finally {
+        setLoading(false)
+      }
+    }
+    loadData()
+  }, [])
 
   // Calculations for summary metrics
-  const totalRequests = requests.length + 5 // Static baseline offset to match screenshot summary (8 total)
-  const resolvedRequests = requests.filter(r => r.status === "Resolved").length + 4 // offset to match screenshot (5 resolved)
+  const totalRequests = requests.length
+  const resolvedRequests = requests.filter(r => r.status === "Resolved").length
   const inProgressRequests = totalRequests - resolvedRequests
 
-  function handleSubmit(e) {
+  async function handleSubmit(e) {
     e.preventDefault()
     if (!title.trim() || !description.trim()) return
 
-    const newRequest = {
-      id: Date.now(),
-      subject: subject,
-      status: "Pending",
-      title: title,
-      desc: description,
-      helperName: requestType === "Mentor" ? selectedMentor.split(" —")[0] : "Peer: Nayana",
-      helperRole: requestType,
-      helperInitials: requestType === "Mentor" ? "MA" : "NC",
-      helperColor: requestType === "Mentor" ? "accent" : "green",
-      date: new Date().toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" }),
-      badgeColor: "warning"
-    }
+    const matchedMentor = mentors.find(m => m.display === selectedMentor)
+    const assignedToId = matchedMentor ? matchedMentor.id : null
 
-    setRequests([newRequest, ...requests])
-    setTitle("")
-    setDescription("")
-    setSuccessMsg(true)
-    setTimeout(() => setSuccessMsg(false), 3000)
+    try {
+      await createHelpRequest({
+        title: title,
+        description: description,
+        subject: subject,
+        priority: priority.toLowerCase(),
+        request_type: requestType.toLowerCase(),
+        assigned_to: assignedToId
+      })
+
+      setTitle("")
+      setDescription("")
+      setSuccessMsg(true)
+      setTimeout(() => setSuccessMsg(false), 3000)
+
+      // Refresh list
+      const reqRes = await getHelpRequests()
+      setRequests(reqRes.data.requests)
+    } catch (err) {
+      console.error("Failed to submit help request:", err)
+    }
   }
 
   return (
@@ -148,9 +109,13 @@ function HelpPage() {
                     onChange={(e) => setSelectedMentor(e.target.value)}
                     className="w-full bg-[#f2f1ed] text-gray-800 font-body text-xs px-4 py-3 rounded-2xl border-none focus:outline-none focus:ring-1 focus:ring-[#3b719f]/30 transition-all cursor-pointer"
                   >
-                    <option>Mr. Ashan — Mon, Wed (9AM-12PM)</option>
-                    <option>Mr. Kavindu — Mon, Wed (9AM-12PM)</option>
-                    <option>Miss. Shalu — Tue, Thu (2PM-5PM)</option>
+                    {mentors.length > 0 ? (
+                      mentors.map(m => (
+                        <option key={m.id} value={m.display}>{m.display}</option>
+                      ))
+                    ) : (
+                      <option>No mentors available</option>
+                    )}
                   </select>
                 </div>
 
@@ -168,6 +133,12 @@ function HelpPage() {
                     <option>Physics</option>
                     <option>Chemistry</option>
                     <option>Biology</option>
+                    <option>Data Structures</option>
+                    <option>Calculus III</option>
+                    <option>Database Systems</option>
+                    <option>Software Engineering</option>
+                    <option>Computer Networks</option>
+                    <option>Operating Systems</option>
                   </select>
                 </div>
 
@@ -232,12 +203,6 @@ function HelpPage() {
                     rows={4}
                     className="w-full bg-[#f2f1ed] text-gray-800 placeholder-gray-400 font-body text-xs px-4 py-3 rounded-2xl border-none focus:outline-none focus:ring-1 focus:ring-[#3b719f]/30 transition-all resize-none pr-12"
                   />
-                  <button 
-                    type="button" 
-                    className="absolute right-3.5 bottom-3.5 w-8 h-8 rounded-full bg-[#dbe7f4] text-[#3b719f] hover:bg-[#ccdcf0] flex items-center justify-center font-bold transition-all text-base border-none cursor-pointer"
-                  >
-                    +
-                  </button>
                 </div>
 
                 {/* Priority Selector */}
@@ -324,13 +289,13 @@ function HelpPage() {
         </div>
 
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-          {availableHelpers.map((helper, idx) => (
+          {mentors.map((helper, idx) => (
             <div key={idx} className="flex items-center justify-between p-3.5 bg-[#F6FAFD] rounded-2xl border border-gray-50">
               <div className="flex items-center gap-3">
                 <Avatar 
-                  src={helper.name === "Peer: Nayana" ? profileImg : helper.avatar} 
+                  src={helper.name === "Peer: Nayana" ? profileImg : null} 
                   name={helper.name} 
-                  color={helper.color} 
+                  color="primary" 
                   size="sm" 
                 />
                 <div>
@@ -355,87 +320,93 @@ function HelpPage() {
         </div>
 
         <div className="grid grid-cols-1 md:grid-cols-3 gap-5">
-          {requests.map((req) => (
-            <div key={req.id} className="bg-white rounded-2xl p-5 shadow-sm border border-gray-100 flex flex-col justify-between space-y-4">
-              
-              {/* Card Header badges */}
-              <div className="flex items-center justify-between">
-                <span className="px-2.5 py-0.5 bg-blue-50 text-[#1A3D63] border border-blue-100/50 rounded-full font-body text-[10px] font-bold">
-                  {req.subject}
-                </span>
+          {loading ? (
+            <div className="col-span-3 text-center py-8 text-gray-400 text-xs">Loading requests...</div>
+          ) : requests.length === 0 ? (
+            <div className="col-span-3 text-center py-8 text-gray-400 text-xs">No previous requests found.</div>
+          ) : (
+            requests.map((req) => (
+              <div key={req.id} className="bg-white rounded-2xl p-5 shadow-sm border border-gray-100 flex flex-col justify-between space-y-4">
                 
-                {/* Status Badge */}
-                <span className={`px-2 py-0.5 rounded-full font-body text-[10px] font-bold flex items-center gap-1.5 ${
-                  req.status === "Accepted"
-                    ? "bg-blue-50 text-blue-600 border border-blue-100"
-                    : req.status === "Resolved"
-                      ? "bg-green-50 text-green-600 border border-green-100"
-                      : "bg-amber-50 text-amber-600 border border-amber-100"
-                }`}>
-                  <span className={`w-1.5 h-1.5 rounded-full ${
-                    req.status === "Accepted"
-                      ? "bg-blue-500"
+                {/* Card Header badges */}
+                <div className="flex items-center justify-between">
+                  <span className="px-2.5 py-0.5 bg-blue-50 text-[#1A3D63] border border-blue-100/50 rounded-full font-body text-[10px] font-bold">
+                    {req.subject}
+                  </span>
+                  
+                  {/* Status Badge */}
+                  <span className={`px-2 py-0.5 rounded-full font-body text-[10px] font-bold flex items-center gap-1.5 ${
+                    req.status === "Accepted" || req.status === "In progress" || req.status === "In Progress"
+                      ? "bg-blue-50 text-blue-600 border border-blue-100"
                       : req.status === "Resolved"
-                        ? "bg-green-500"
-                        : "bg-amber-500"
-                  }`} />
-                  {req.status}
-                </span>
-              </div>
+                        ? "bg-green-50 text-green-600 border border-green-100"
+                        : "bg-amber-50 text-amber-600 border border-amber-100"
+                  }`}>
+                    <span className={`w-1.5 h-1.5 rounded-full ${
+                      req.status === "Accepted" || req.status === "In progress" || req.status === "In Progress"
+                        ? "bg-blue-500"
+                        : req.status === "Resolved"
+                          ? "bg-green-500"
+                          : "bg-amber-500"
+                    }`} />
+                    {req.status}
+                  </span>
+                </div>
 
-              {/* Title & Description */}
-              <div className="space-y-1">
-                <h4 className="font-heading text-xs font-bold text-[#0A1931] leading-tight">
-                  {req.title}
-                </h4>
-                <p className="font-body text-[11px] text-gray-500 leading-relaxed">
-                  {req.desc}
-                </p>
-              </div>
-
-              {/* Mentor Reply block (Only for resolved chemistry card in initial list) */}
-              {req.reply && (
-                <div className="bg-[#F6FAFD] border-l-4 border-[#4A7FA7] p-3 rounded-r-xl space-y-1">
-                  <h5 className="font-heading text-[9px] font-bold text-[#1A3D63] flex items-center gap-1 uppercase tracking-wider">
-                    💬 Mentor Reply
-                  </h5>
-                  <p className="font-body text-[10px] text-gray-600 leading-relaxed">
-                    {req.reply}
+                {/* Title & Description */}
+                <div className="space-y-1">
+                  <h4 className="font-heading text-xs font-bold text-[#0A1931] leading-tight">
+                    {req.title}
+                  </h4>
+                  <p className="font-body text-[11px] text-gray-500 leading-relaxed">
+                    {req.desc}
                   </p>
                 </div>
-              )}
 
-              {/* Helper Profile Footer */}
-              <div className="pt-3 border-t border-gray-50 flex items-center justify-between text-xs">
-                <div className="flex items-center gap-2">
-                  <Avatar 
-                    src={req.helperName === "Peer: Nayana" ? profileImg : null} 
-                    name={req.helperName} 
-                    color={req.helperColor} 
-                    size="xs" 
-                  />
-                  <div className="min-w-0">
-                    <p className="font-heading font-semibold text-gray-600 truncate max-w-[100px] leading-tight">
-                      {req.helperName}
-                    </p>
-                    <p className="font-body text-[9px] text-gray-400">
-                      {req.helperRole}
+                {/* Mentor Reply block */}
+                {req.reply && (
+                  <div className="bg-[#F6FAFD] border-l-4 border-[#4A7FA7] p-3 rounded-r-xl space-y-1">
+                    <h5 className="font-heading text-[9px] font-bold text-[#1A3D63] flex items-center gap-1 uppercase tracking-wider">
+                      💬 Mentor Reply
+                    </h5>
+                    <p className="font-body text-[10px] text-gray-600 leading-relaxed">
+                      {req.reply}
                     </p>
                   </div>
+                )}
+
+                {/* Helper Profile Footer */}
+                <div className="pt-3 border-t border-gray-50 flex items-center justify-between text-xs">
+                  <div className="flex items-center gap-2">
+                    <Avatar 
+                      src={req.helperName === "Peer: Nayana" ? profileImg : null} 
+                      name={req.helperName} 
+                      color={req.helperColor} 
+                      size="xs" 
+                    />
+                    <div className="min-w-0">
+                      <p className="font-heading font-semibold text-gray-600 truncate max-w-[100px] leading-tight">
+                        {req.helperName}
+                      </p>
+                      <p className="font-body text-[9px] text-gray-400">
+                        {req.helperRole}
+                      </p>
+                    </div>
+                  </div>
+                  <span className="font-body text-[10px] text-gray-300">
+                    {req.date}
+                  </span>
                 </div>
-                <span className="font-body text-[10px] text-gray-300">
-                  {req.date}
-                </span>
+
+                {/* View details action */}
+                <button className="font-body text-[10px] font-bold text-[#4A7FA7] hover:text-[#1A3D63] text-left mt-2 flex items-center gap-1 transition-colors border-none bg-transparent">
+                  View Details
+                  <ArrowRight size={12} />
+                </button>
+
               </div>
-
-              {/* View details action */}
-              <button className="font-body text-[10px] font-bold text-[#4A7FA7] hover:text-[#1A3D63] text-left mt-2 flex items-center gap-1 transition-colors border-none bg-transparent">
-                View Details
-                <ArrowRight size={12} />
-              </button>
-
-            </div>
-          ))}
+            ))
+          )}
         </div>
       </div>
 
