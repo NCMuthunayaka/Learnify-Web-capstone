@@ -34,166 +34,211 @@ function TypeBadge({ type }) {
 }
 
 // ── Upload Modal ───────────────────────────────────────────
-function UploadModal({ onClose, onSuccess, subjects, editResource = null }) {
-  const [formData, setFormData] = useState({
-    title:        editResource?.title        || "",
-    subject_id:   editResource?.subject_id   || "",
-    file_type_id: editResource?.file_type_id || "",
-    file_url:     editResource?.file_url     || "",
-    file_size_mb: editResource?.file_size_mb || "",
-  })
-  const [uploading, setUploading] = useState(false)
-  const [error, setError]         = useState("")
-  const isEdit                    = !!editResource
+import { uploadFile, uploadResource } from "../api/resourcesApi"
 
-  function handleChange(e) {
-    setFormData({ ...formData, [e.target.name]: e.target.value })
+function UploadModal({ onClose, onUploadSuccess, subjects }) {
+  const [title, setTitle]           = useState("")
+  const [subjectId, setSubjectId]   = useState("")
+  const [selectedFile, setSelectedFile] = useState(null)
+  const [uploading, setUploading]   = useState(false)
+  const [progress, setProgress]     = useState("")
+  const [error, setError]           = useState("")
+
+  function handleFileSelect(e) {
+    const file = e.target.files[0]
+    if (!file) return
+
+    // Check extension
+    const ext     = file.name.split(".").pop().toLowerCase()
+    const allowed = ["pdf", "docx", "pptx", "mp4"]
+    if (!allowed.includes(ext)) {
+      setError("Only PDF, DOCX, PPTX, and MP4 files are allowed")
+      return
+    }
+
+    // Check size — max 100MB
+    if (file.size > 100 * 1024 * 1024) {
+      setError("File size must be less than 100MB")
+      return
+    }
+
+    setSelectedFile(file)
+    setError("")
   }
 
-  async function handleSubmit() {
+  async function handleUpload() {
     setError("")
 
-    if (!formData.title || !formData.subject_id ||
-        !formData.file_type_id || !formData.file_url) {
-      setError("Please fill in all required fields")
+    // Validate
+    if (!title.trim()) {
+      setError("Please enter a title")
+      return
+    }
+    if (!subjectId) {
+      setError("Please select a subject")
+      return
+    }
+    if (!selectedFile) {
+      setError("Please select a file to upload")
       return
     }
 
     try {
       setUploading(true)
-      const payload = {
-        title:        formData.title,
-        subject_id:   parseInt(formData.subject_id),
-        file_type_id: parseInt(formData.file_type_id),
-        file_url:     formData.file_url,
-        file_size_mb: parseFloat(formData.file_size_mb) || 0,
-      }
 
-      if (isEdit) {
-        await updateResource(editResource.id, payload)
-      } else {
-        await uploadResource(payload)
-      }
+      // Step 1 — Upload actual file to server
+      setProgress("Uploading file to server...")
+      const uploadRes  = await uploadFile(selectedFile)
+      const fileUrl    = uploadRes.data.file_url
+      const fileSizeMb = uploadRes.data.file_size_mb
+      const fileTypeId = uploadRes.data.file_type_id
 
-      onSuccess()
+      // Step 2 — Save resource record in DB
+      setProgress("Saving resource details...")
+      await uploadResource({
+        title:        title,
+        subject_id:   parseInt(subjectId),
+        file_type_id: fileTypeId,   // ✅ auto-detected from file
+        file_url:     fileUrl,      // ✅ server path
+        file_size_mb: fileSizeMb,   // ✅ auto-calculated
+      })
+
+      onUploadSuccess()
       onClose()
+
     } catch (err) {
-      setError(err.response?.data?.error?.message || "Failed. Please try again.")
+      setError(err.response?.data?.error?.message || "Upload failed. Please try again.")
     } finally {
       setUploading(false)
+      setProgress("")
     }
   }
 
   return (
-    <Modal
-      isOpen={true}
-      onClose={onClose}
-      title={isEdit ? "Edit Resource" : "Upload New Resource"}
-      size="md"
-    >
+    <Modal isOpen={true} onClose={onClose} title="Upload Material" size="md">
       <div className="space-y-4">
 
-        {error && <ErrorMessage message={error} onDismiss={() => setError("")} />}
+        {error && (
+          <ErrorMessage message={error} onDismiss={() => setError("")} />
+        )}
 
+        {/* Title */}
         <div>
           <label className="font-body text-xs text-gray-500 mb-1 block">
             Title *
           </label>
-          <input type="text" name="title" placeholder="Resource title"
-            value={formData.title} onChange={handleChange}
+          <input
+            type="text"
+            placeholder="Resource title"
+            value={title}
+            onChange={(e) => setTitle(e.target.value)}
             className="w-full border border-gray-200 rounded-lg px-3 py-2.5
               font-body text-sm text-gray-700 focus:outline-none
-              focus:border-[#4A7FA7]" />
+              focus:border-[#4A7FA7]"
+          />
         </div>
 
+        {/* Subject — from DB */}
         <div>
           <label className="font-body text-xs text-gray-500 mb-1 block">
-            Description
+            Subject *
           </label>
-          <textarea name="description" placeholder="Brief description..."
-            rows={3}
+          <select
+            value={subjectId}
+            onChange={(e) => setSubjectId(e.target.value)}
             className="w-full border border-gray-200 rounded-lg px-3 py-2.5
               font-body text-sm text-gray-700 focus:outline-none
-              focus:border-[#4A7FA7] resize-none" />
+              focus:border-[#4A7FA7]"
+          >
+            <option value="">Select subject</option>
+            {subjects.map(s => (
+              <option key={s.id} value={s.id}>{s.name}</option>
+            ))}
+          </select>
         </div>
 
-        <div className="grid grid-cols-2 gap-3">
-          <div>
-            <label className="font-body text-xs text-gray-500 mb-1 block">
-              Subject *
-            </label>
-            <select name="subject_id" value={formData.subject_id}
-              onChange={handleChange}
-              className="w-full border border-gray-200 rounded-lg px-3
-                py-2.5 font-body text-sm text-gray-700 focus:outline-none
-                focus:border-[#4A7FA7]">
-              <option value="">Select subject</option>
-              {subjects.map(s => (
-                <option key={s.id} value={s.id}>{s.name}</option>
-              ))}
-            </select>
-          </div>
-          <div>
-            <label className="font-body text-xs text-gray-500 mb-1 block">
-              Visibility
-            </label>
-            <select className="w-full border border-gray-200 rounded-lg px-3
-              py-2.5 font-body text-sm text-gray-700 focus:outline-none
-              focus:border-[#4A7FA7]">
-              <option>All Students</option>
-              <option>My Students Only</option>
-            </select>
-          </div>
-        </div>
-
-        <div className="grid grid-cols-2 gap-3">
-          <div>
-            <label className="font-body text-xs text-gray-500 mb-1 block">
-              File Type *
-            </label>
-            <select name="file_type_id" value={formData.file_type_id}
-              onChange={handleChange}
-              className="w-full border border-gray-200 rounded-lg px-3
-                py-2.5 font-body text-sm text-gray-700 focus:outline-none
-                focus:border-[#4A7FA7]">
-              <option value="">Select type</option>
-              {Object.entries(fileTypeIdMap).map(([name, id]) => (
-                <option key={id} value={id}>{name}</option>
-              ))}
-            </select>
-          </div>
-          <div>
-            <label className="font-body text-xs text-gray-500 mb-1 block">
-              File Size (MB)
-            </label>
-            <input type="number" name="file_size_mb" placeholder="3.2"
-              value={formData.file_size_mb} onChange={handleChange}
-              className="w-full border border-gray-200 rounded-lg px-3
-                py-2.5 font-body text-sm text-gray-700 focus:outline-none
-                focus:border-[#4A7FA7]" />
-          </div>
-        </div>
-
+        {/* File Upload — real file picker ✅ */}
         <div>
           <label className="font-body text-xs text-gray-500 mb-1 block">
-            File URL *
+            File * — PDF, DOCX, PPTX, MP4 (max 100MB)
           </label>
-          <input type="text" name="file_url"
-            placeholder="https://example.com/file.pdf"
-            value={formData.file_url} onChange={handleChange}
-            className="w-full border border-gray-200 rounded-lg px-3 py-2.5
-              font-body text-sm text-gray-700 focus:outline-none
-              focus:border-[#4A7FA7]" />
+          <div
+            onClick={() => document.getElementById("student-file-input").click()}
+            className={`border-2 border-dashed rounded-lg p-6 text-center
+              cursor-pointer transition-colors
+              ${selectedFile
+                ? "border-[#4A7FA7] bg-blue-50"
+                : "border-gray-200 hover:border-[#4A7FA7] hover:bg-gray-50"
+              }`}
+          >
+            {selectedFile ? (
+              <div className="space-y-1">
+                {/* File icon based on type */}
+                <p className="text-2xl">
+                  {selectedFile.name.endsWith(".pdf")  ? "📄" :
+                   selectedFile.name.endsWith(".mp4")  ? "🎬" :
+                   selectedFile.name.endsWith(".pptx") ? "📊" : "📝"}
+                </p>
+                <p className="font-body text-sm font-medium text-[#1A3D63]">
+                  {selectedFile.name}
+                </p>
+                <p className="font-body text-xs text-gray-400">
+                  {(selectedFile.size / (1024 * 1024)).toFixed(2)} MB
+                  {" · "}
+                  {selectedFile.name.split(".").pop().toUpperCase()}
+                </p>
+                <button
+                  onClick={(e) => {
+                    e.stopPropagation()
+                    setSelectedFile(null)
+                  }}
+                  className="font-body text-xs text-red-400
+                    hover:text-red-600 transition-colors mt-1"
+                >
+                  ✕ Remove file
+                </button>
+              </div>
+            ) : (
+              <div className="space-y-2">
+                <p className="text-3xl">📁</p>
+                <p className="font-body text-sm text-gray-500 font-medium">
+                  Click to select a file
+                </p>
+                <p className="font-body text-xs text-gray-300">
+                  PDF, DOCX, PPTX, MP4
+                </p>
+              </div>
+            )}
+          </div>
+          <input
+            id="student-file-input"
+            type="file"
+            accept=".pdf,.docx,.pptx,.mp4"
+            onChange={handleFileSelect}
+            className="hidden"
+          />
         </div>
 
+        {/* Upload Progress */}
+        {progress && (
+          <div className="flex items-center gap-2 bg-blue-50
+            rounded-lg px-4 py-3">
+            <div className="w-4 h-4 border-2 border-[#4A7FA7]
+              border-t-transparent rounded-full animate-spin
+              flex-shrink-0" />
+            <p className="font-body text-xs text-[#1A3D63]">{progress}</p>
+          </div>
+        )}
+
+        {/* Buttons */}
         <div className="flex gap-3 pt-2">
-          <Button variant="secondary" fullWidth onClick={onClose}
-            disabled={uploading}>
+          <Button variant="secondary" fullWidth
+            onClick={onClose} disabled={uploading}>
             Cancel
           </Button>
-          <Button variant="primary" fullWidth onClick={handleSubmit}
-            disabled={uploading}>
-            {uploading ? "Saving..." : isEdit ? "Save Changes" : "Upload Resource"}
+          <Button variant="primary" fullWidth
+            onClick={handleUpload} disabled={uploading}>
+            {uploading ? "Uploading..." : "Upload"}
           </Button>
         </div>
 

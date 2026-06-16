@@ -223,6 +223,13 @@ def delete_resource(resource_id):
     if role == "mentor" and resource.uploader_id != user_id:
         return error_response("FORBIDDEN", "You can only delete your own resources", status=403)
 
+    # ── Delete the actual file from disk ──────────────────
+    try:
+        from app.services.file_service import delete_file
+        delete_file(resource.file_url)
+    except Exception as e:
+        print(f"File deletion error: {e}")
+
     db.session.delete(resource)
     db.session.commit()
 
@@ -245,3 +252,42 @@ def track_download(resource_id):
         data={"file_url": resource.file_url},
         message="Download tracked"
     )
+
+# ── POST /api/resources/upload-file ──────────────────────
+# Accepts actual file, saves to server, returns file URL
+# Called BEFORE creating the resource record
+@bp.route("/upload-file", methods=["POST"])
+@jwt_required()
+def upload_file():
+    role = get_current_role()
+    if role not in ["mentor", "admin"]:
+        return error_response("FORBIDDEN", "Only mentors can upload files", status=403)
+
+    # Check if file is in request
+    if "file" not in request.files:
+        return error_response("MISSING_FILE", "No file provided", status=400)
+
+    file = request.files["file"]
+
+    try:
+        from app.services.file_service import save_file, get_file_type_id
+
+        # Save file and get URL + size
+        file_url, file_size_mb, ext = save_file(file)
+        file_type_id                = get_file_type_id(ext)
+
+        return success_response(
+            data={
+                "file_url":     file_url,
+                "file_size_mb": file_size_mb,
+                "file_type_id": file_type_id,
+                "extension":    ext,
+            },
+            message="File uploaded successfully",
+            status=201,
+        )
+
+    except ValueError as e:
+        return error_response("INVALID_FILE", str(e), status=400)
+    except Exception as e:
+        return error_response("UPLOAD_FAILED", f"Upload failed: {str(e)}", status=500)

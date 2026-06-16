@@ -19,7 +19,7 @@ const studentNavItems = [
 ]
 
 const mentorNavItems = [
-  { label: "Dashboard",        icon: LayoutDashboard, path: "/mentor/dashboard" },
+  { label: "Dashboard",        icon: LayoutDashboard, path: "/dashboard" },
   { label: "Student Requests", icon: MessageSquare,   path: "/mentor/requests"  },
   { label: "AI Assistant",     icon: Bot,             path: "/ai-chat"          },
   { label: "My Resources",     icon: BookOpen,        path: "/mentor/resources" },
