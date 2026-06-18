@@ -1,13 +1,15 @@
 import { useState, useRef, useEffect, useCallback } from "react"
 import {
   Send, Sparkles, Settings, RefreshCw, Bot,
-  Mic, MicOff, FileText, ChevronRight, Paperclip, X, FileImage, AlertCircle
+  Mic, MicOff, FileText, ChevronRight, Paperclip, X, FileImage, AlertCircle,
+  MessageSquare
 } from "lucide-react"
 import Avatar from "../components/common/Avatar"
 import Badge from "../components/common/Badge"
 import profileImg from "../assets/icons/profile.png"
 import aiIcon from "../assets/icons/AI.png"
-import { createChatSession, getChatMessages, sendChatMessage, uploadChatFile } from "../api/chatApi"
+import { createChatSession, getChatMessages, sendChatMessage, uploadChatFile, getChatSessions } from "../api/chatApi"
+
 
 // ── Suggested prompts ─────────────────────────────────────────────────────────
 const suggestedPrompts = [
@@ -54,6 +56,7 @@ function AIChatPage() {
   const [isTyping,    setIsTyping]    = useState(false)
   const [isLoading,   setIsLoading]   = useState(true)
   const [error,       setError]       = useState(null)
+  const [sessions,    setSessions]    = useState([])
 
   // File upload state
   const [pendingFile,     setPendingFile]     = useState(null)   // { file, preview, type }
@@ -73,19 +76,60 @@ function AIChatPage() {
     chatEndRef.current?.scrollIntoView({ behavior: "smooth" })
   }, [messages, isTyping])
 
-  // ── Init: create or restore session ───────────────────────────────────────
+  // ── Fetch sessions list ───────────────────────────────────────────────────
+  const fetchSessions = useCallback(async () => {
+    try {
+      const res = await getChatSessions()
+      const list = res.data?.data?.sessions || []
+      setSessions(list)
+      return list
+    } catch (err) {
+      console.error("Failed to fetch sessions", err)
+      return []
+    }
+  }, [])
+
+  // ── Load selected session messages ─────────────────────────────────────────
+  const handleSelectSession = async (sid) => {
+    if (sid === sessionId) return
+    setIsLoading(true)
+    setError(null)
+    setSessionId(sid)
+    setPendingFile(null)
+    setFileCaption("")
+    try {
+      const res = await getChatMessages(sid)
+      setMessages(res.data?.data?.messages || [])
+    } catch (err) {
+      setError("Failed to load chat history.")
+    } finally {
+      setIsLoading(false)
+    }
+  }
+
+  // ── Init: fetch sessions and load active or create new ────────────────────
   useEffect(() => {
     async function initSession() {
       try {
         setIsLoading(true)
-        const res      = await createChatSession("Study Session")
-        const data     = res.data?.data
-        const sid      = data?.session?.id
-        const greeting = data?.greeting
-
-        setSessionId(sid)
-        if (greeting) {
-          setMessages([greeting])
+        const list = await fetchSessions()
+        if (list.length > 0) {
+          // Load latest session
+          const latestId = list[0].id
+          setSessionId(latestId)
+          const mRes = await getChatMessages(latestId)
+          setMessages(mRes.data?.data?.messages || [])
+        } else {
+          // Create new session
+          const res = await createChatSession("Study Session")
+          const data = res.data?.data
+          const sid = data?.session?.id
+          const greeting = data?.greeting
+          setSessionId(sid)
+          if (greeting) {
+            setMessages([greeting])
+          }
+          await fetchSessions()
         }
       } catch (err) {
         setError("Could not connect to AI. Please refresh the page.")
@@ -94,7 +138,7 @@ function AIChatPage() {
       }
     }
     initSession()
-  }, [])
+  }, [fetchSessions])
 
   // ── Voice recognition setup ────────────────────────────────────────────────
   useEffect(() => {
@@ -133,7 +177,11 @@ function AIChatPage() {
       content:    text,
       created_at: new Date().toISOString(),
     }
-    setMessages(prev => [...prev, tempUser])
+    let isFirstMessage = false
+    setMessages(prev => {
+      isFirstMessage = prev.length <= 1
+      return [...prev, tempUser]
+    })
     setIsTyping(true)
     setError(null)
 
@@ -147,13 +195,17 @@ function AIChatPage() {
         user_message,
         ai_message,
       ])
+      
+      if (isFirstMessage) {
+        fetchSessions()
+      }
     } catch (err) {
       setError("AI failed to respond. Please try again.")
       setMessages(prev => prev.filter(m => m.id !== tempUser.id))
     } finally {
       setIsTyping(false)
     }
-  }, [inputValue, sessionId, isTyping])
+  }, [inputValue, sessionId, isTyping, fetchSessions])
 
   // ── File picker ────────────────────────────────────────────────────────────
   function handleFilePick(e) {
@@ -192,7 +244,11 @@ function AIChatPage() {
       created_at: new Date().toISOString(),
       _preview:   pendingFile.preview,
     }
-    setMessages(prev => [...prev, tempUser])
+    let isFirstMessage = false
+    setMessages(prev => {
+      isFirstMessage = prev.length <= 1
+      return [...prev, tempUser]
+    })
     setIsTyping(true)
 
     try {
@@ -203,6 +259,9 @@ function AIChatPage() {
         user_message,
         ai_message,
       ])
+      if (isFirstMessage) {
+        fetchSessions()
+      }
     } catch (err) {
       setError("File upload failed. Please try again.")
       setMessages(prev => prev.filter(m => m.id !== tempUser.id))
@@ -232,11 +291,13 @@ function AIChatPage() {
       setIsLoading(true)
       const res      = await createChatSession("Study Session")
       const data     = res.data?.data
-      setSessionId(data?.session?.id)
+      const newSid   = data?.session?.id
+      setSessionId(newSid)
       setMessages(data?.greeting ? [data.greeting] : [])
       setPendingFile(null)
       setFileCaption("")
       setError(null)
+      await fetchSessions()
     } catch {
       setError("Could not reset chat.")
     } finally {
@@ -287,6 +348,57 @@ function AIChatPage() {
 
         {/* ── Left Sidebar ── */}
         <div className="lg:col-span-1 space-y-6">
+
+          {/* Chat History */}
+          <div className="bg-white rounded-2xl p-5 shadow-sm border border-gray-100 space-y-4">
+            <div className="flex items-center justify-between border-b border-gray-50 pb-3">
+              <div className="flex items-center gap-2">
+                <MessageSquare size={16} className="text-[#4A7FA7]" />
+                <h3 className="font-heading text-sm font-semibold text-[#0A1931]">Chat History</h3>
+              </div>
+              <span className="text-[10px] text-gray-400 font-semibold bg-gray-50 px-2 py-0.5 rounded-full">
+                {sessions.length}
+              </span>
+            </div>
+            
+            <div className="space-y-2 max-h-48 overflow-y-auto pr-1">
+              {sessions.length === 0 ? (
+                <p className="font-body text-xs text-gray-400 text-center py-4">No recent chats</p>
+              ) : (
+                sessions.map((s) => {
+                  const isActive = s.id === sessionId;
+                  return (
+                    <button
+                      key={s.id}
+                      onClick={() => handleSelectSession(s.id)}
+                      className={`w-full text-left p-2.5 rounded-xl border transition-all duration-200 flex items-start gap-2.5 group ${
+                        isActive
+                          ? "bg-[#F6FAFD] border-[#4A7FA7]/30 text-[#1A3D63]"
+                          : "bg-white border-transparent hover:bg-gray-50/50 text-gray-600"
+                      }`}
+                    >
+                      <MessageSquare
+                        size={14}
+                        className={`mt-0.5 flex-shrink-0 transition-colors ${
+                          isActive ? "text-[#4A7FA7]" : "text-gray-300 group-hover:text-gray-400"
+                        }`}
+                      />
+                      <div className="min-w-0 flex-1">
+                        <p className={`font-body text-xs truncate leading-snug ${
+                          isActive ? "font-bold text-[#0A1931]" : "font-medium"
+                        }`}>
+                          {s.title || "New Chat"}
+                        </p>
+                        <span className="font-body text-[9px] text-gray-400 block mt-0.5">
+                          {new Date(s.created_at).toLocaleDateString([], { month: "short", day: "numeric" })}
+                        </span>
+                      </div>
+                    </button>
+                  );
+                })
+              )}
+            </div>
+          </div>
 
           {/* Suggested Topics */}
           <div className="bg-white rounded-2xl p-5 shadow-sm border border-gray-100 space-y-4">
