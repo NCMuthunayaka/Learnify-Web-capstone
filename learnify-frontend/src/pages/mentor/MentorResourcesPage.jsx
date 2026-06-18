@@ -34,7 +34,7 @@ function TypeBadge({ type }) {
 }
 
 // ── Upload Modal ───────────────────────────────────────────
-import { uploadFile, uploadResource } from "../api/resourcesApi"
+
 
 function UploadModal({ onClose, onUploadSuccess, subjects }) {
   const [title, setTitle]           = useState("")
