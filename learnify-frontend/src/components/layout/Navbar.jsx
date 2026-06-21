@@ -14,6 +14,23 @@ import {
 } from "../../api/notificationsApi"
 import api from "../../api/axiosInstance"
 
+// ── Get basic user info from JWT token ────────────────────
+// Used as fallback if API call fails
+function getUserFromToken() {
+  try {
+    const token = localStorage.getItem("access_token")
+    if (!token) return null
+    const payload = JSON.parse(atob(token.split(".")[1]))
+    return {
+      name:  payload.name  || "",
+      role:  payload.role  || "student",
+      email: payload.email || "",
+    }
+  } catch {
+    return null
+  }
+}
+
 function getRoleFromToken() {
   try {
     const token = localStorage.getItem("access_token")
@@ -24,20 +41,25 @@ function getRoleFromToken() {
   }
 }
 
+// ── Page titles — fixed to match actual routes ────────────
 const pageTitles = {
-  "/dashboard": "Dashboard",
-  "/mentor/dashboard": "Mentor Dashboard",
-  "/mentor/requests": "Student Requests",
-  "/scheduler": "Study Scheduler",
-  "/progress": "Progress",
-  "/ai-chat": "AI Assistant",
-  "/resources": "Study Resources",
-  "/feedback": "Feedback",
-  "/profile": "Profile",
-  "/notifications": "Notifications",
-  "/mentor/resources": "My Resources",
+  "/dashboard":             "Dashboard",
+  "/scheduler":             "Study Scheduler",
+  "/progress":              "Progress",
+  "/ai-chat":               "AI Assistant",
+  "/resources":             "Study Resources",
+  "/feedback":              "Feedback",
+  "/profile":               "My Profile",
+  "/notifications":         "Notifications",
+  "/help":                  "Help",
+  "/mentor/requests":       "Student Requests",
+  "/mentor/resources":      "My Resources",
   "/mentor/profile":        "My Profile",
-  "/help":                  "Help Requests",
+  "/admin/dashboard":       "Admin Dashboard",
+  "/admin/users":           "User Management",
+  "/admin/approvals":       "User Approvals",
+  "/admin/system":          "System Monitoring",
+  "/admin/feedback":        "Feedback Dashboard",
   "/admin/profile":         "My Profile",
   "/admin/profile/edit":    "Edit Profile",
   "/admin/change-password": "Change Password",
@@ -46,12 +68,12 @@ const pageTitles = {
 // ── Notification Icon ─────────────────────────────────────
 function NotificationIcon({ type }) {
   const config = {
-    deadline: { icon: Clock, bg: "bg-red-100", color: "text-red-500" },
-    session: { icon: BookOpen, bg: "bg-blue-100", color: "text-blue-500" },
-    resource: { icon: BookOpen, bg: "bg-green-100", color: "text-green-500" },
-    system: { icon: AlertCircle, bg: "bg-purple-100", color: "text-purple-500" },
-    mentor_reply: { icon: AlertCircle, bg: "bg-yellow-100", color: "text-yellow-500" },
-    reminder: { icon: Clock, bg: "bg-orange-100", color: "text-orange-500" },
+    deadline:     { icon: Clock,        bg: "bg-red-100",    color: "text-red-500"    },
+    session:      { icon: BookOpen,     bg: "bg-blue-100",   color: "text-blue-500"   },
+    resource:     { icon: BookOpen,     bg: "bg-green-100",  color: "text-green-500"  },
+    system:       { icon: AlertCircle,  bg: "bg-purple-100", color: "text-purple-500" },
+    mentor_reply: { icon: AlertCircle,  bg: "bg-yellow-100", color: "text-yellow-500" },
+    reminder:     { icon: Clock,        bg: "bg-orange-100", color: "text-orange-500" },
   }
   const { icon: Icon, bg, color } = config[type] || config.system
   return (
@@ -63,37 +85,54 @@ function NotificationIcon({ type }) {
 }
 
 function Navbar({ onToggleSidebar }) {
-  const { logout } = useAuth()
+  const { logout }  = useAuth()
   const navigate    = useNavigate()
   const location    = useLocation()
   const pageTitle   = pageTitles[location.pathname] || "Dashboard"
-  const dropdownRef = useRef(null)
+  const dropdownRef        = useRef(null)
   const profileDropdownRef = useRef(null)
 
-  const role = getRoleFromToken()
+  const role    = getRoleFromToken()
   const isAdmin = role === "admin"
 
   const [notifications, setNotifications] = useState([])
   const [unreadCount, setUnreadCount]     = useState(0)
   const [showDropdown, setShowDropdown]   = useState(false)
   const [showProfileCard, setShowProfileCard] = useState(false)
-  const [user, setUser]                   = useState({ name: "", role: "", email: "" })
 
-  const profilePath = user?.role === "mentor" ? "/mentor/profile" : "/profile"
+  // ── Initialize user from token immediately ────────────
+  // This prevents showing "User" while API loads
+  const tokenUser = getUserFromToken()
+  const [user, setUser] = useState({
+    name:  tokenUser?.name  || "",
+    role:  tokenUser?.role  || "student",
+    email: tokenUser?.email || "",
+  })
 
-  // ── Fetch notifications and user on mount ────────────────
-  // Admin's user data is handled by AdminProfile component
+  // ── Profile path based on role ─────────────────────────
+  const profilePath =
+    role === "admin"  ? "/admin/profile"  :
+    role === "mentor" ? "/mentor/profile" :
+    "/profile"
+
+  // ── Fetch notifications and user on mount ──────────────
   useEffect(() => {
     fetchNotifications()
     if (!isAdmin) fetchUser()
   }, [])
 
+  // ── Re-fetch notifications when page changes ───────────
+  // This keeps bell count in sync after visiting /notifications
+  useEffect(() => {
+    fetchNotifications()
+  }, [location.pathname])
+
   async function fetchNotifications() {
     try {
       const response = await getNotifications()
-      const data = response.data
+      const data     = response.data
       setNotifications(data.notifications || [])
-      setUnreadCount(data.unread_count || 0)
+      setUnreadCount(data.unread_count   || 0)
     } catch (err) {
       console.error("Failed to fetch notifications:", err)
     }
@@ -101,32 +140,33 @@ function Navbar({ onToggleSidebar }) {
 
   async function fetchUser() {
     try {
-      // Get user from localStorage token
-      const token = localStorage.getItem("access_token")
-      if (!token) return
-
-      // Decode JWT payload to get user info
-      const { default: api } = await import("../../api/axiosInstance")
       const response = await api.get("/auth/me")
-
-      // Our Flask API wraps data in { success, message, data }
-      // Axios wraps response in response.data
-      // So real user is at response.data.data
       const userData = response.data.data
-      setUser(userData)
 
+      if (userData) {
+        setUser(userData)
+      }
     } catch (err) {
+      // ── Fallback — use JWT token data if API fails ─────
+      // This means user will still see their name even if
+      // backend is temporarily unreachable
+      const fallback = getUserFromToken()
+      if (fallback?.name) {
+        setUser(fallback)
+      }
       console.error("Failed to fetch user:", err)
     }
   }
 
-  // Close dropdowns on outside click
+  // ── Close dropdowns on outside click ──────────────────
   useEffect(() => {
     function handleClickOutside(e) {
-      if (dropdownRef.current && !dropdownRef.current.contains(e.target)) {
+      if (dropdownRef.current &&
+          !dropdownRef.current.contains(e.target)) {
         setShowDropdown(false)
       }
-      if (profileDropdownRef.current && !profileDropdownRef.current.contains(e.target)) {
+      if (profileDropdownRef.current &&
+          !profileDropdownRef.current.contains(e.target)) {
         setShowProfileCard(false)
       }
     }
@@ -153,6 +193,18 @@ function Navbar({ onToggleSidebar }) {
       setUnreadCount(prev => Math.max(0, prev - 1))
     } catch (err) {
       console.error("Failed to mark as read:", err)
+    }
+  }
+
+  // ── Logout — blacklist token then clear ───────────────
+  async function handleLogout() {
+    try {
+      await api.delete("/auth/logout")
+    } catch (err) {
+      console.error("Logout API failed:", err)
+    } finally {
+      logout()
+      navigate("/login")
     }
   }
 
@@ -183,25 +235,27 @@ function Navbar({ onToggleSidebar }) {
           <Tooltip text="Notifications" position="bottom">
             <button
               onClick={() => setShowDropdown(!showDropdown)}
-              className="relative p-2 rounded-lg hover:bg-white/10 transition-colors"
+              className="relative p-2 rounded-lg hover:bg-white/10
+                transition-colors"
             >
               <Bell size={20} />
               {unreadCount > 0 && (
                 <span className="absolute -top-0.5 -right-0.5 w-4 h-4
                   bg-red-500 rounded-full flex items-center justify-center
                   font-body text-[9px] font-bold text-white">
-                  {unreadCount}
+                  {unreadCount > 9 ? "9+" : unreadCount}
                 </span>
               )}
             </button>
           </Tooltip>
 
-          {/* Dropdown */}
+          {/* Notifications Dropdown */}
           {showDropdown && (
             <div className="absolute right-0 top-12 w-80 bg-white
               rounded-2xl shadow-2xl border border-gray-100 z-50
               overflow-hidden">
 
+              {/* Header */}
               <div className="flex items-center justify-between
                 px-4 py-3 border-b border-gray-100">
                 <div className="flex items-center gap-2">
@@ -225,12 +279,13 @@ function Navbar({ onToggleSidebar }) {
                 )}
               </div>
 
+              {/* List */}
               <div className="max-h-80 overflow-y-auto">
                 {notifications.length === 0 ? (
                   <div className="py-8 text-center">
                     <Bell size={24} className="text-gray-200 mx-auto mb-2" />
                     <p className="font-body text-xs text-gray-300">
-                      No notifications
+                      No notifications yet
                     </p>
                   </div>
                 ) : (
@@ -241,7 +296,9 @@ function Navbar({ onToggleSidebar }) {
                       className={`flex items-start gap-3 px-4 py-3
                         border-b border-gray-50 cursor-pointer
                         hover:bg-gray-50 transition-colors
-                        ${!notification.is_read ? "bg-blue-50/50" : "bg-white"}`}
+                        ${!notification.is_read
+                          ? "bg-blue-50/50"
+                          : "bg-white"}`}
                     >
                       <NotificationIcon type={notification.type} />
                       <div className="flex-1 min-w-0">
@@ -258,7 +315,7 @@ function Navbar({ onToggleSidebar }) {
                           )}
                         </div>
                         <p className="font-body text-[11px] text-gray-400
-                          mt-0.5 leading-tight">
+                          mt-0.5 leading-tight line-clamp-2">
                           {notification.body}
                         </p>
                       </div>
@@ -267,7 +324,9 @@ function Navbar({ onToggleSidebar }) {
                 )}
               </div>
 
-              <div className="px-4 py-2.5 border-t border-gray-100 text-center">
+              {/* Footer */}
+              <div className="px-4 py-2.5 border-t border-gray-100
+                text-center">
                 <button
                   onClick={() => {
                     setShowDropdown(false)
@@ -276,7 +335,7 @@ function Navbar({ onToggleSidebar }) {
                   className="font-body text-xs text-[#4A7FA7]
                     hover:text-[#1A3D63] transition-colors font-medium"
                 >
-                  View all notifications
+                  View all notifications →
                 </button>
               </div>
 
@@ -284,66 +343,127 @@ function Navbar({ onToggleSidebar }) {
           )}
         </div>
 
-        {/* User / Profile — admin gets enhanced AdminProfile, others get standard card */}
+        {/* User Profile */}
         {isAdmin ? (
           <AdminProfile />
         ) : (
           <div className="relative" ref={profileDropdownRef}>
             <button
               onClick={() => setShowProfileCard(!showProfileCard)}
-              className="flex items-center gap-3 p-1.5 rounded-xl hover:bg-white/5 transition-colors focus:outline-none text-left"
+              className="flex items-center gap-3 p-1.5 rounded-xl
+                hover:bg-white/5 transition-colors focus:outline-none
+                text-left"
             >
               <div className="text-right hidden sm:block">
-                <p className="font-body text-sm font-medium text-white leading-tight">
-                  {user.name || "User"}
+                <p className="font-body text-sm font-medium text-white
+                  leading-tight">
+                  {/* ✅ Shows name from API or JWT fallback — never "User" */}
+                  {user.name
+                    ? user.name.split(" ")[0]  // show first name only
+                    : role
+                      ? role.charAt(0).toUpperCase() + role.slice(1)
+                      : "User"
+                  }
                 </p>
-                <p className="font-body text-[11px] text-[#B3CFE5] mt-0.5 capitalize">
-                  {user.role || "Student"}
+                <p className="font-body text-[11px] text-[#B3CFE5]
+                  mt-0.5 capitalize">
+                  {user.role || role || "Student"}
                 </p>
               </div>
-              <Avatar src={profileImg} name={user.name || "U"} color="accent" size="md" />
+              <Avatar
+                src={profileImg}
+                name={user.name || "U"}
+                color="accent"
+                size="md"
+              />
             </button>
 
-            {/* Profile Card Dropdown */}
+            {/* Profile Dropdown */}
             {showProfileCard && (
-              <div className="absolute right-0 top-12 w-64 bg-white rounded-2xl shadow-2xl border border-gray-100 z-50 p-4 overflow-hidden text-[#0A1931]">
-                <div className="flex flex-col items-center text-center pb-4 border-b border-gray-100">
-                  <Avatar src={profileImg} name={user.name || "U"} color="accent" size="lg" />
-                  <h4 className="font-heading font-bold text-base mt-3 leading-tight">
+              <div className="absolute right-0 top-12 w-64 bg-white
+                rounded-2xl shadow-2xl border border-gray-100 z-50
+                p-4 overflow-hidden text-[#0A1931]">
+
+                {/* Profile Info */}
+                <div className="flex flex-col items-center text-center
+                  pb-4 border-b border-gray-100">
+                  <Avatar
+                    src={profileImg}
+                    name={user.name || "U"}
+                    color="accent"
+                    size="lg"
+                  />
+                  <h4 className="font-heading font-bold text-base
+                    mt-3 leading-tight">
                     {user.name || "User"}
                   </h4>
                   <span className="font-body text-xs text-gray-400 mt-0.5">
-                    {user.email || "user@learnify.com"}
+                    {user.email || ""}
                   </span>
-                  <span className="mt-2.5 px-3 py-1 bg-[#F6FAFD] border border-[#B3CFE5]/30 rounded-full font-body text-[11px] font-semibold text-[#1A3D63] uppercase tracking-wider">
-                    {user.role || "student"}
+                  <span className="mt-2.5 px-3 py-1 bg-[#F6FAFD]
+                    border border-[#B3CFE5]/30 rounded-full font-body
+                    text-[11px] font-semibold text-[#1A3D63]
+                    uppercase tracking-wider">
+                    {user.role || role || "student"}
                   </span>
                 </div>
+
+                {/* Menu Items */}
                 <div className="py-2 space-y-1">
                   <button
-                    onClick={() => { setShowProfileCard(false); navigate(profilePath) }}
-                    className="w-full flex items-center gap-3 px-3 py-2 rounded-xl text-sm font-body text-gray-600 hover:bg-gray-50 hover:text-[#1A3D63] transition-colors text-left"
+                    onClick={() => {
+                      setShowProfileCard(false)
+                      navigate(profilePath)
+                    }}
+                    className="w-full flex items-center gap-3 px-3 py-2
+                      rounded-xl text-sm font-body text-gray-600
+                      hover:bg-gray-50 hover:text-[#1A3D63]
+                      transition-colors text-left"
                   >
                     <User size={16} />
                     <span>My Profile</span>
                   </button>
                   <button
-                    onClick={() => { setShowProfileCard(false); navigate("/notifications") }}
-                    className="w-full flex items-center gap-3 px-3 py-2 rounded-xl text-sm font-body text-gray-600 hover:bg-gray-50 hover:text-[#1A3D63] transition-colors text-left"
+                    onClick={() => {
+                      setShowProfileCard(false)
+                      navigate("/notifications")
+                    }}
+                    className="w-full flex items-center gap-3 px-3 py-2
+                      rounded-xl text-sm font-body text-gray-600
+                      hover:bg-gray-50 hover:text-[#1A3D63]
+                      transition-colors text-left"
                   >
                     <Bell size={16} />
-                    <span>Notifications</span>
+                    <span>
+                      Notifications
+                      {unreadCount > 0 && (
+                        <span className="ml-2 bg-red-100 text-red-500
+                          font-body text-[10px] font-bold px-1.5 py-0.5
+                          rounded-full">
+                          {unreadCount}
+                        </span>
+                      )}
+                    </span>
                   </button>
                 </div>
+
+                {/* Logout */}
                 <div className="pt-2 border-t border-gray-100">
                   <button
-                    onClick={() => { setShowProfileCard(false); logout(); navigate("/login") }}
-                    className="w-full flex items-center gap-3 px-3 py-2 rounded-xl text-sm font-body text-red-500 hover:bg-red-50 hover:text-red-600 transition-colors text-left font-medium"
+                    onClick={() => {
+                      setShowProfileCard(false)
+                      handleLogout()
+                    }}
+                    className="w-full flex items-center gap-3 px-3 py-2
+                      rounded-xl text-sm font-body text-red-500
+                      hover:bg-red-50 hover:text-red-600
+                      transition-colors text-left font-medium"
                   >
                     <LogOut size={16} />
                     <span>Logout</span>
                   </button>
                 </div>
+
               </div>
             )}
           </div>
