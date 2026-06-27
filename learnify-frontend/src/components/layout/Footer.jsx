@@ -1,7 +1,12 @@
 import { Link } from "react-router-dom"
 import learnify_logo from "../../assets/images/learnify_logo.png"
 
-const quickLinks = ["Features", "How it Works", "About", "Contact"]
+const quickLinks = [
+  { label: "Features",      path: "/features"      },
+  { label: "How It Works",  path: "/how-it-works"  },
+  { label: "About",         path: "/about"         },
+  { label: "Contact",       path: "/contact"       },
+]
 
 function Footer() {
   return (
@@ -14,7 +19,11 @@ function Footer() {
           <div className="flex items-center gap-2">
             <div className="w-8 h-8 bg-[#f6fafd] rounded-lg flex items-center
               justify-center">
-               <img src={learnify_logo} alt="Learnify Logo" />
+              <img
+                src={learnify_logo}
+                alt="Learnify Logo"
+                className="w-6 h-6 object-contain"
+              />
             </div>
             <span className="font-semibold text-lg">Learnify</span>
           </div>
@@ -24,16 +33,17 @@ function Footer() {
           </p>
         </div>
 
-        {/* Quick Links */}
+        {/* Quick Links — now with real paths */}
         <div className="space-y-3">
           <h4 className="font-semibold text-sm">Quick Links</h4>
           <ul className="space-y-2">
             {quickLinks.map((link) => (
-              <li key={link}>
+              <li key={link.label}>
                 <Link
-                  to="#"
-                  className="text-sm text-[#B3CFE5] hover:text-white transition-colors">
-                  {link}
+                  to={link.path}
+                  className="text-sm text-[#B3CFE5] hover:text-white
+                    transition-colors">
+                  {link.label}
                 </Link>
               </li>
             ))}
@@ -46,7 +56,12 @@ function Footer() {
           <ul className="space-y-2 text-sm text-[#B3CFE5]">
             <li>No: 123/6, Ragammawatta, Kirindiwela</li>
             <li>076 555 6756</li>
-            <li>learnify@gmail.com</li>
+            <li>
+              <a href="mailto:learnify@gmail.com"
+                className="hover:text-white transition-colors">
+                learnify.official.edu@gmail.com
+              </a>
+            </li>
           </ul>
         </div>
 
