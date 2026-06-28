@@ -23,9 +23,11 @@ function formatDate(str) {
 
 export default function AdminProfilePage() {
   const navigate = useNavigate()
-  const [user, setUser]       = useState(null)
-  const [loading, setLoading] = useState(true)
-  const profileImage = localStorage.getItem(STORAGE_KEY)
+  const [user, setUser]               = useState(null)
+  const [loading, setLoading]         = useState(true)
+  const [profileImage, setProfileImage] = useState(() => {
+    try { return localStorage.getItem(STORAGE_KEY) } catch { return null }
+  })
 
   useEffect(() => {
     async function load() {

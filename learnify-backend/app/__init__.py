@@ -24,9 +24,10 @@ def create_app(config_name="development"):
     jwt.init_app(app)
     migrate.init_app(app, db)
     bcrypt.init_app(app)
+    allowed_origin = os.getenv("FRONTEND_URL", "*")
     cors.init_app(app,
-        resources={r"/api/*": {"origins": "*"}},
-        supports_credentials=True,
+        resources={r"/api/*": {"origins": allowed_origin}},
+        supports_credentials=allowed_origin != "*",
         allow_headers=["Content-Type", "Authorization"],
         methods=["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"]
     )
@@ -34,11 +35,14 @@ def create_app(config_name="development"):
     # ── Fix Google OAuth popup issue ──────────────────────
     @app.after_request
     def add_headers(response):
-        response.headers["Cross-Origin-Opener-Policy"]  = "unsafe-none"
+        response.headers["Cross-Origin-Opener-Policy"]   = "unsafe-none"
         response.headers["Cross-Origin-Embedder-Policy"] = "unsafe-none"
-        response.headers["Access-Control-Allow-Origin"]  = "*"
+        origin = os.getenv("FRONTEND_URL", "*")
+        response.headers["Access-Control-Allow-Origin"]  = origin
         response.headers["Access-Control-Allow-Headers"] = "Content-Type, Authorization"
         response.headers["Access-Control-Allow-Methods"] = "GET, POST, PUT, PATCH, DELETE, OPTIONS"
+        if origin != "*":
+            response.headers["Access-Control-Allow-Credentials"] = "true"
         return response
 
     # ── Serve uploaded files ──────────────────────────────

@@ -18,24 +18,27 @@ function PrivateRoute({ children, roles }) {
     return <Navigate to="/login" replace />
   }
 
-  // If roles are specified, check user's role from JWT
-  if (roles && roles.length > 0) {
-    try {
-      // Decode JWT payload
-      // JWT has 3 parts: header.payload.signature
-      // We decode the middle part (payload)
-      const payload  = JSON.parse(atob(token.split(".")[1]))
-      const userRole = payload.role
+  // Decode JWT and check expiry + role
+  try {
+    const payload  = JSON.parse(atob(token.split(".")[1]))
 
-      // Role not allowed — redirect to dashboard
-      if (!roles.includes(userRole)) {
-        return <Navigate to="/dashboard" replace />
-      }
-    } catch {
-      // Invalid token — redirect to login
+    // Reject expired tokens
+    if (payload.exp && payload.exp * 1000 < Date.now()) {
       localStorage.clear()
       return <Navigate to="/login" replace />
     }
+
+    // If roles are specified, check user's role
+    if (roles && roles.length > 0) {
+      const userRole = payload.role
+      if (!roles.includes(userRole)) {
+        return <Navigate to="/dashboard" replace />
+      }
+    }
+  } catch {
+    // Malformed token — redirect to login
+    localStorage.clear()
+    return <Navigate to="/login" replace />
   }
 
   // All checks passed — show the page
