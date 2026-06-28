@@ -94,9 +94,11 @@ def update_user_status(user_id):
     if err:
         return err
 
-    data   = request.get_json()
+    data   = request.get_json() or {}
     status = data.get("status")
 
+    if not status:
+        return error_response("MISSING_STATUS", "status is required", status=400)
     if status not in ("active", "pending", "inactive"):
         return error_response("INVALID_STATUS",
                               "status must be active, pending, or inactive",
