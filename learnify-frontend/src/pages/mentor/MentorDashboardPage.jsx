@@ -666,7 +666,7 @@ export default function MentorDashboardPage() {
             <div className="text-right">
               <span className="text-[10px] text-gray-400 uppercase tracking-wider font-semibold block">Completion Rate</span>
               <span className="font-heading text-lg font-bold text-green-600 mt-0.5 block">
-                94%
+                {stats.completion_rate || 100}%
               </span>
             </div>
           </div>
