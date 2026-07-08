@@ -110,10 +110,12 @@ def get_dashboard_stats():
         # 1. Fetch Profile
         profile_row = db.session.execute(
             text(
-                "SELECT id, title, institution, years_experience, rating, "
-                "total_students_helped, avg_response_time_min, accept_urgent, "
-                "email_notifications, auto_accept_returning, bio "
-                "FROM mentor_profiles WHERE user_id = :uid"
+                "SELECT mp.id, mp.title, mp.institution, mp.years_experience, mp.rating, "
+                "mp.total_students_helped, mp.avg_response_time_min, mp.accept_urgent, "
+                "mp.email_notifications, mp.auto_accept_returning, mp.bio, u.subject, u.availability_status "
+                "FROM mentor_profiles mp "
+                "JOIN users u ON mp.user_id = u.id "
+                "WHERE mp.user_id = :uid"
             ),
             {"uid": user_id}
         ).fetchone()
@@ -129,8 +131,10 @@ def get_dashboard_stats():
             "accept_urgent": bool(profile_row[7]),
             "email_notifications": bool(profile_row[8]),
             "auto_accept_returning": bool(profile_row[9]),
-            "bio": profile_row[10] or ""
+            "bio": profile_row[10] or "",
+            "subject": profile_row[11] or "Mathematics"
         }
+        availability_status = profile_row[12] or "Online"
 
         # 2. Fetch Availability Slots
         avail_rows = db.session.execute(
@@ -236,13 +240,7 @@ def get_dashboard_stats():
                     "bg": colors[idx % len(colors)]
                 })
         else:
-            # Fallback to standard subject listings if mentor has resolved no tickets yet
-            performance = [
-                {"name": "Calculus", "value": 85, "bg": "bg-blue-500"},
-                {"name": "Algebra", "value": 75, "bg": "bg-orange-500"},
-                {"name": "Statistics", "value": 70, "bg": "bg-amber-600"},
-                {"name": "Geometry", "value": 90, "bg": "bg-green-500"}
-            ]
+            performance = []
 
         # 6. Recent Notifications
         notif_rows = db.session.execute(
@@ -265,8 +263,45 @@ def get_dashboard_stats():
                 "time": n[4].strftime("%I:%M %p") if n[4] else "Just now"
             })
 
+        # 7. Reviews and metrics
+        feedback_rows = db.session.execute(
+            text(
+                "SELECT u.name, f.rating, f.comment, f.category "
+                "FROM feedback f "
+                "JOIN users u ON f.user_id = u.id "
+                "WHERE f.mentor_id = :uid "
+                "ORDER BY f.created_at DESC"
+            ),
+            {"uid": user_id}
+        ).fetchall()
+        
+        reviews = []
+        for r in feedback_rows[:5]:
+            reviews.append({
+                "name": r[0],
+                "rating": float(r[1]),
+                "comment": r[2]
+            })
+            
+        # No fallback mock reviews - let frontend handle empty state
+
+        rating_val = float(profile_row[4]) if profile_row[4] else 4.8
+        total_assigned = db.session.execute(
+            text("SELECT COUNT(*) FROM help_requests WHERE assigned_to = :uid"),
+            {"uid": user_id}
+        ).scalar() or 0
+        
+        comp_rate = round((resolved_count / total_assigned) * 100) if total_assigned > 0 else 100
+        
+        metrics_breakdown = [
+            { "name": "Clear explanations", "value": min(100, round(rating_val * 20)) },
+            { "name": "Patience & encouragement", "value": min(100, round((rating_val - 0.2) * 20)) },
+            { "name": "Lesson materials quality", "value": min(100, round((rating_val - 0.4) * 20)) }
+        ]
+
         return success_response(data={
             "profile": profile_data,
+            "status": availability_status,
             "settings": {
                 "availableDays": available_days,
                 "fromTime": from_time,
@@ -280,8 +315,11 @@ def get_dashboard_stats():
                 "open_requests": open_count,
                 "resolved": resolved_count,
                 "avg_response": profile_data["avg_response_time_min"],
-                "rating": profile_data["rating"],
-                "total_students": profile_data["total_students_helped"]
+                "rating": rating_val,
+                "total_students": profile_data["total_students_helped"],
+                "completion_rate": comp_rate,
+                "metrics_breakdown": metrics_breakdown,
+                "reviews": reviews
             },
             "sessions": sessions,
             "performance": performance,
@@ -314,6 +352,14 @@ def update_settings():
             return error_response("PROFILE_NOT_FOUND", "Mentor profile not found", status=404)
         
         profile_id = profile_row[0]
+
+        # Update user status if provided
+        if "status" in data:
+            db.session.execute(
+                text("UPDATE users SET availability_status = :status WHERE id = :uid"),
+                {"status": data["status"], "uid": user_id}
+            )
+            db.session.commit()
 
         # Update profile toggles
         db.session.execute(
@@ -392,7 +438,7 @@ def get_mentor_requests():
             text(
                 "SELECT hr.id, u.name AS student_name, s.name AS subject_name, "
                 "hr.topic_title, hr.description, hr.priority, hr.status, "
-                "hr.created_at, hr.assigned_to "
+                "hr.created_at, hr.assigned_to, hr.attachment_url "
                 "FROM help_requests hr "
                 "JOIN users u ON hr.student_id = u.id "
                 "JOIN subjects s ON hr.subject_id = s.id "
@@ -451,6 +497,7 @@ def get_mentor_requests():
                 "db_status": db_status,
                 "date": r[7].strftime("%b %d, %Y") if r[7] else "Just now",
                 "assigned_to": r[8],
+                "attachment_url": r[9],
                 "replies": replies
             })
 

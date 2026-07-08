@@ -12,6 +12,8 @@ import {
   trackDownload,
 } from "../api/resourcesApi"
 import { getSubjects } from "../api/subjectsApi"
+import { getStudentsList } from "../api/usersApi"
+import { shareResource } from "../api/resourcesApi"
 
 const typeOptions   = ["All Types", "PDF", "Video", "DOCX", "PPTX"]
 const sortOptions   = ["Newest First", "Oldest First", "A–Z", "Z–A"]
@@ -41,6 +43,21 @@ function UploadModal({ onClose, onUploadSuccess, subjects }) {
   const [uploading, setUploading]       = useState(false)
   const [progress, setProgress]         = useState("")
   const [error, setError]               = useState("")
+  const [isPublic, setIsPublic]         = useState(true)
+  const [students, setStudents]         = useState([])
+  const [selectedStudent, setSelectedStudent] = useState("")
+
+  useEffect(() => {
+    async function loadStudents() {
+      try {
+        const res = await getStudentsList()
+        setStudents(res.data || [])
+      } catch (err) {
+        console.error("Failed to load students list:", err)
+      }
+    }
+    loadStudents()
+  }, [])
 
   function handleFileSelect(e) {
     const file = e.target.files[0]
@@ -66,6 +83,10 @@ function UploadModal({ onClose, onUploadSuccess, subjects }) {
     if (!title.trim()) { setError("Please enter a title"); return }
     if (!subjectId)    { setError("Please select a subject"); return }
     if (!selectedFile) { setError("Please select a file"); return }
+    if (!isPublic && !selectedStudent) {
+      setError("Please select a student to share this private resource with.")
+      return
+    }
 
     try {
       setUploading(true)
@@ -82,6 +103,8 @@ function UploadModal({ onClose, onUploadSuccess, subjects }) {
         file_type_id: step1.data.file_type_id,
         file_url:     step1.data.file_url,
         file_size_mb: step1.data.file_size_mb,
+        is_public:    isPublic,
+        recipient_id: selectedStudent ? parseInt(selectedStudent) : null
       })
 
       onUploadSuccess()
@@ -138,6 +161,48 @@ function UploadModal({ onClose, onUploadSuccess, subjects }) {
               <option key={s.id} value={s.id}>{s.name}</option>
             ))}
           </select>
+        </div>
+
+        {/* Visibility toggle & target student share */}
+        <div className="space-y-3.5 p-3.5 bg-gray-50 border border-gray-100 rounded-2xl">
+          <div className="flex items-center justify-between">
+            <div>
+              <span className="font-body text-xs font-bold text-[#0A1931] block">Make Resource Public</span>
+              <span className="font-body text-[10px] text-gray-400">
+                {isPublic 
+                  ? "Visible in the general library for all students." 
+                  : "Private: Only you and the selected student can view it."}
+              </span>
+            </div>
+            <label className="relative inline-flex items-center cursor-pointer select-none">
+              <input 
+                type="checkbox" 
+                checked={isPublic} 
+                onChange={(e) => {
+                  setIsPublic(e.target.checked)
+                  if (e.target.checked) setSelectedStudent("")
+                }}
+                className="sr-only peer" 
+              />
+              <div className="w-8 h-4.5 bg-gray-200 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-3.5 after:w-3.5 after:transition-all peer-checked:bg-[#4A7FA7]"></div>
+            </label>
+          </div>
+
+          <div className="pt-2.5 border-t border-gray-200/60">
+            <label className="font-body text-xs text-gray-500 mb-1.5 block">
+              {isPublic ? "Share with Student Personally (Optional)" : "Target Student (Required) *"}
+            </label>
+            <select
+              value={selectedStudent}
+              onChange={(e) => setSelectedStudent(e.target.value)}
+              className="w-full border border-gray-200 rounded-lg px-3 py-2 font-body text-xs text-gray-700 focus:outline-none focus:border-[#4A7FA7] bg-white"
+            >
+              <option value="">-- Select Student --</option>
+              {students.map(s => (
+                <option key={s.id} value={s.id}>{s.name}</option>
+              ))}
+            </select>
+          </div>
         </div>
 
         {/* File Picker */}
@@ -526,9 +591,16 @@ function ResourcesPage() {
                            resource.file_type_name?.toLowerCase() === "pptx" ? "📊" :
                            resource.file_type_name?.toLowerCase() === "docx" ? "📝" : "📄"}
                         </div>
-                        <span className="font-body text-sm text-[#0A1931] font-medium">
-                          {resource.title}
-                        </span>
+                        <div className="flex flex-col">
+                          <span className="font-body text-sm text-[#0A1931] font-medium">
+                            {resource.title}
+                          </span>
+                          {resource.is_shared_personally && (
+                            <span className="font-body text-[9px] text-[#4A7FA7] font-bold mt-0.5 bg-blue-50 px-1.5 py-0.5 rounded border border-blue-100 w-fit">
+                              📎 Shared Personally
+                            </span>
+                          )}
+                        </div>
                       </div>
                     </td>
 

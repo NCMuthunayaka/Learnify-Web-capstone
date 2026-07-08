@@ -20,7 +20,7 @@ def get_help_requests():
                 "SELECT hr.id, hr.subject_id, s.name AS subject_name, "
                 "hr.topic_title, hr.description, hr.priority, hr.status, "
                 "hr.assigned_to, u.name AS helper_name, hr.created_at, "
-                "s.color_hex "
+                "s.color_hex, hr.attachment_url "
                 "FROM help_requests hr "
                 "JOIN subjects s ON hr.subject_id = s.id "
                 "LEFT JOIN users u ON hr.assigned_to = u.id "
@@ -68,6 +68,7 @@ def get_help_requests():
                 "helper_name": row[8] or "Unassigned",
                 "created_at": row[9].isoformat() if row[9] else None,
                 "color_hex": row[10],
+                "attachment_url": row[11],
                 "replies": replies,
                 # For compatibility with mock UI:
                 "subject": row[2],
@@ -104,6 +105,7 @@ def create_help_request():
     priority_input = data.get("priority", "medium").lower() # low, medium, high
     request_type = data.get("request_type", "mentor").lower() # mentor, peer
     assigned_to_id = data.get("assigned_to") # optional
+    attachment_url = data.get("attachment_url") # optional
 
     if priority_input not in ["low", "medium", "high"]:
         priority_input = "medium"
@@ -149,8 +151,8 @@ def create_help_request():
 
         db.session.execute(
             text(
-                "INSERT INTO help_requests (student_id, subject_id, assigned_to, request_type, topic_title, description, priority, status, created_at) "
-                "VALUES (:sid, :subid, :assigned, :req_type, :title, :desc, :priority, 'pending', :created)"
+                "INSERT INTO help_requests (student_id, subject_id, assigned_to, request_type, topic_title, description, priority, status, attachment_url, created_at) "
+                "VALUES (:sid, :subid, :assigned, :req_type, :title, :desc, :priority, 'pending', :attach_url, :created)"
             ),
             {
                 "sid": user_id,
@@ -160,6 +162,7 @@ def create_help_request():
                 "title": title,
                 "desc": description,
                 "priority": priority_input,
+                "attach_url": attachment_url,
                 "created": datetime.utcnow()
             }
         )
@@ -175,23 +178,39 @@ def create_help_request():
 @bp.route("/mentors", methods=["GET"])
 @jwt_required()
 def get_available_mentors():
+    user_id = int(get_jwt_identity())
     try:
         # Fetch mentors
-        rows = db.session.execute(
+        mentor_rows = db.session.execute(
             text(
-                "SELECT u.id, u.name, mp.rating, u.subject "
+                "SELECT u.id, u.name, mp.rating, u.subject, u.availability_status "
                 "FROM users u "
                 "LEFT JOIN mentor_profiles mp ON u.id = mp.user_id "
-                "WHERE u.role = 'mentor' AND u.status = 'active'"
+                "WHERE u.role = 'mentor' AND u.status = 'active' "
+                "AND (u.availability_status = 'Online' OR u.availability_status IS NULL)"
             )
         ).fetchall()
 
-        mentors = []
-        for row in rows:
+        # Fetch peers (other active students)
+        peer_rows = db.session.execute(
+            text(
+                "SELECT id, name, subject, availability_status "
+                "FROM users "
+                "WHERE role = 'student' AND status = 'active' AND id != :uid "
+                "AND (availability_status = 'Online' OR availability_status IS NULL)"
+            ),
+            {"uid": user_id}
+        ).fetchall()
+
+        helpers = []
+        
+        # 1. Add mentors
+        for row in mentor_rows:
             mentor_id = row[0]
             mentor_name = row[1]
             rating = float(row[2]) if row[2] else 4.8
             specialty = row[3] or "Academic"
+            avail_status = row[4] or "Online"
 
             # Fetch availability slots
             avail_rows = db.session.execute(
@@ -219,17 +238,37 @@ def get_available_mentors():
             else:
                 time_str = "Mon, Wed, Fri • 10:00 AM-06:00 PM"
 
-            mentors.append({
+            helpers.append({
                 "id": mentor_id,
                 "name": mentor_name,
                 "time": time_str,
                 "rating": rating,
                 "specialty": specialty,
+                "status": avail_status,
                 "initials": "".join([part[0] for part in mentor_name.split()]).upper()[:2],
                 # Frontend display string
                 "display": f"{mentor_name} ({specialty}) — {time_str}"
             })
 
-        return success_response(data={"mentors": mentors})
+        # 2. Add peers (students)
+        for row in peer_rows:
+            peer_id = row[0]
+            peer_name = row[1]
+            specialty = row[2] or "Student Peer"
+            avail_status = row[3] or "Online"
+            
+            helpers.append({
+                "id": peer_id,
+                "name": f"Peer: {peer_name}",
+                "time": "Online Now",
+                "rating": 5.0,
+                "specialty": specialty,
+                "status": avail_status,
+                "initials": "".join([part[0] for part in peer_name.split()]).upper()[:2],
+                # Frontend display string
+                "display": f"Peer: {peer_name} ({specialty}) — {avail_status}"
+            })
+
+        return success_response(data={"mentors": helpers})
     except Exception as e:
         return error_response("FETCH_MENTORS_ERROR", str(e), status=500)

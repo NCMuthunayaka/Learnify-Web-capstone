@@ -56,3 +56,9 @@ export async function trackDownload(id) {
     const response = await api.post(`/resources/${id}/download`)
     return response.data
 }
+
+// ── Share resource with student ───────────────────────────
+export async function shareResource(resourceId, studentId) {
+    const response = await api.post(`/resources/${resourceId}/share`, { student_id: studentId })
+    return response.data
+}

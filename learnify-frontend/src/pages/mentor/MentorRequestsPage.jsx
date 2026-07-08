@@ -13,7 +13,8 @@ import {
   acceptRequest,
   declineRequest,
   resolveRequest,
-  sendRequestReply
+  sendRequestReply,
+  getMentorStats
 } from "../../api/mentorApi"
 
 export default function MentorRequestsPage() {
@@ -23,6 +24,7 @@ export default function MentorRequestsPage() {
   const [statusFilter, setStatusFilter] = useState("All") // "All", "Pending", "In Progress", "Resolved"
   const [replyText, setReplyText] = useState("")
   const [loading, setLoading] = useState(true)
+  const [avgResponse, setAvgResponse] = useState(15)
 
   // Fetch help requests queue
   const loadRequests = async () => {
@@ -38,6 +40,14 @@ export default function MentorRequestsPage() {
     async function init() {
       setLoading(true)
       await loadRequests()
+      try {
+        const statsRes = await getMentorStats()
+        if (statsRes.data && statsRes.data.stats) {
+          setAvgResponse(statsRes.data.stats.avg_response)
+        }
+      } catch (err) {
+        console.error("Failed to load mentor stats:", err)
+      }
       setLoading(false)
     }
     init()
@@ -160,7 +170,7 @@ export default function MentorRequestsPage() {
         <div className="bg-white rounded-2xl p-5 border border-gray-100 shadow-sm flex items-center justify-between">
           <div>
             <p className="font-body text-[10px] text-gray-400 uppercase tracking-wider font-semibold">Avg Response Time</p>
-            <span className="font-heading text-3xl font-extrabold text-teal-600 block mt-1">18 mins</span>
+            <span className="font-heading text-3xl font-extrabold text-teal-600 block mt-1">{avgResponse} mins</span>
           </div>
           <div className="w-10 h-10 rounded-xl bg-teal-50 text-teal-500 flex items-center justify-center">
             <Clock size={20} />
@@ -301,10 +311,22 @@ export default function MentorRequestsPage() {
                   <h3 className="font-heading text-base font-extrabold text-[#0A1931] leading-snug">
                     {selectedRequest.title}
                   </h3>
-                  <div className="bg-gray-50 border border-gray-100 rounded-2xl p-4">
+                  <div className="bg-gray-50 border border-gray-100 rounded-2xl p-4 space-y-2">
                     <p className="font-body text-xs text-gray-600 leading-relaxed whitespace-pre-wrap">
                       {selectedRequest.description}
                     </p>
+                    {selectedRequest.attachment_url && (
+                      <div className="pt-2 border-t border-gray-200/60">
+                        <a
+                          href={`http://localhost:5000${selectedRequest.attachment_url}`}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="inline-flex items-center gap-1 font-body text-[11px] text-[#3b719f] hover:underline font-bold"
+                        >
+                          📎 View Student Attachment
+                        </a>
+                      </div>
+                    )}
                   </div>
                 </div>
 

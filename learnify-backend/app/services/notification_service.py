@@ -103,3 +103,22 @@ def create_notification(user_id, type_name, title, body, action_url=None):
     db.session.add(notification)
     db.session.commit()
     return notification
+
+
+def notify_new_resource(resource_title, subject_name, uploader_name):
+    """
+    Send a notification to all active students about a new public resource.
+    """
+    from app.models.user import User
+    try:
+        students = User.query.filter_by(role="student", status="active").all()
+        for s in students:
+            create_notification(
+                user_id    = s.id,
+                type_name  = "resource",
+                title      = f"New {subject_name} Material",
+                body       = f"{uploader_name} uploaded a new resource: {resource_title}",
+                action_url = "/resources"
+            )
+    except Exception as e:
+        print(f"Error triggering global new resource notification: {e}")

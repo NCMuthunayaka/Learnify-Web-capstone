@@ -1,11 +1,14 @@
-import { useState, useEffect } from "react"
-import { Paperclip, Send, Users, User, ArrowRight, CheckCircle2, AlertCircle, Clock, Sparkles, GraduationCap } from "lucide-react"
+import { useState, useEffect, useRef } from "react"
+import { Paperclip, Send, Users, User, ArrowRight, CheckCircle2, AlertCircle, Clock, Sparkles, GraduationCap, Search } from "lucide-react"
 import Avatar from "../components/common/Avatar"
 import Badge from "../components/common/Badge"
 import Button from "../components/common/Button"
+import Modal from "../components/common/Modal"
 import helpImg from "../assets/images/help.png"
 import profileImg from "../assets/icons/profile.png"
 import { getHelpRequests, createHelpRequest, getAvailableMentors } from "../api/helpRequestsApi"
+import { getSubjects } from "../api/subjectsApi"
+import { uploadFile } from "../api/resourcesApi"
 
 function HelpPage() {
   const [requests, setRequests] = useState([])
@@ -18,8 +21,25 @@ function HelpPage() {
   const [priority, setPriority] = useState("Medium") // "Low", "Medium", "High"
   const [successMsg, setSuccessMsg] = useState(false)
   const [loading, setLoading] = useState(true)
+  const [subjects, setSubjects] = useState([])
+  const [selectedFile, setSelectedFile] = useState(null)
+  const [uploadingFile, setUploadingFile] = useState(false)
+  const [showAllMentors, setShowAllMentors] = useState(false)
+  const [showAllRequests, setShowAllRequests] = useState(false)
+  const fileInputRef = useRef(null)
 
-  // Load help requests and available mentors on mount
+  const handleAttachClick = () => {
+    fileInputRef.current?.click()
+  }
+
+  const handleFileChange = (e) => {
+    const file = e.target.files[0]
+    if (file) {
+      setSelectedFile(file)
+    }
+  }
+
+  // Load help requests, available mentors, and subjects on mount
   useEffect(() => {
     async function loadData() {
       try {
@@ -32,6 +52,13 @@ function HelpPage() {
         setMentors(mentorList)
         if (mentorList.length > 0) {
           setSelectedMentor(mentorList[0].display)
+        }
+
+        const subRes = await getSubjects()
+        const subjectList = subRes.data || []
+        setSubjects(subjectList)
+        if (subjectList.length > 0) {
+          setSubject(subjectList[0].name)
         }
       } catch (err) {
         console.error("Failed to load help page data:", err)
@@ -55,17 +82,26 @@ function HelpPage() {
     const assignedToId = matchedMentor ? matchedMentor.id : null
 
     try {
+      setUploadingFile(true)
+      let attachmentUrl = null
+      if (selectedFile) {
+        const uploadRes = await uploadFile(selectedFile)
+        attachmentUrl = uploadRes.data.file_url
+      }
+
       await createHelpRequest({
         title: title,
         description: description,
         subject: subject,
         priority: priority.toLowerCase(),
         request_type: requestType.toLowerCase(),
-        assigned_to: assignedToId
+        assigned_to: assignedToId,
+        attachment_url: attachmentUrl
       })
 
       setTitle("")
       setDescription("")
+      setSelectedFile(null)
       setSuccessMsg(true)
       setTimeout(() => setSuccessMsg(false), 3000)
 
@@ -74,6 +110,8 @@ function HelpPage() {
       setRequests(reqRes.data.requests)
     } catch (err) {
       console.error("Failed to submit help request:", err)
+    } finally {
+      setUploadingFile(false)
     }
   }
 
@@ -129,16 +167,15 @@ function HelpPage() {
                     onChange={(e) => setSubject(e.target.value)}
                     className="w-full bg-[#f2f1ed] text-gray-800 font-body text-xs px-4 py-3 rounded-2xl border-none focus:outline-none focus:ring-1 focus:ring-[#3b719f]/30 transition-all cursor-pointer"
                   >
-                    <option>Mathematics</option>
-                    <option>Physics</option>
-                    <option>Chemistry</option>
-                    <option>Biology</option>
-                    <option>Data Structures</option>
-                    <option>Calculus III</option>
-                    <option>Database Systems</option>
-                    <option>Software Engineering</option>
-                    <option>Computer Networks</option>
-                    <option>Operating Systems</option>
+                    {subjects.length > 0 ? (
+                      subjects.map((sub) => (
+                        <option key={sub.id} value={sub.name}>
+                          {sub.name}
+                        </option>
+                      ))
+                    ) : (
+                      <option>Loading subjects...</option>
+                    )}
                   </select>
                 </div>
 
@@ -250,18 +287,40 @@ function HelpPage() {
 
                 {/* Actions Panel */}
                 <div className="w-full flex items-center justify-between pt-4">
-                  <button
-                    type="button"
-                    className="flex items-center gap-1.5 px-5 py-2.5 border border-[#3b719f] text-[#3b719f] bg-white hover:bg-[#e2edf7]/30 rounded-2xl font-body text-xs font-bold transition-all"
-                  >
-                    <Paperclip size={14} />
-                    Attach File
-                  </button>
+                  <div className="flex items-center gap-3">
+                    <button
+                      type="button"
+                      onClick={handleAttachClick}
+                      className="flex items-center gap-1.5 px-5 py-2.5 border border-[#3b719f] text-[#3b719f] bg-white hover:bg-[#e2edf7]/30 rounded-2xl font-body text-xs font-bold transition-all cursor-pointer"
+                    >
+                      <Paperclip size={14} />
+                      Attach File
+                    </button>
+                    {selectedFile && (
+                      <span className="font-body text-xs text-gray-500 flex items-center gap-1">
+                        📎 {selectedFile.name}
+                        <button
+                          type="button"
+                          onClick={() => setSelectedFile(null)}
+                          className="text-red-500 hover:text-red-700 font-bold ml-1 border-none bg-transparent cursor-pointer"
+                        >
+                          ×
+                        </button>
+                      </span>
+                    )}
+                    <input
+                      type="file"
+                      ref={fileInputRef}
+                      onChange={handleFileChange}
+                      className="hidden"
+                    />
+                  </div>
                   <button
                     type="submit"
-                    className="flex items-center gap-1.5 px-6 py-2.5 bg-[#3b719f] hover:bg-[#2e597c] text-white rounded-2xl font-body text-xs font-bold transition-all shadow-sm border-none cursor-pointer"
+                    disabled={uploadingFile}
+                    className="flex items-center gap-1.5 px-6 py-2.5 bg-[#3b719f] hover:bg-[#2e597c] disabled:bg-gray-400 text-white rounded-2xl font-body text-xs font-bold transition-all shadow-sm border-none cursor-pointer"
                   >
-                    Submit Request →
+                    {uploadingFile ? "Uploading..." : "Submit Request →"}
                   </button>
                 </div>
 
@@ -283,13 +342,24 @@ function HelpPage() {
 
       {/* ── Row 2: Available Mentors & Peers ── */}
       <div className="bg-white rounded-2xl p-5 shadow-sm border border-gray-100">
-        <div className="flex items-center gap-2 border-b border-gray-50 pb-3 mb-4">
-          <Users size={16} className="text-[#4A7FA7]" />
-          <h3 className="font-heading text-sm font-semibold text-[#0A1931]">Available Mentors & Peers</h3>
+        <div className="flex items-center justify-between border-b border-gray-50 pb-3 mb-4">
+          <div className="flex items-center gap-2">
+            <Users size={16} className="text-[#4A7FA7]" />
+            <h3 className="font-heading text-sm font-semibold text-[#0A1931]">Available Mentors & Peers</h3>
+          </div>
+          {mentors.length > 0 && (
+            <button 
+              onClick={() => setShowAllMentors(true)}
+              className="font-body text-xs font-semibold text-[#4A7FA7] hover:text-[#1A3D63] flex items-center gap-1 transition-colors border-none bg-transparent"
+            >
+              View All
+              <ArrowRight size={14} />
+            </button>
+          )}
         </div>
 
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-          {mentors.map((helper, idx) => (
+          {mentors.slice(0, 3).map((helper, idx) => (
             <div key={idx} className="flex items-center justify-between p-3.5 bg-[#F6FAFD] rounded-2xl border border-gray-50">
               <div className="flex items-center gap-3">
                 <Avatar 
@@ -303,7 +373,16 @@ function HelpPage() {
                   <p className="font-body text-[10px] text-gray-400 mt-0.5">{helper.time}</p>
                 </div>
               </div>
-              <span className="w-2 h-2 rounded-full bg-green-500 animate-pulse mr-1" />
+              <span 
+                className={`w-2 h-2 rounded-full mr-1 ${
+                  helper.status === "Busy"
+                    ? "bg-amber-500"
+                    : helper.status === "Away"
+                      ? "bg-red-500"
+                      : "bg-green-500 animate-pulse"
+                }`} 
+                title={helper.status || "Online"} 
+              />
             </div>
           ))}
         </div>
@@ -313,10 +392,15 @@ function HelpPage() {
       <div className="space-y-4">
         <div className="flex items-center justify-between">
           <h3 className="font-heading text-sm font-bold text-[#0A1931]">My Previous Requests</h3>
-          <button className="font-body text-xs font-semibold text-[#4A7FA7] hover:text-[#1A3D63] flex items-center gap-1 transition-colors border-none bg-transparent">
-            View All
-            <ArrowRight size={14} />
-          </button>
+          {requests.length > 0 && (
+            <button 
+              onClick={() => setShowAllRequests(true)}
+              className="font-body text-xs font-semibold text-[#4A7FA7] hover:text-[#1A3D63] flex items-center gap-1 transition-colors border-none bg-transparent"
+            >
+              View All
+              <ArrowRight size={14} />
+            </button>
+          )}
         </div>
 
         <div className="grid grid-cols-1 md:grid-cols-3 gap-5">
@@ -325,7 +409,7 @@ function HelpPage() {
           ) : requests.length === 0 ? (
             <div className="col-span-3 text-center py-8 text-gray-400 text-xs">No previous requests found.</div>
           ) : (
-            requests.map((req) => (
+            requests.slice(0, 3).map((req) => (
               <div key={req.id} className="bg-white rounded-2xl p-5 shadow-sm border border-gray-100 flex flex-col justify-between space-y-4">
                 
                 {/* Card Header badges */}
@@ -361,6 +445,18 @@ function HelpPage() {
                   <p className="font-body text-[11px] text-gray-500 leading-relaxed">
                     {req.desc}
                   </p>
+                  {req.attachment_url && (
+                    <div className="pt-1">
+                      <a
+                        href={`http://localhost:5000${req.attachment_url}`}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="inline-flex items-center gap-1 font-body text-[10px] text-[#3b719f] hover:underline font-bold"
+                      >
+                        📎 View Attachment
+                      </a>
+                    </div>
+                  )}
                 </div>
 
                 {/* Mentor Reply block */}
@@ -473,7 +569,200 @@ function HelpPage() {
 
       </div>
 
+      {showAllMentors && (
+        <AllMentorsModal 
+          mentors={mentors} 
+          onClose={() => setShowAllMentors(false)} 
+        />
+      )}
+
+      {showAllRequests && (
+        <AllRequestsModal 
+          requests={requests} 
+          onClose={() => setShowAllRequests(false)} 
+        />
+      )}
+
     </div>
+  )
+}
+
+// ── All Mentors Modal Component ────────────────────────────
+function AllMentorsModal({ mentors, onClose }) {
+  const [searchQuery, setSearchQuery] = useState("")
+  
+  const filtered = mentors.filter(m => 
+    m.name.toLowerCase().includes(searchQuery.toLowerCase()) || 
+    m.specialty.toLowerCase().includes(searchQuery.toLowerCase())
+  )
+
+  return (
+    <Modal isOpen={true} onClose={onClose} title="All Available Mentors & Peers" size="md">
+      <div className="space-y-4">
+        {/* Search Input */}
+        <div className="relative">
+          <Search size={15} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-300" />
+          <input 
+            type="text"
+            placeholder="Search available helpers by name or specialty..."
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+            className="w-full pl-9 pr-3 py-2.5 border border-gray-200 rounded-lg font-body text-sm text-gray-600 focus:outline-none focus:border-[#4A7FA7]"
+          />
+        </div>
+
+        <div className="max-h-[350px] overflow-y-auto space-y-2.5 pr-1">
+          {filtered.length === 0 ? (
+            <div className="text-center py-8 text-gray-400 text-xs">No helpers found matching your search.</div>
+          ) : (
+            filtered.map((helper, idx) => (
+              <div key={idx} className="flex items-center justify-between p-3.5 bg-[#F6FAFD] rounded-2xl border border-gray-50">
+                <div className="flex items-center gap-3">
+                  <Avatar 
+                    src={helper.name === "Peer: Nayana" ? profileImg : null} 
+                    name={helper.name} 
+                    color="primary" 
+                    size="sm" 
+                  />
+                  <div>
+                    <h4 className="font-heading text-xs font-bold text-[#0A1931]">{helper.name}</h4>
+                    <p className="font-body text-[10px] text-gray-400 mt-0.5">{helper.time}</p>
+                  </div>
+                </div>
+                <span 
+                  className={`w-2 h-2 rounded-full mr-1 ${
+                    helper.status === "Busy"
+                      ? "bg-amber-500"
+                      : helper.status === "Away"
+                        ? "bg-red-500"
+                        : "bg-green-500 animate-pulse"
+                  }`} 
+                  title={helper.status || "Online"} 
+                />
+              </div>
+            ))
+          )}
+        </div>
+
+        <div className="pt-2 border-t border-gray-100 flex justify-end">
+          <Button variant="secondary" onClick={onClose}>Close</Button>
+        </div>
+      </div>
+    </Modal>
+  )
+}
+
+// ── All Requests Modal Component ───────────────────────────
+function AllRequestsModal({ requests, onClose }) {
+  const [searchQuery, setSearchQuery] = useState("")
+
+  const filtered = requests.filter(r => 
+    r.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
+    r.desc.toLowerCase().includes(searchQuery.toLowerCase()) ||
+    r.subject.toLowerCase().includes(searchQuery.toLowerCase())
+  )
+
+  return (
+    <Modal isOpen={true} onClose={onClose} title="My Previous Requests" size="lg">
+      <div className="space-y-4">
+        {/* Search Input */}
+        <div className="relative">
+          <Search size={15} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-300" />
+          <input 
+            type="text"
+            placeholder="Search previous requests by title, subject, or description..."
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+            className="w-full pl-9 pr-3 py-2.5 border border-gray-200 rounded-lg font-body text-sm text-gray-600 focus:outline-none focus:border-[#4A7FA7]"
+          />
+        </div>
+
+        <div className="max-h-[400px] overflow-y-auto space-y-4 pr-1">
+          {filtered.length === 0 ? (
+            <div className="text-center py-8 text-gray-400 text-xs">No previous requests found matching your search.</div>
+          ) : (
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              {filtered.map((req) => (
+                <div key={req.id} className="bg-white rounded-2xl p-5 shadow-sm border border-gray-100 flex flex-col justify-between space-y-4">
+                  {/* Card Header badges */}
+                  <div className="flex items-center justify-between">
+                    <span className="px-2.5 py-0.5 bg-blue-50 text-[#1A3D63] border border-blue-100/50 rounded-full font-body text-[10px] font-bold">
+                      {req.subject}
+                    </span>
+                    
+                    {/* Status Badge */}
+                    <span className={`px-2 py-0.5 rounded-full font-body text-[10px] font-bold flex items-center gap-1.5 ${
+                      req.status === "Accepted" || req.status === "In progress" || req.status === "In Progress"
+                        ? "bg-blue-50 text-blue-600 border border-blue-100"
+                        : req.status === "Resolved"
+                          ? "bg-green-50 text-green-600 border border-green-100"
+                          : "bg-amber-50 text-amber-600 border border-amber-100"
+                    }`}>
+                      <span className={`w-1.5 h-1.5 rounded-full ${
+                        req.status === "Accepted" || req.status === "In progress" || req.status === "In Progress"
+                          ? "bg-blue-500"
+                          : req.status === "Resolved"
+                            ? "bg-green-500"
+                            : "bg-amber-500"
+                      }`} />
+                      {req.status}
+                    </span>
+                  </div>
+
+                  {/* Title & Description */}
+                  <div className="space-y-1">
+                    <h4 className="font-heading text-xs font-bold text-[#0A1931] leading-tight">
+                      {req.title}
+                    </h4>
+                    <p className="font-body text-[11px] text-gray-500 leading-relaxed">
+                      {req.desc}
+                    </p>
+                    {req.attachment_url && (
+                      <div className="pt-2">
+                        <a 
+                          href={req.attachment_url} 
+                          target="_blank" 
+                          rel="noopener noreferrer" 
+                          className="font-body text-[10px] text-[#4A7FA7] hover:underline flex items-center gap-1"
+                        >
+                          📎 View Attachment
+                        </a>
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Helper Profile Footer */}
+                  {req.helperName && (
+                    <div className="pt-3 border-t border-gray-50 flex items-center justify-between text-xs">
+                      <div className="flex items-center gap-2">
+                        <Avatar 
+                          src={null} 
+                          name={req.helperName} 
+                          color={req.helperColor || "primary"} 
+                          size="xs" 
+                        />
+                        <div className="min-w-0">
+                          <p className="font-heading font-semibold text-gray-600 truncate max-w-[100px] leading-tight">
+                            {req.helperName}
+                          </p>
+                          <p className="font-body text-[9px] text-gray-400">
+                            {req.helperRole}
+                          </p>
+                        </div>
+                      </div>
+                    </div>
+                  )}
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+
+        <div className="pt-2 border-t border-gray-100 flex justify-end">
+          <Button variant="secondary" onClick={onClose}>Close</Button>
+        </div>
+      </div>
+    </Modal>
   )
 }
 

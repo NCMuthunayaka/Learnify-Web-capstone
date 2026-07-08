@@ -128,3 +128,18 @@ def get_user(user_id):
         return error_response("NOT_FOUND", "User not found", status=404)
 
     return success_response(data=user.to_dict())
+
+
+@bp.route("/students", methods=["GET"])
+@jwt_required()
+def get_students_list():
+    claims = get_jwt()
+    role   = claims.get("role")
+    
+    if role not in ["mentor", "student", "admin"]:
+        return error_response("FORBIDDEN", "Access denied", status=403)
+        
+    students = User.query.filter_by(role="student", status="active").order_by(User.name.asc()).all()
+    student_list = [{"id": s.id, "name": s.name} for s in students]
+    
+    return success_response(data=student_list)
