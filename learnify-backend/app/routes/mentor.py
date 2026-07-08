@@ -112,7 +112,7 @@ def get_dashboard_stats():
             text(
                 "SELECT mp.id, mp.title, mp.institution, mp.years_experience, mp.rating, "
                 "mp.total_students_helped, mp.avg_response_time_min, mp.accept_urgent, "
-                "mp.email_notifications, mp.auto_accept_returning, mp.bio, u.subject "
+                "mp.email_notifications, mp.auto_accept_returning, mp.bio, u.subject, u.availability_status "
                 "FROM mentor_profiles mp "
                 "JOIN users u ON mp.user_id = u.id "
                 "WHERE mp.user_id = :uid"
@@ -134,6 +134,7 @@ def get_dashboard_stats():
             "bio": profile_row[10] or "",
             "subject": profile_row[11] or "Mathematics"
         }
+        availability_status = profile_row[12] or "Online"
 
         # 2. Fetch Availability Slots
         avail_rows = db.session.execute(
@@ -270,6 +271,7 @@ def get_dashboard_stats():
 
         return success_response(data={
             "profile": profile_data,
+            "status": availability_status,
             "settings": {
                 "availableDays": available_days,
                 "fromTime": from_time,
@@ -317,6 +319,14 @@ def update_settings():
             return error_response("PROFILE_NOT_FOUND", "Mentor profile not found", status=404)
         
         profile_id = profile_row[0]
+
+        # Update user status if provided
+        if "status" in data:
+            db.session.execute(
+                text("UPDATE users SET availability_status = :status WHERE id = :uid"),
+                {"status": data["status"], "uid": user_id}
+            )
+            db.session.commit()
 
         # Update profile toggles
         db.session.execute(

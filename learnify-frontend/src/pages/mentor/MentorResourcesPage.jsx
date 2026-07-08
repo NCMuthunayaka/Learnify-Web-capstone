@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react"
-import { Upload, Download, Eye, Trash2, Edit, X, Plus } from "lucide-react"
+import { Upload, Download, Eye, Trash2, Edit, X, Plus, Share2 } from "lucide-react"
 import Button from "../../components/common/Button"
 import Modal from "../../components/common/Modal"
 import Tooltip from "../../components/common/Tooltip"
@@ -12,8 +12,10 @@ import {
   uploadFile,
   deleteResource,
   updateResource,
+  shareResource,
 } from "../../api/resourcesApi"
 import { getSubjects } from "../../api/subjectsApi"
+import { getStudentsList } from "../../api/usersApi"
 
 const fileTypeIdMap = { "PDF": 1, "DOCX": 2, "PPTX": 3, "Video": 4 }
 const sortOptions   = ["Newest First", "Oldest First", "A–Z", "Z–A"]
@@ -44,6 +46,21 @@ function UploadModal({ onClose, onUploadSuccess, subjects }) {
   const [uploading, setUploading]   = useState(false)
   const [progress, setProgress]     = useState("")
   const [error, setError]           = useState("")
+  const [isPublic, setIsPublic]     = useState(true)
+  const [students, setStudents]     = useState([])
+  const [selectedStudent, setSelectedStudent] = useState("")
+
+  useEffect(() => {
+    async function loadStudents() {
+      try {
+        const res = await getStudentsList()
+        setStudents(res.data || [])
+      } catch (err) {
+        console.error("Failed to load students list:", err)
+      }
+    }
+    loadStudents()
+  }, [])
 
   function handleFileSelect(e) {
     const file = e.target.files[0]
@@ -83,6 +100,10 @@ function UploadModal({ onClose, onUploadSuccess, subjects }) {
       setError("Please select a file to upload")
       return
     }
+    if (!isPublic && !selectedStudent) {
+      setError("Please select a student to share this private resource with.")
+      return
+    }
 
     try {
       setUploading(true)
@@ -102,6 +123,8 @@ function UploadModal({ onClose, onUploadSuccess, subjects }) {
         file_type_id: fileTypeId,   // ✅ auto-detected from file
         file_url:     fileUrl,      // ✅ server path
         file_size_mb: fileSizeMb,   // ✅ auto-calculated
+        is_public:    isPublic,
+        recipient_id: selectedStudent ? parseInt(selectedStudent) : null
       })
 
       onUploadSuccess()
@@ -156,6 +179,48 @@ function UploadModal({ onClose, onUploadSuccess, subjects }) {
               <option key={s.id} value={s.id}>{s.name}</option>
             ))}
           </select>
+        </div>
+
+        {/* Visibility toggle & target student share */}
+        <div className="space-y-3.5 p-3.5 bg-gray-50 border border-gray-100 rounded-2xl">
+          <div className="flex items-center justify-between">
+            <div>
+              <span className="font-body text-xs font-bold text-[#0A1931] block">Make Resource Public</span>
+              <span className="font-body text-[10px] text-gray-400">
+                {isPublic 
+                  ? "Visible in the general library for all students." 
+                  : "Private: Only you and the selected student can view it."}
+              </span>
+            </div>
+            <label className="relative inline-flex items-center cursor-pointer select-none">
+              <input 
+                type="checkbox" 
+                checked={isPublic} 
+                onChange={(e) => {
+                  setIsPublic(e.target.checked)
+                  if (e.target.checked) setSelectedStudent("")
+                }}
+                className="sr-only peer" 
+              />
+              <div className="w-8 h-4.5 bg-gray-200 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-3.5 after:w-3.5 after:transition-all peer-checked:bg-[#4A7FA7]"></div>
+            </label>
+          </div>
+
+          <div className="pt-2.5 border-t border-gray-200/60">
+            <label className="font-body text-xs text-gray-500 mb-1.5 block">
+              {isPublic ? "Share with Student Personally (Optional)" : "Target Student (Required) *"}
+            </label>
+            <select
+              value={selectedStudent}
+              onChange={(e) => setSelectedStudent(e.target.value)}
+              className="w-full border border-gray-200 rounded-lg px-3 py-2 font-body text-xs text-gray-700 focus:outline-none focus:border-[#4A7FA7] bg-white"
+            >
+              <option value="">-- Select Student --</option>
+              {students.map(s => (
+                <option key={s.id} value={s.id}>{s.name}</option>
+              ))}
+            </select>
+          </div>
         </div>
 
         {/* File Upload — real file picker ✅ */}
@@ -270,6 +335,90 @@ function DeleteModal({ onClose, onConfirm, title }) {
   )
 }
 
+// ── Share Modal ────────────────────────────────────────────
+function ShareModal({ resource, onClose, onSuccess }) {
+  const [students, setStudents] = useState([])
+  const [selectedStudent, setSelectedStudent] = useState("")
+  const [sharing, setSharing] = useState(false)
+  const [error, setError] = useState("")
+  const [success, setSuccess] = useState(false)
+
+  useEffect(() => {
+    async function loadStudents() {
+      try {
+        const res = await getStudentsList()
+        setStudents(res.data || [])
+      } catch (err) {
+        console.error("Failed to load students list:", err)
+      }
+    }
+    loadStudents()
+  }, [])
+
+  async function handleShare() {
+    if (!selectedStudent) {
+      setError("Please select a student")
+      return
+    }
+
+    try {
+      setSharing(true)
+      setError("")
+      await shareResource(resource.id, parseInt(selectedStudent))
+      setSuccess(true)
+      setTimeout(() => {
+        onSuccess()
+      }, 1500)
+    } catch (err) {
+      setError(err.response?.data?.error?.message || "Failed to share resource")
+    } finally {
+      setSharing(false)
+    }
+  }
+
+  return (
+    <Modal isOpen={true} onClose={onClose} title="Share Study Material" size="sm">
+      <div className="space-y-4">
+        {error && <ErrorMessage message={error} onDismiss={() => setError("")} />}
+        {success && (
+          <div className="bg-green-50 text-green-700 p-3.5 rounded-2xl border border-green-100 text-xs font-semibold">
+            🎉 Resource shared successfully!
+          </div>
+        )}
+
+        <div>
+          <p className="font-body text-xs text-gray-500 mb-2">
+            Resource: <span className="font-bold text-[#0A1931]">{resource.title}</span>
+          </p>
+          <label className="font-body text-xs text-gray-500 mb-1.5 block">
+            Select Student *
+          </label>
+          <select
+            value={selectedStudent}
+            onChange={(e) => setSelectedStudent(e.target.value)}
+            disabled={success}
+            className="w-full border border-gray-200 rounded-lg px-3 py-2 font-body text-xs text-gray-700 focus:outline-none focus:border-[#4A7FA7] bg-white"
+          >
+            <option value="">-- Select Student --</option>
+            {students.map(s => (
+              <option key={s.id} value={s.id}>{s.name}</option>
+            ))}
+          </select>
+        </div>
+
+        <div className="flex gap-2.5 pt-2">
+          <Button variant="secondary" fullWidth onClick={onClose} disabled={sharing || success}>
+            Cancel
+          </Button>
+          <Button variant="primary" fullWidth onClick={handleShare} disabled={sharing || success}>
+            {sharing ? "Sharing..." : "Share"}
+          </Button>
+        </div>
+      </div>
+    </Modal>
+  )
+}
+
 // ── Main Component ─────────────────────────────────────────
 function MentorResourcesPage() {
   const [resources, setResources]     = useState([])
@@ -282,6 +431,7 @@ function MentorResourcesPage() {
   const [showUpload, setShowUpload]   = useState(false)
   const [editResource, setEditResource] = useState(null)
   const [deleteTarget, setDeleteTarget] = useState(null)
+  const [shareTarget, setShareTarget]   = useState(null)
   const [sortBy, setSortBy]           = useState("Newest First")
 
   // ── Fetch on load ──────────────────────────────────────
@@ -364,6 +514,16 @@ function MentorResourcesPage() {
           onClose={() => setDeleteTarget(null)}
           onConfirm={handleDelete}
           title={deleteTarget.title}
+        />
+      )}
+      {shareTarget && (
+        <ShareModal
+          resource={shareTarget}
+          onClose={() => setShareTarget(null)}
+          onSuccess={() => {
+            setShareTarget(null)
+            fetchAll()
+          }}
         />
       )}
 
@@ -521,6 +681,14 @@ function MentorResourcesPage() {
                             className="p-1.5 text-gray-400
                               hover:text-[#1A3D63] transition-colors">
                             <Eye size={15} />
+                          </button>
+                        </Tooltip>
+                        <Tooltip text="Share with Student">
+                          <button
+                            onClick={() => setShareTarget(resource)}
+                            className="p-1.5 text-gray-400
+                              hover:text-[#4A7FA7] transition-colors">
+                            <Share2 size={15} />
                           </button>
                         </Tooltip>
                         <Tooltip text="Edit">

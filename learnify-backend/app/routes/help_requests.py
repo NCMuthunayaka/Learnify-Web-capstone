@@ -183,19 +183,21 @@ def get_available_mentors():
         # Fetch mentors
         mentor_rows = db.session.execute(
             text(
-                "SELECT u.id, u.name, mp.rating, u.subject "
+                "SELECT u.id, u.name, mp.rating, u.subject, u.availability_status "
                 "FROM users u "
                 "LEFT JOIN mentor_profiles mp ON u.id = mp.user_id "
-                "WHERE u.role = 'mentor' AND u.status = 'active'"
+                "WHERE u.role = 'mentor' AND u.status = 'active' "
+                "AND (u.availability_status = 'Online' OR u.availability_status IS NULL)"
             )
         ).fetchall()
 
         # Fetch peers (other active students)
         peer_rows = db.session.execute(
             text(
-                "SELECT id, name, subject "
+                "SELECT id, name, subject, availability_status "
                 "FROM users "
-                "WHERE role = 'student' AND status = 'active' AND id != :uid"
+                "WHERE role = 'student' AND status = 'active' AND id != :uid "
+                "AND (availability_status = 'Online' OR availability_status IS NULL)"
             ),
             {"uid": user_id}
         ).fetchall()
@@ -208,6 +210,7 @@ def get_available_mentors():
             mentor_name = row[1]
             rating = float(row[2]) if row[2] else 4.8
             specialty = row[3] or "Academic"
+            avail_status = row[4] or "Online"
 
             # Fetch availability slots
             avail_rows = db.session.execute(
@@ -241,6 +244,7 @@ def get_available_mentors():
                 "time": time_str,
                 "rating": rating,
                 "specialty": specialty,
+                "status": avail_status,
                 "initials": "".join([part[0] for part in mentor_name.split()]).upper()[:2],
                 # Frontend display string
                 "display": f"{mentor_name} ({specialty}) — {time_str}"
@@ -251,6 +255,7 @@ def get_available_mentors():
             peer_id = row[0]
             peer_name = row[1]
             specialty = row[2] or "Student Peer"
+            avail_status = row[3] or "Online"
             
             helpers.append({
                 "id": peer_id,
@@ -258,9 +263,10 @@ def get_available_mentors():
                 "time": "Online Now",
                 "rating": 5.0,
                 "specialty": specialty,
+                "status": avail_status,
                 "initials": "".join([part[0] for part in peer_name.split()]).upper()[:2],
                 # Frontend display string
-                "display": f"Peer: {peer_name} ({specialty}) — Online"
+                "display": f"Peer: {peer_name} ({specialty}) — {avail_status}"
             })
 
         return success_response(data={"mentors": helpers})

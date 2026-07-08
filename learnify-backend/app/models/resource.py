@@ -15,6 +15,7 @@ class Resource(db.Model):
     file_size_mb   = db.Column(db.Float,       default=0)
     duration_sec   = db.Column(db.Integer,     nullable=True)
     status         = db.Column(db.Enum("draft", "published"), default="published")
+    is_public      = db.Column(db.Boolean,     default=True, nullable=False)
     view_count     = db.Column(db.Integer,     default=0)
     download_count = db.Column(db.Integer,     default=0)
     uploaded_at    = db.Column(db.DateTime,    default=datetime.utcnow)
@@ -35,6 +36,7 @@ class Resource(db.Model):
             "file_size_mb":   self.file_size_mb,
             "duration_sec":   self.duration_sec,
             "status":         self.status,
+            "is_public":      self.is_public,
             "view_count":     self.view_count,
             "download_count": self.download_count,
             "uploaded_at":    self.uploaded_at.isoformat(),

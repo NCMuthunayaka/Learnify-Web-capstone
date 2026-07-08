@@ -119,6 +119,7 @@ export default function MentorDashboardPage() {
       const saveSettings = async () => {
         try {
           await updateMentorSettings({
+            status,
             acceptUrgent,
             emailNotif,
             autoAccept,

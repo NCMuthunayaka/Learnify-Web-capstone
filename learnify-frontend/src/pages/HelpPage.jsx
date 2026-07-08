@@ -359,7 +359,16 @@ function HelpPage() {
                   <p className="font-body text-[10px] text-gray-400 mt-0.5">{helper.time}</p>
                 </div>
               </div>
-              <span className="w-2 h-2 rounded-full bg-green-500 animate-pulse mr-1" />
+              <span 
+                className={`w-2 h-2 rounded-full mr-1 ${
+                  helper.status === "Busy"
+                    ? "bg-amber-500"
+                    : helper.status === "Away"
+                      ? "bg-red-500"
+                      : "bg-green-500 animate-pulse"
+                }`} 
+                title={helper.status || "Online"} 
+              />
             </div>
           ))}
         </div>
