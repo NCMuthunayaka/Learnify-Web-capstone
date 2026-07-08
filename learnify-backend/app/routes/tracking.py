@@ -3,6 +3,7 @@ from flask_jwt_extended import jwt_required, get_jwt_identity
 from app.extensions import db
 from sqlalchemy import text
 from app.utils.response_utils import success_response, error_response
+from datetime import datetime
 
 bp = Blueprint("tracking", __name__)
 
@@ -22,6 +23,13 @@ def start_session(session_id):
         if not row or row[1] != user_id:
             return error_response("NOT_FOUND", "Study session not found", status=404)
             
+        # Log the start time
+        db.session.execute(
+            text("UPDATE study_sessions SET start_time = :start WHERE id = :sid"),
+            {"start": datetime.utcnow(), "sid": session_id}
+        )
+        db.session.commit()
+            
         return success_response(
             data={
                 "id": row[0],
@@ -31,6 +39,7 @@ def start_session(session_id):
             message="Study session started"
         )
     except Exception as e:
+        db.session.rollback()
         return error_response("START_FAILED", str(e), status=500)
 
 

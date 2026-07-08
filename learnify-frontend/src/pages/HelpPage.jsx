@@ -6,6 +6,7 @@ import Button from "../components/common/Button"
 import helpImg from "../assets/images/help.png"
 import profileImg from "../assets/icons/profile.png"
 import { getHelpRequests, createHelpRequest, getAvailableMentors } from "../api/helpRequestsApi"
+import { getSubjects } from "../api/subjectsApi"
 
 function HelpPage() {
   const [requests, setRequests] = useState([])
@@ -18,8 +19,9 @@ function HelpPage() {
   const [priority, setPriority] = useState("Medium") // "Low", "Medium", "High"
   const [successMsg, setSuccessMsg] = useState(false)
   const [loading, setLoading] = useState(true)
+  const [subjects, setSubjects] = useState([])
 
-  // Load help requests and available mentors on mount
+  // Load help requests, available mentors, and subjects on mount
   useEffect(() => {
     async function loadData() {
       try {
@@ -32,6 +34,13 @@ function HelpPage() {
         setMentors(mentorList)
         if (mentorList.length > 0) {
           setSelectedMentor(mentorList[0].display)
+        }
+
+        const subRes = await getSubjects()
+        const subjectList = subRes.data || []
+        setSubjects(subjectList)
+        if (subjectList.length > 0) {
+          setSubject(subjectList[0].name)
         }
       } catch (err) {
         console.error("Failed to load help page data:", err)
@@ -129,16 +138,15 @@ function HelpPage() {
                     onChange={(e) => setSubject(e.target.value)}
                     className="w-full bg-[#f2f1ed] text-gray-800 font-body text-xs px-4 py-3 rounded-2xl border-none focus:outline-none focus:ring-1 focus:ring-[#3b719f]/30 transition-all cursor-pointer"
                   >
-                    <option>Mathematics</option>
-                    <option>Physics</option>
-                    <option>Chemistry</option>
-                    <option>Biology</option>
-                    <option>Data Structures</option>
-                    <option>Calculus III</option>
-                    <option>Database Systems</option>
-                    <option>Software Engineering</option>
-                    <option>Computer Networks</option>
-                    <option>Operating Systems</option>
+                    {subjects.length > 0 ? (
+                      subjects.map((sub) => (
+                        <option key={sub.id} value={sub.name}>
+                          {sub.name}
+                        </option>
+                      ))
+                    ) : (
+                      <option>Loading subjects...</option>
+                    )}
                   </select>
                 </div>
 
