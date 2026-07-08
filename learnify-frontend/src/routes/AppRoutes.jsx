@@ -4,7 +4,11 @@ import LandingLayout from "../components/layout/LandingLayout"
 import PrivateRoute from "./PrivateRoute"
 
 // Pages
-import LandingPage from "../pages/LandingPage"    
+import FeaturesPage from "../pages/FeaturesPage"
+import HowItWorksPage from "../pages/HowItWorksPage"
+import AboutPage from "../pages/AboutPage"
+import ContactPage from "../pages/ContactPage"
+import LandingPage from "../pages/LandingPage"
 import DashboardPage from "../pages/DashboardPage"
 import ProgressPage from "../pages/ProgressPage"
 import SchedulerPage from "../pages/SchedulerPage"
@@ -57,8 +61,12 @@ function AppRoutes() {
         {/* ── Public Routes — no login needed ── */}
         <Route element={<LandingLayout />}>
           <Route path="/" element={<LandingPage />} />
+          <Route path="/features" element={<FeaturesPage />} />
+          <Route path="/how-it-works" element={<HowItWorksPage />} />
+          <Route path="/about" element={<AboutPage />} />
+          <Route path="/contact" element={<ContactPage />} />
         </Route>
-        <Route path="/login"    element={<LoginPage />} />
+        <Route path="/login" element={<LoginPage />} />
         <Route path="/register" element={<RegisterPage />} />
 
         {/* ── All logged in users ── */}

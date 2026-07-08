@@ -1,11 +1,16 @@
 import { useState, useEffect } from "react"
-import { Search, Upload, Download, Eye } from "lucide-react"
+import { Search, Upload, Download, Eye, FileText } from "lucide-react"
 import Button from "../components/common/Button"
 import Modal from "../components/common/Modal"
 import Tooltip from "../components/common/Tooltip"
 import LoadingSpinner from "../components/common/LoadingSpinner"
 import ErrorMessage from "../components/common/ErrorMessage"
-import { getResources, uploadResource, trackDownload } from "../api/resourcesApi"
+import {
+  getResources,
+  uploadResource,
+  uploadFile,
+  trackDownload,
+} from "../api/resourcesApi"
 import { getSubjects } from "../api/subjectsApi"
 
 const typeOptions   = ["All Types", "PDF", "Video", "DOCX", "PPTX"]
@@ -23,46 +28,74 @@ function TypeBadge({ type }) {
   return (
     <span className={`font-body text-xs px-2 py-0.5 rounded font-medium
       ${colors[type?.toLowerCase()] || "bg-gray-100 text-gray-600"}`}>
-      {type?.toUpperCase()}
+      {type?.toUpperCase() || "—"}
     </span>
   )
 }
 
-// ── Upload Modal ───────────────────────────────────────────
+// ── Upload Modal — real file picker ─────────────────────────
 function UploadModal({ onClose, onUploadSuccess, subjects }) {
-  const [uploadData, setUploadData] = useState({
-    title: "", subject_id: "", file_type_id: "",
-    file_url: "", file_size_mb: "",
-  })
-  const [uploading, setUploading] = useState(false)
-  const [error, setError]         = useState("")
+  const [title, setTitle]               = useState("")
+  const [subjectId, setSubjectId]       = useState("")
+  const [selectedFile, setSelectedFile] = useState(null)
+  const [uploading, setUploading]       = useState(false)
+  const [progress, setProgress]         = useState("")
+  const [error, setError]               = useState("")
 
-  function handleChange(e) {
-    setUploadData({ ...uploadData, [e.target.name]: e.target.value })
+  function handleFileSelect(e) {
+    const file = e.target.files[0]
+    if (!file) return
+
+    const ext     = file.name.split(".").pop().toLowerCase()
+    const allowed = ["pdf", "docx", "pptx", "mp4"]
+    if (!allowed.includes(ext)) {
+      setError("Only PDF, DOCX, PPTX, and MP4 files are allowed")
+      return
+    }
+    if (file.size > 100 * 1024 * 1024) {
+      setError("File size must be less than 100MB")
+      return
+    }
+    setSelectedFile(file)
+    setError("")
   }
 
   async function handleUpload() {
     setError("")
-    if (!uploadData.title || !uploadData.subject_id ||
-        !uploadData.file_type_id || !uploadData.file_url) {
-      setError("Please fill in all required fields")
-      return
-    }
+
+    if (!title.trim()) { setError("Please enter a title"); return }
+    if (!subjectId)    { setError("Please select a subject"); return }
+    if (!selectedFile) { setError("Please select a file"); return }
+
     try {
       setUploading(true)
+
+      // Step 1 — upload file
+      setProgress("Uploading file...")
+      const step1 = await uploadFile(selectedFile)
+
+      // Step 2 — save record
+      setProgress("Saving resource...")
       await uploadResource({
-        title:        uploadData.title,
-        subject_id:   parseInt(uploadData.subject_id),
-        file_type_id: parseInt(uploadData.file_type_id),
-        file_url:     uploadData.file_url,
-        file_size_mb: parseFloat(uploadData.file_size_mb) || 0,
+        title:        title,
+        subject_id:   parseInt(subjectId),
+        file_type_id: step1.data.file_type_id,
+        file_url:     step1.data.file_url,
+        file_size_mb: step1.data.file_size_mb,
       })
+
       onUploadSuccess()
       onClose()
+
     } catch (err) {
-      setError(err.response?.data?.error?.message || "Upload failed.")
+      setError(
+        err.response?.data?.error?.message ||
+        err.message ||
+        "Upload failed. Please try again."
+      )
     } finally {
       setUploading(false)
+      setProgress("")
     }
   }
 
@@ -72,61 +105,112 @@ function UploadModal({ onClose, onUploadSuccess, subjects }) {
 
         {error && <ErrorMessage message={error} onDismiss={() => setError("")} />}
 
+        {/* Title */}
         <div>
-          <label className="font-body text-xs text-gray-500 mb-1 block">Title *</label>
-          <input type="text" name="title" placeholder="Resource title"
-            value={uploadData.title} onChange={handleChange}
+          <label className="font-body text-xs text-gray-500 mb-1 block">
+            Title *
+          </label>
+          <input
+            type="text"
+            placeholder="Resource title"
+            value={title}
+            onChange={(e) => setTitle(e.target.value)}
             className="w-full border border-gray-200 rounded-lg px-3 py-2.5
-              font-body text-sm text-gray-700 focus:outline-none focus:border-[#4A7FA7]" />
+              font-body text-sm text-gray-700 focus:outline-none
+              focus:border-[#4A7FA7]"
+          />
         </div>
 
-        <div className="grid grid-cols-2 gap-3">
-          <div>
-            <label className="font-body text-xs text-gray-500 mb-1 block">Subject *</label>
-            <select name="subject_id" value={uploadData.subject_id}
-              onChange={handleChange}
-              className="w-full border border-gray-200 rounded-lg px-3 py-2.5
-                font-body text-sm text-gray-700 focus:outline-none focus:border-[#4A7FA7]">
-              <option value="">Select subject</option>
-              {/* Subjects fetched from DB — not hardcoded */}
-              {subjects.map(s => (
-                <option key={s.id} value={s.id}>{s.name}</option>
-              ))}
-            </select>
+        {/* Subject */}
+        <div>
+          <label className="font-body text-xs text-gray-500 mb-1 block">
+            Subject *
+          </label>
+          <select
+            value={subjectId}
+            onChange={(e) => setSubjectId(e.target.value)}
+            className="w-full border border-gray-200 rounded-lg px-3 py-2.5
+              font-body text-sm text-gray-700 focus:outline-none
+              focus:border-[#4A7FA7]"
+          >
+            <option value="">Select subject</option>
+            {subjects.map(s => (
+              <option key={s.id} value={s.id}>{s.name}</option>
+            ))}
+          </select>
+        </div>
+
+        {/* File Picker */}
+        <div>
+          <label className="font-body text-xs text-gray-500 mb-1 block">
+            File * — PDF, DOCX, PPTX, MP4 (max 100MB)
+          </label>
+          <div
+            onClick={() => document.getElementById("resource-file-input").click()}
+            className={`border-2 border-dashed rounded-lg p-6 text-center
+              cursor-pointer transition-colors
+              ${selectedFile
+                ? "border-[#4A7FA7] bg-blue-50"
+                : "border-gray-200 hover:border-[#4A7FA7] hover:bg-gray-50"
+              }`}
+          >
+            {selectedFile ? (
+              <div className="space-y-1">
+                <p className="text-2xl">
+                  {selectedFile.name.endsWith(".pdf")  ? "📄" :
+                   selectedFile.name.endsWith(".mp4")  ? "🎬" :
+                   selectedFile.name.endsWith(".pptx") ? "📊" : "📝"}
+                </p>
+                <p className="font-body text-sm font-medium text-[#1A3D63]">
+                  {selectedFile.name}
+                </p>
+                <p className="font-body text-xs text-gray-400">
+                  {(selectedFile.size / (1024 * 1024)).toFixed(2)} MB ·{" "}
+                  {selectedFile.name.split(".").pop().toUpperCase()}
+                </p>
+                <button
+                  onClick={(e) => { e.stopPropagation(); setSelectedFile(null) }}
+                  className="font-body text-xs text-red-400 hover:text-red-600
+                    transition-colors mt-1"
+                >
+                  ✕ Remove file
+                </button>
+              </div>
+            ) : (
+              <div className="space-y-2">
+                <p className="text-3xl">📁</p>
+                <p className="font-body text-sm text-gray-500 font-medium">
+                  Click to select a file
+                </p>
+                <p className="font-body text-xs text-gray-300">
+                  PDF, DOCX, PPTX, MP4
+                </p>
+              </div>
+            )}
           </div>
-          <div>
-            <label className="font-body text-xs text-gray-500 mb-1 block">File Type *</label>
-            <select name="file_type_id" value={uploadData.file_type_id}
-              onChange={handleChange}
-              className="w-full border border-gray-200 rounded-lg px-3 py-2.5
-                font-body text-sm text-gray-700 focus:outline-none focus:border-[#4A7FA7]">
-              <option value="">Select type</option>
-              {Object.entries(fileTypeIdMap).map(([name, id]) => (
-                <option key={id} value={id}>{name}</option>
-              ))}
-            </select>
+          <input
+            id="resource-file-input"
+            type="file"
+            accept=".pdf,.docx,.pptx,.mp4"
+            onChange={handleFileSelect}
+            className="hidden"
+          />
+        </div>
+
+        {/* Progress */}
+        {progress && (
+          <div className="flex items-center gap-2 bg-blue-50 rounded-lg px-4 py-3">
+            <div className="w-4 h-4 border-2 border-[#4A7FA7]
+              border-t-transparent rounded-full animate-spin flex-shrink-0" />
+            <p className="font-body text-xs text-[#1A3D63]">{progress}</p>
           </div>
-        </div>
+        )}
 
-        <div>
-          <label className="font-body text-xs text-gray-500 mb-1 block">File URL *</label>
-          <input type="text" name="file_url"
-            placeholder="https://example.com/file.pdf"
-            value={uploadData.file_url} onChange={handleChange}
-            className="w-full border border-gray-200 rounded-lg px-3 py-2.5
-              font-body text-sm text-gray-700 focus:outline-none focus:border-[#4A7FA7]" />
-        </div>
-
-        <div>
-          <label className="font-body text-xs text-gray-500 mb-1 block">File Size (MB)</label>
-          <input type="number" name="file_size_mb" placeholder="3.2"
-            value={uploadData.file_size_mb} onChange={handleChange}
-            className="w-full border border-gray-200 rounded-lg px-3 py-2.5
-              font-body text-sm text-gray-700 focus:outline-none focus:border-[#4A7FA7]" />
-        </div>
-
+        {/* Buttons */}
         <div className="flex gap-3 pt-2">
-          <Button variant="secondary" fullWidth onClick={onClose} disabled={uploading}>Cancel</Button>
+          <Button variant="secondary" fullWidth onClick={onClose} disabled={uploading}>
+            Cancel
+          </Button>
           <Button variant="primary" fullWidth onClick={handleUpload} disabled={uploading}>
             {uploading ? "Uploading..." : "Upload"}
           </Button>
@@ -140,12 +224,14 @@ function UploadModal({ onClose, onUploadSuccess, subjects }) {
 // ── Main Component ─────────────────────────────────────────
 function ResourcesPage() {
   const [resources, setResources]             = useState([])
-  const [subjects, setSubjects]               = useState([])  // 👈 from DB
+  const [subjects, setSubjects]               = useState([])
+  const [subjectsLoaded, setSubjectsLoaded]   = useState(false)
   const [loading, setLoading]                 = useState(true)
+  const [searching, setSearching]             = useState(false) // subtle re-fetch indicator
   const [error, setError]                     = useState("")
   const [search, setSearch]                   = useState("")
   const [selectedType, setSelectedType]       = useState("All Types")
-  const [selectedSubject, setSelectedSubject] = useState(null) // null = All
+  const [selectedSubject, setSelectedSubject] = useState(null)
   const [sortBy, setSortBy]                   = useState("Newest First")
   const [showUpload, setShowUpload]           = useState(false)
   const [currentPage, setCurrentPage]         = useState(1)
@@ -159,15 +245,17 @@ function ResourcesPage() {
         setSubjects(response.data || [])
       } catch (err) {
         console.error("Failed to load subjects:", err)
+      } finally {
+        setSubjectsLoaded(true)
       }
     }
     fetchSubjects()
   }, [])
 
   // ── Fetch resources ────────────────────────────────────
-  async function fetchResources() {
+  async function fetchResources({ isInitial = false } = {}) {
     try {
-      setLoading(true)
+      isInitial ? setLoading(true) : setSearching(true)
       setError("")
 
       const filters = {}
@@ -178,15 +266,49 @@ function ResourcesPage() {
       }
 
       const response = await getResources(filters)
-      setResources(response.data || [])
+      let data = response.data || []
+
+      // ── Apply sorting ─────────────────────────────────
+      data = sortResources(data, sortBy)
+
+      setResources(data)
+      setCurrentPage(1) // reset to page 1 whenever filters change
+
     } catch (err) {
       setError("Failed to load resources. Please try again.")
     } finally {
       setLoading(false)
+      setSearching(false)
     }
   }
 
-  useEffect(() => { fetchResources() }, [])
+  useEffect(() => {
+    fetchResources({ isInitial: true })
+  }, [])
+
+  // ── Re-fetch when subject/type/sort change ─────────────
+  useEffect(() => {
+    if (!subjectsLoaded) return // skip first mount race
+    fetchResources()
+  }, [selectedSubject, selectedType, sortBy])
+
+  // ── Sort helper ─────────────────────────────────────────
+  function sortResources(data, sortKey) {
+    const sorted = [...data]
+    switch (sortKey) {
+      case "Oldest First":
+        return sorted.sort((a, b) =>
+          new Date(a.uploaded_at) - new Date(b.uploaded_at))
+      case "A–Z":
+        return sorted.sort((a, b) => a.title.localeCompare(b.title))
+      case "Z–A":
+        return sorted.sort((a, b) => b.title.localeCompare(a.title))
+      case "Newest First":
+      default:
+        return sorted.sort((a, b) =>
+          new Date(b.uploaded_at) - new Date(a.uploaded_at))
+    }
+  }
 
   // ── Handle download ────────────────────────────────────
   async function handleDownload(resource) {
@@ -195,6 +317,7 @@ function ResourcesPage() {
       window.open(response.data.file_url, "_blank")
     } catch (err) {
       console.error("Download failed:", err)
+      setError("Failed to download. Please try again.")
     }
   }
 
@@ -209,14 +332,18 @@ function ResourcesPage() {
   const startIndex  = (currentPage - 1) * itemsPerPage
   const currentData = resources.slice(startIndex, startIndex + itemsPerPage)
 
+  // ── Determine empty state type ─────────────────────────
+  const hasActiveFilters =
+    search || selectedSubject || selectedType !== "All Types"
+
   return (
     <div className="space-y-5">
 
       {showUpload && (
         <UploadModal
           onClose={() => setShowUpload(false)}
-          onUploadSuccess={fetchResources}
-          subjects={subjects}  // 👈 pass DB subjects to modal
+          onUploadSuccess={() => fetchResources()}
+          subjects={subjects}
         />
       )}
 
@@ -236,7 +363,7 @@ function ResourcesPage() {
       </div>
 
       {error && (
-        <ErrorMessage message={error} onRetry={fetchResources}
+        <ErrorMessage message={error} onRetry={() => fetchResources({ isInitial: true })}
           onDismiss={() => setError("")} />
       )}
 
@@ -254,21 +381,28 @@ function ResourcesPage() {
               className="w-full pl-9 pr-3 py-2.5 border border-gray-200
                 rounded-lg font-body text-sm text-gray-600
                 focus:outline-none focus:border-[#4A7FA7]" />
+            {/* Subtle searching indicator inside input */}
+            {searching && (
+              <div className="absolute right-3 top-1/2 -translate-y-1/2
+                w-3.5 h-3.5 border-2 border-[#4A7FA7]
+                border-t-transparent rounded-full animate-spin" />
+            )}
           </div>
           <select value={selectedType} onChange={(e) => setSelectedType(e.target.value)}
             className="border border-gray-200 rounded-lg px-3 py-2.5
               font-body text-sm text-gray-600 focus:outline-none focus:border-[#4A7FA7]">
             {typeOptions.map(t => <option key={t}>{t}</option>)}
           </select>
-          <Button variant="primary" onClick={fetchResources}>Search</Button>
+          <Button variant="primary" onClick={() => fetchResources()}>
+            Search
+          </Button>
         </div>
 
         {/* Subject Tabs — from DB */}
         <div className="flex flex-wrap gap-2 mt-3">
 
-          {/* All Subjects button */}
           <button
-            onClick={() => { setSelectedSubject(null); setCurrentPage(1) }}
+            onClick={() => setSelectedSubject(null)}
             className={`font-body text-xs px-3 py-1.5 rounded-full
               transition-colors duration-200
               ${!selectedSubject
@@ -281,24 +415,20 @@ function ResourcesPage() {
             All Subjects
           </button>
 
-          {/* Dynamic subject tabs from DB */}
           {subjects.map((subject) => (
             <button
               key={subject.id}
-              onClick={() => {
-                setSelectedSubject(subject.id)
-                setCurrentPage(1)
-              }}
+              onClick={() => setSelectedSubject(subject.id)}
               className={`font-body text-xs px-3 py-1.5 rounded-full
                 transition-colors duration-200
                 ${selectedSubject === subject.id
                   ? "text-white"
                   : "bg-gray-100 text-gray-500 hover:bg-gray-200"}`}
               style={selectedSubject === subject.id
-                ? { backgroundColor: subject.color_hex }  // 👈 color from DB
+                ? { backgroundColor: subject.color_hex }
                 : {}}
             >
-              {subject.name}  {/* 👈 name from DB */}
+              {subject.name}
             </button>
           ))}
         </div>
@@ -332,13 +462,41 @@ function ResourcesPage() {
             <LoadingSpinner size="lg" label="Loading resources..." />
           </div>
         ) : resources.length === 0 ? (
-          <div className="text-center py-16">
-            <p className="font-heading text-sm font-semibold text-gray-300">
-              No resources found
-            </p>
-            <p className="font-body text-xs text-gray-200 mt-1">
-              Try a different search or filter
-            </p>
+          <div className="text-center py-16 space-y-2">
+            <div className="w-12 h-12 rounded-full bg-gray-100 flex
+              items-center justify-center mx-auto">
+              <FileText size={20} className="text-gray-300" />
+            </div>
+            {hasActiveFilters ? (
+              <>
+                <p className="font-heading text-sm font-semibold text-gray-300">
+                  No resources found
+                </p>
+                <p className="font-body text-xs text-gray-200 mt-1">
+                  Try a different search or clear filters
+                </p>
+                <button
+                  onClick={() => {
+                    setSearch("")
+                    setSelectedSubject(null)
+                    setSelectedType("All Types")
+                  }}
+                  className="font-body text-xs text-[#4A7FA7]
+                    hover:text-[#1A3D63] transition-colors font-medium mt-2"
+                >
+                  Clear all filters
+                </button>
+              </>
+            ) : (
+              <>
+                <p className="font-heading text-sm font-semibold text-gray-300">
+                  No study materials yet
+                </p>
+                <p className="font-body text-xs text-gray-200 mt-1">
+                  Your mentors haven't uploaded any resources yet
+                </p>
+              </>
+            )}
           </div>
         ) : (
           <div className="overflow-x-auto">
@@ -364,7 +522,9 @@ function ResourcesPage() {
                       <div className="flex items-center gap-2">
                         <div className="w-7 h-7 bg-gray-100 rounded
                           flex items-center justify-center flex-shrink-0">
-                          📄
+                          {resource.file_type_name?.toLowerCase() === "video" ? "🎬" :
+                           resource.file_type_name?.toLowerCase() === "pptx" ? "📊" :
+                           resource.file_type_name?.toLowerCase() === "docx" ? "📝" : "📄"}
                         </div>
                         <span className="font-body text-sm text-[#0A1931] font-medium">
                           {resource.title}
@@ -372,13 +532,12 @@ function ResourcesPage() {
                       </div>
                     </td>
 
-                    {/* Subject — colored from DB */}
                     <td className="px-5 py-3.5">
                       <span
                         className="font-body text-xs font-semibold"
                         style={{ color: getSubjectColor(resource.subject_name) }}
                       >
-                        {resource.subject_name}
+                        {resource.subject_name || "—"}
                       </span>
                     </td>
 
@@ -394,16 +553,20 @@ function ResourcesPage() {
 
                     <td className="px-5 py-3.5">
                       <span className="font-body text-xs text-gray-400">
-                        {new Date(resource.uploaded_at)
-                          .toLocaleDateString("en-GB", {
-                            day: "2-digit", month: "short", year: "numeric"
-                          })}
+                        {resource.uploaded_at
+                          ? new Date(resource.uploaded_at)
+                              .toLocaleDateString("en-GB", {
+                                day: "2-digit", month: "short", year: "numeric"
+                              })
+                          : "—"}
                       </span>
                     </td>
 
                     <td className="px-5 py-3.5">
                       <span className="font-body text-xs text-gray-400">
-                        {resource.file_size_mb ? `${resource.file_size_mb} MB` : "—"}
+                        {resource.file_size_mb
+                          ? `${resource.file_size_mb} MB`
+                          : "—"}
                       </span>
                     </td>
 
@@ -474,4 +637,4 @@ function ResourcesPage() {
   )
 }
 
-export default ResourcesPage
+export default ResourcesPage  
