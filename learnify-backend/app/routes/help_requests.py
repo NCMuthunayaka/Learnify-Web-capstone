@@ -175,9 +175,10 @@ def create_help_request():
 @bp.route("/mentors", methods=["GET"])
 @jwt_required()
 def get_available_mentors():
+    user_id = int(get_jwt_identity())
     try:
         # Fetch mentors
-        rows = db.session.execute(
+        mentor_rows = db.session.execute(
             text(
                 "SELECT u.id, u.name, mp.rating, u.subject "
                 "FROM users u "
@@ -186,8 +187,20 @@ def get_available_mentors():
             )
         ).fetchall()
 
-        mentors = []
-        for row in rows:
+        # Fetch peers (other active students)
+        peer_rows = db.session.execute(
+            text(
+                "SELECT id, name, subject "
+                "FROM users "
+                "WHERE role = 'student' AND status = 'active' AND id != :uid"
+            ),
+            {"uid": user_id}
+        ).fetchall()
+
+        helpers = []
+        
+        # 1. Add mentors
+        for row in mentor_rows:
             mentor_id = row[0]
             mentor_name = row[1]
             rating = float(row[2]) if row[2] else 4.8
@@ -219,7 +232,7 @@ def get_available_mentors():
             else:
                 time_str = "Mon, Wed, Fri • 10:00 AM-06:00 PM"
 
-            mentors.append({
+            helpers.append({
                 "id": mentor_id,
                 "name": mentor_name,
                 "time": time_str,
@@ -230,6 +243,23 @@ def get_available_mentors():
                 "display": f"{mentor_name} ({specialty}) — {time_str}"
             })
 
-        return success_response(data={"mentors": mentors})
+        # 2. Add peers (students)
+        for row in peer_rows:
+            peer_id = row[0]
+            peer_name = row[1]
+            specialty = row[2] or "Student Peer"
+            
+            helpers.append({
+                "id": peer_id,
+                "name": f"Peer: {peer_name}",
+                "time": "Online Now",
+                "rating": 5.0,
+                "specialty": specialty,
+                "initials": "".join([part[0] for part in peer_name.split()]).upper()[:2],
+                # Frontend display string
+                "display": f"Peer: {peer_name} ({specialty}) — Online"
+            })
+
+        return success_response(data={"mentors": helpers})
     except Exception as e:
         return error_response("FETCH_MENTORS_ERROR", str(e), status=500)
