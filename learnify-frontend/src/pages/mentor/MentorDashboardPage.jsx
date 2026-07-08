@@ -51,7 +51,17 @@ export default function MentorDashboardPage() {
     resolved: 0,
     avg_response: 18,
     rating: 4.8,
-    total_students: 142
+    total_students: 142,
+    completion_rate: 94,
+    metrics_breakdown: [
+      { name: "Clear explanations", value: 96 },
+      { name: "Patience & encouragement", value: 92 },
+      { name: "Lesson materials quality", value: 88 }
+    ],
+    reviews: [
+      { name: "Rashmika", rating: 5.0, comment: "Explained the topics perfectly! I could understand the concepts easily." },
+      { name: "Ashani We.", rating: 5.0, comment: "Highly patient. Walked me through step-by-step calculations." }
+    ]
   })
   const [sessions, setSessions] = useState([])
   const [performance, setPerformance] = useState([])
@@ -1034,18 +1044,14 @@ export default function MentorDashboardPage() {
               </div>
               <div className="bg-slate-50 p-4 rounded-xl border border-slate-100 shadow-sm">
                 <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">Completion Rate</span>
-                <span className="font-heading text-2xl font-extrabold text-[#0A1931] mt-1 block">94%</span>
+                <span className="font-heading text-2xl font-extrabold text-[#0A1931] mt-1 block">{stats.completion_rate || 100}%</span>
               </div>
             </div>
 
             <div className="space-y-4 border-t border-slate-100 pt-4">
               <h4 className="font-heading text-xs font-bold text-slate-500 uppercase tracking-wider">Teaching Metrics Breakdown</h4>
               <div className="space-y-3.5">
-                {[
-                  { name: "Clear explanations", value: 96 },
-                  { name: "Patience & encouragement", value: 92 },
-                  { name: "Lesson materials quality", value: 88 }
-                ].map((item, i) => (
+                {(stats.metrics_breakdown || []).map((item, i) => (
                   <div key={i} className="space-y-1">
                     <div className="flex justify-between text-xs font-semibold text-slate-700">
                       <span>{item.name}</span>
@@ -1062,20 +1068,15 @@ export default function MentorDashboardPage() {
             <div className="space-y-3 border-t border-slate-100 pt-4">
               <h4 className="font-heading text-xs font-bold text-slate-500 uppercase tracking-wider">Recent Reviews</h4>
               <div className="space-y-2">
-                <div className="p-3 bg-slate-50 border border-slate-100 rounded-xl">
-                  <div className="flex justify-between items-center text-xs">
-                    <span className="font-bold text-slate-700">Rashmika</span>
-                    <span className="text-amber-500 font-bold">5.0★</span>
+                {(stats.reviews || []).map((rev, i) => (
+                  <div key={i} className="p-3 bg-slate-50 border border-slate-100 rounded-xl">
+                    <div className="flex justify-between items-center text-xs">
+                      <span className="font-bold text-slate-700">{rev.name}</span>
+                      <span className="text-amber-500 font-bold">{parseFloat(rev.rating).toFixed(1)}★</span>
+                    </div>
+                    <p className="font-body text-xs text-slate-500 mt-1 italic">"{rev.comment}"</p>
                   </div>
-                  <p className="font-body text-xs text-slate-500 mt-1 italic">"Davis explained integration by parts perfectly! I could understand the formula easily."</p>
-                </div>
-                <div className="p-3 bg-slate-50 border border-slate-100 rounded-xl">
-                  <div className="flex justify-between items-center text-xs">
-                    <span className="font-bold text-slate-700">Ashani We.</span>
-                    <span className="text-amber-500 font-bold">5.0★</span>
-                  </div>
-                  <p className="font-body text-xs text-slate-500 mt-1 italic">"Highly patient. Walked me through step-by-step calculus calculations."</p>
-                </div>
+                ))}
               </div>
             </div>
           </div>
