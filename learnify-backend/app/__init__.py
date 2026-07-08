@@ -1,6 +1,6 @@
 from flask import Flask, send_from_directory
 from app.extensions import db, jwt, migrate, bcrypt, cors
-from app.routes import auth, chat, scheduler, tracking, feedback, resources, admin, notifications, users, subjects, dashboard, progress
+from app.routes import auth, chat, scheduler, tracking, feedback, resources, admin, notifications, users, subjects, dashboard, progress, help_requests, mentor
 from app.config import config
 from app.middleware.error_handler import register_error_handlers
 from app.models.user              import User
@@ -61,6 +61,8 @@ def create_app(config_name="development"):
     app.register_blueprint(subjects.bp,      url_prefix="/api/subjects")
     app.register_blueprint(dashboard.bp,     url_prefix="/api/dashboard")
     app.register_blueprint(progress.bp,      url_prefix="/api/progress")
+    app.register_blueprint(help_requests.bp, url_prefix="/api/help_requests")
+    app.register_blueprint(mentor.bp,        url_prefix="/api/mentor")
 
     register_error_handlers(app)
     return app
