@@ -110,10 +110,12 @@ def get_dashboard_stats():
         # 1. Fetch Profile
         profile_row = db.session.execute(
             text(
-                "SELECT id, title, institution, years_experience, rating, "
-                "total_students_helped, avg_response_time_min, accept_urgent, "
-                "email_notifications, auto_accept_returning, bio "
-                "FROM mentor_profiles WHERE user_id = :uid"
+                "SELECT mp.id, mp.title, mp.institution, mp.years_experience, mp.rating, "
+                "mp.total_students_helped, mp.avg_response_time_min, mp.accept_urgent, "
+                "mp.email_notifications, mp.auto_accept_returning, mp.bio, u.subject "
+                "FROM mentor_profiles mp "
+                "JOIN users u ON mp.user_id = u.id "
+                "WHERE mp.user_id = :uid"
             ),
             {"uid": user_id}
         ).fetchone()
@@ -129,7 +131,8 @@ def get_dashboard_stats():
             "accept_urgent": bool(profile_row[7]),
             "email_notifications": bool(profile_row[8]),
             "auto_accept_returning": bool(profile_row[9]),
-            "bio": profile_row[10] or ""
+            "bio": profile_row[10] or "",
+            "subject": profile_row[11] or "Mathematics"
         }
 
         # 2. Fetch Availability Slots

@@ -43,7 +43,8 @@ export default function MentorDashboardPage() {
     rating: 4.8,
     total_students_helped: 142,
     avg_response_time_min: 18,
-    bio: "PhD in Applied Mathematics. Specializing in making complex topics digestible."
+    bio: "PhD in Applied Mathematics. Specializing in making complex topics digestible.",
+    subject: "Mathematics"
   })
   const [stats, setStats] = useState({
     open_requests: 0,
@@ -275,9 +276,9 @@ export default function MentorDashboardPage() {
             </p>
 
             <div className="flex flex-wrap gap-2">
-              {["Calculus", "Algebra", "Statistics", "Geometry", "Trigonometry"].map(skill => (
-                <span key={skill} className="bg-gray-50 text-[#1A3D63] font-medium font-body text-xs px-3 py-1.5 rounded-lg border border-gray-100 hover:bg-gray-100 transition-colors">
-                  {skill}
+              {(profile.subject || "Mathematics").split(",").map(skill => (
+                <span key={skill.trim()} className="bg-gray-50 text-[#1A3D63] font-medium font-body text-xs px-3 py-1.5 rounded-lg border border-gray-100 hover:bg-gray-100 transition-colors">
+                  {skill.trim()}
                 </span>
               ))}
             </div>
