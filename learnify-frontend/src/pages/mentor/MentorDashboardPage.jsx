@@ -49,19 +49,12 @@ export default function MentorDashboardPage() {
   const [stats, setStats] = useState({
     open_requests: 0,
     resolved: 0,
-    avg_response: 18,
-    rating: 4.8,
-    total_students: 142,
-    completion_rate: 94,
-    metrics_breakdown: [
-      { name: "Clear explanations", value: 96 },
-      { name: "Patience & encouragement", value: 92 },
-      { name: "Lesson materials quality", value: 88 }
-    ],
-    reviews: [
-      { name: "Rashmika", rating: 5.0, comment: "Explained the topics perfectly! I could understand the concepts easily." },
-      { name: "Ashani We.", rating: 5.0, comment: "Highly patient. Walked me through step-by-step calculations." }
-    ]
+    avg_response: 0,
+    rating: 0,
+    total_students: 0,
+    completion_rate: 0,
+    metrics_breakdown: [],
+    reviews: []
   })
   const [sessions, setSessions] = useState([])
   const [performance, setPerformance] = useState([])
@@ -642,20 +635,24 @@ export default function MentorDashboardPage() {
             </div>
 
             <div className="space-y-4">
-              {performance.map((subject, idx) => (
-                <div key={idx} className="space-y-1.5">
-                  <div className="flex justify-between text-xs font-body font-bold text-gray-700">
-                    <span>{subject.name}</span>
-                    <span>{subject.value}%</span>
+              {performance.length === 0 ? (
+                <p className="font-body text-xs text-gray-400 italic py-4">No resolved requests to show breakdown</p>
+              ) : (
+                performance.map((subject, idx) => (
+                  <div key={idx} className="space-y-1.5">
+                    <div className="flex justify-between text-xs font-body font-bold text-gray-700">
+                      <span>{subject.name}</span>
+                      <span>{subject.value}%</span>
+                    </div>
+                    <div className="w-full bg-gray-100 h-2 rounded-full overflow-hidden">
+                      <div
+                        className={`h-full rounded-full transition-all duration-500 ${subject.bg}`}
+                        style={{ width: `${subject.value}%` }}
+                      />
+                    </div>
                   </div>
-                  <div className="w-full bg-gray-100 h-2 rounded-full overflow-hidden">
-                    <div
-                      className={`h-full rounded-full transition-all duration-500 ${subject.bg}`}
-                      style={{ width: `${subject.value}%` }}
-                    />
-                  </div>
-                </div>
-              ))}
+                ))
+              )}
             </div>
           </div>
 
@@ -1051,32 +1048,40 @@ export default function MentorDashboardPage() {
             <div className="space-y-4 border-t border-slate-100 pt-4">
               <h4 className="font-heading text-xs font-bold text-slate-500 uppercase tracking-wider">Teaching Metrics Breakdown</h4>
               <div className="space-y-3.5">
-                {(stats.metrics_breakdown || []).map((item, i) => (
-                  <div key={i} className="space-y-1">
-                    <div className="flex justify-between text-xs font-semibold text-slate-700">
-                      <span>{item.name}</span>
-                      <span>{item.value}% positive</span>
+                {(!stats.metrics_breakdown || stats.metrics_breakdown.length === 0) ? (
+                  <p className="font-body text-xs text-gray-400 italic py-2">No teaching metrics data available yet</p>
+                ) : (
+                  stats.metrics_breakdown.map((item, i) => (
+                    <div key={i} className="space-y-1">
+                      <div className="flex justify-between text-xs font-semibold text-slate-700">
+                        <span>{item.name}</span>
+                        <span>{item.value}% positive</span>
+                      </div>
+                      <div className="w-full bg-slate-100 h-2 rounded-full overflow-hidden">
+                        <div className="h-full bg-green-500 rounded-full" style={{ width: `${item.value}%` }} />
+                      </div>
                     </div>
-                    <div className="w-full bg-slate-100 h-2 rounded-full overflow-hidden">
-                      <div className="h-full bg-green-500 rounded-full" style={{ width: `${item.value}%` }} />
-                    </div>
-                  </div>
-                ))}
+                  ))
+                )}
               </div>
             </div>
 
             <div className="space-y-3 border-t border-slate-100 pt-4">
               <h4 className="font-heading text-xs font-bold text-slate-500 uppercase tracking-wider">Recent Reviews</h4>
               <div className="space-y-2">
-                {(stats.reviews || []).map((rev, i) => (
-                  <div key={i} className="p-3 bg-slate-50 border border-slate-100 rounded-xl">
-                    <div className="flex justify-between items-center text-xs">
-                      <span className="font-bold text-slate-700">{rev.name}</span>
-                      <span className="text-amber-500 font-bold">{parseFloat(rev.rating).toFixed(1)}★</span>
+                {(!stats.reviews || stats.reviews.length === 0) ? (
+                  <p className="font-body text-xs text-gray-400 italic py-2">No reviews received yet</p>
+                ) : (
+                  stats.reviews.map((rev, i) => (
+                    <div key={i} className="p-3 bg-slate-50 border border-slate-100 rounded-xl">
+                      <div className="flex justify-between items-center text-xs">
+                        <span className="font-bold text-slate-700">{rev.name}</span>
+                        <span className="text-amber-500 font-bold">{parseFloat(rev.rating).toFixed(1)}★</span>
+                      </div>
+                      <p className="font-body text-xs text-slate-500 mt-1 italic">"{rev.comment}"</p>
                     </div>
-                    <p className="font-body text-xs text-slate-500 mt-1 italic">"{rev.comment}"</p>
-                  </div>
-                ))}
+                  ))
+                )}
               </div>
             </div>
           </div>

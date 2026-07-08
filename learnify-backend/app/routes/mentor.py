@@ -240,13 +240,7 @@ def get_dashboard_stats():
                     "bg": colors[idx % len(colors)]
                 })
         else:
-            # Fallback to standard subject listings if mentor has resolved no tickets yet
-            performance = [
-                {"name": "Calculus", "value": 85, "bg": "bg-blue-500"},
-                {"name": "Algebra", "value": 75, "bg": "bg-orange-500"},
-                {"name": "Statistics", "value": 70, "bg": "bg-amber-600"},
-                {"name": "Geometry", "value": 90, "bg": "bg-green-500"}
-            ]
+            performance = []
 
         # 6. Recent Notifications
         notif_rows = db.session.execute(
@@ -289,20 +283,7 @@ def get_dashboard_stats():
                 "comment": r[2]
             })
             
-        if not reviews:
-            # Fallback mock reviews if none exists yet
-            reviews = [
-                {
-                    "name": "Rashmika",
-                    "rating": 5.0,
-                    "comment": "Explained the topics perfectly! I could understand the concepts easily."
-                },
-                {
-                    "name": "Ashani We.",
-                    "rating": 5.0,
-                    "comment": "Highly patient. Walked me through step-by-step calculations."
-                }
-            ]
+        # No fallback mock reviews - let frontend handle empty state
 
         rating_val = float(profile_row[4]) if profile_row[4] else 4.8
         total_assigned = db.session.execute(
