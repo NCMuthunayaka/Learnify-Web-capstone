@@ -395,7 +395,7 @@ def get_mentor_requests():
             text(
                 "SELECT hr.id, u.name AS student_name, s.name AS subject_name, "
                 "hr.topic_title, hr.description, hr.priority, hr.status, "
-                "hr.created_at, hr.assigned_to "
+                "hr.created_at, hr.assigned_to, hr.attachment_url "
                 "FROM help_requests hr "
                 "JOIN users u ON hr.student_id = u.id "
                 "JOIN subjects s ON hr.subject_id = s.id "
@@ -454,6 +454,7 @@ def get_mentor_requests():
                 "db_status": db_status,
                 "date": r[7].strftime("%b %d, %Y") if r[7] else "Just now",
                 "assigned_to": r[8],
+                "attachment_url": r[9],
                 "replies": replies
             })
 

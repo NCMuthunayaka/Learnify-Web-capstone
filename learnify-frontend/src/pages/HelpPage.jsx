@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react"
+import { useState, useEffect, useRef } from "react"
 import { Paperclip, Send, Users, User, ArrowRight, CheckCircle2, AlertCircle, Clock, Sparkles, GraduationCap } from "lucide-react"
 import Avatar from "../components/common/Avatar"
 import Badge from "../components/common/Badge"
@@ -7,6 +7,7 @@ import helpImg from "../assets/images/help.png"
 import profileImg from "../assets/icons/profile.png"
 import { getHelpRequests, createHelpRequest, getAvailableMentors } from "../api/helpRequestsApi"
 import { getSubjects } from "../api/subjectsApi"
+import { uploadFile } from "../api/resourcesApi"
 
 function HelpPage() {
   const [requests, setRequests] = useState([])
@@ -20,6 +21,20 @@ function HelpPage() {
   const [successMsg, setSuccessMsg] = useState(false)
   const [loading, setLoading] = useState(true)
   const [subjects, setSubjects] = useState([])
+  const [selectedFile, setSelectedFile] = useState(null)
+  const [uploadingFile, setUploadingFile] = useState(false)
+  const fileInputRef = useRef(null)
+
+  const handleAttachClick = () => {
+    fileInputRef.current?.click()
+  }
+
+  const handleFileChange = (e) => {
+    const file = e.target.files[0]
+    if (file) {
+      setSelectedFile(file)
+    }
+  }
 
   // Load help requests, available mentors, and subjects on mount
   useEffect(() => {
@@ -64,17 +79,26 @@ function HelpPage() {
     const assignedToId = matchedMentor ? matchedMentor.id : null
 
     try {
+      setUploadingFile(true)
+      let attachmentUrl = null
+      if (selectedFile) {
+        const uploadRes = await uploadFile(selectedFile)
+        attachmentUrl = uploadRes.data.file_url
+      }
+
       await createHelpRequest({
         title: title,
         description: description,
         subject: subject,
         priority: priority.toLowerCase(),
         request_type: requestType.toLowerCase(),
-        assigned_to: assignedToId
+        assigned_to: assignedToId,
+        attachment_url: attachmentUrl
       })
 
       setTitle("")
       setDescription("")
+      setSelectedFile(null)
       setSuccessMsg(true)
       setTimeout(() => setSuccessMsg(false), 3000)
 
@@ -83,6 +107,8 @@ function HelpPage() {
       setRequests(reqRes.data.requests)
     } catch (err) {
       console.error("Failed to submit help request:", err)
+    } finally {
+      setUploadingFile(false)
     }
   }
 
@@ -258,18 +284,40 @@ function HelpPage() {
 
                 {/* Actions Panel */}
                 <div className="w-full flex items-center justify-between pt-4">
-                  <button
-                    type="button"
-                    className="flex items-center gap-1.5 px-5 py-2.5 border border-[#3b719f] text-[#3b719f] bg-white hover:bg-[#e2edf7]/30 rounded-2xl font-body text-xs font-bold transition-all"
-                  >
-                    <Paperclip size={14} />
-                    Attach File
-                  </button>
+                  <div className="flex items-center gap-3">
+                    <button
+                      type="button"
+                      onClick={handleAttachClick}
+                      className="flex items-center gap-1.5 px-5 py-2.5 border border-[#3b719f] text-[#3b719f] bg-white hover:bg-[#e2edf7]/30 rounded-2xl font-body text-xs font-bold transition-all cursor-pointer"
+                    >
+                      <Paperclip size={14} />
+                      Attach File
+                    </button>
+                    {selectedFile && (
+                      <span className="font-body text-xs text-gray-500 flex items-center gap-1">
+                        📎 {selectedFile.name}
+                        <button
+                          type="button"
+                          onClick={() => setSelectedFile(null)}
+                          className="text-red-500 hover:text-red-700 font-bold ml-1 border-none bg-transparent cursor-pointer"
+                        >
+                          ×
+                        </button>
+                      </span>
+                    )}
+                    <input
+                      type="file"
+                      ref={fileInputRef}
+                      onChange={handleFileChange}
+                      className="hidden"
+                    />
+                  </div>
                   <button
                     type="submit"
-                    className="flex items-center gap-1.5 px-6 py-2.5 bg-[#3b719f] hover:bg-[#2e597c] text-white rounded-2xl font-body text-xs font-bold transition-all shadow-sm border-none cursor-pointer"
+                    disabled={uploadingFile}
+                    className="flex items-center gap-1.5 px-6 py-2.5 bg-[#3b719f] hover:bg-[#2e597c] disabled:bg-gray-400 text-white rounded-2xl font-body text-xs font-bold transition-all shadow-sm border-none cursor-pointer"
                   >
-                    Submit Request →
+                    {uploadingFile ? "Uploading..." : "Submit Request →"}
                   </button>
                 </div>
 
@@ -369,6 +417,18 @@ function HelpPage() {
                   <p className="font-body text-[11px] text-gray-500 leading-relaxed">
                     {req.desc}
                   </p>
+                  {req.attachment_url && (
+                    <div className="pt-1">
+                      <a
+                        href={`http://localhost:5000${req.attachment_url}`}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="inline-flex items-center gap-1 font-body text-[10px] text-[#3b719f] hover:underline font-bold"
+                      >
+                        📎 View Attachment
+                      </a>
+                    </div>
+                  )}
                 </div>
 
                 {/* Mentor Reply block */}

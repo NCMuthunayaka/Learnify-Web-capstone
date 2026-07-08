@@ -311,10 +311,22 @@ export default function MentorRequestsPage() {
                   <h3 className="font-heading text-base font-extrabold text-[#0A1931] leading-snug">
                     {selectedRequest.title}
                   </h3>
-                  <div className="bg-gray-50 border border-gray-100 rounded-2xl p-4">
+                  <div className="bg-gray-50 border border-gray-100 rounded-2xl p-4 space-y-2">
                     <p className="font-body text-xs text-gray-600 leading-relaxed whitespace-pre-wrap">
                       {selectedRequest.description}
                     </p>
+                    {selectedRequest.attachment_url && (
+                      <div className="pt-2 border-t border-gray-200/60">
+                        <a
+                          href={`http://localhost:5000${selectedRequest.attachment_url}`}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="inline-flex items-center gap-1 font-body text-[11px] text-[#3b719f] hover:underline font-bold"
+                        >
+                          📎 View Student Attachment
+                        </a>
+                      </div>
+                    )}
                   </div>
                 </div>
 

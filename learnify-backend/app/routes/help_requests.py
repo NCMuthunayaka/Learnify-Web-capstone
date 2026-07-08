@@ -20,7 +20,7 @@ def get_help_requests():
                 "SELECT hr.id, hr.subject_id, s.name AS subject_name, "
                 "hr.topic_title, hr.description, hr.priority, hr.status, "
                 "hr.assigned_to, u.name AS helper_name, hr.created_at, "
-                "s.color_hex "
+                "s.color_hex, hr.attachment_url "
                 "FROM help_requests hr "
                 "JOIN subjects s ON hr.subject_id = s.id "
                 "LEFT JOIN users u ON hr.assigned_to = u.id "
@@ -68,6 +68,7 @@ def get_help_requests():
                 "helper_name": row[8] or "Unassigned",
                 "created_at": row[9].isoformat() if row[9] else None,
                 "color_hex": row[10],
+                "attachment_url": row[11],
                 "replies": replies,
                 # For compatibility with mock UI:
                 "subject": row[2],
@@ -104,6 +105,7 @@ def create_help_request():
     priority_input = data.get("priority", "medium").lower() # low, medium, high
     request_type = data.get("request_type", "mentor").lower() # mentor, peer
     assigned_to_id = data.get("assigned_to") # optional
+    attachment_url = data.get("attachment_url") # optional
 
     if priority_input not in ["low", "medium", "high"]:
         priority_input = "medium"
@@ -149,8 +151,8 @@ def create_help_request():
 
         db.session.execute(
             text(
-                "INSERT INTO help_requests (student_id, subject_id, assigned_to, request_type, topic_title, description, priority, status, created_at) "
-                "VALUES (:sid, :subid, :assigned, :req_type, :title, :desc, :priority, 'pending', :created)"
+                "INSERT INTO help_requests (student_id, subject_id, assigned_to, request_type, topic_title, description, priority, status, attachment_url, created_at) "
+                "VALUES (:sid, :subid, :assigned, :req_type, :title, :desc, :priority, 'pending', :attach_url, :created)"
             ),
             {
                 "sid": user_id,
@@ -160,6 +162,7 @@ def create_help_request():
                 "title": title,
                 "desc": description,
                 "priority": priority_input,
+                "attach_url": attachment_url,
                 "created": datetime.utcnow()
             }
         )
