@@ -136,6 +136,20 @@ CREATE TABLE mentor_profiles (
 ) ENGINE = InnoDB;
 
 
+-- applications submitted by users wishing to become mentors
+CREATE TABLE mentor_applications (
+    id              INT          NOT NULL AUTO_INCREMENT,
+    user_id         INT          NOT NULL,
+    qualifications  TEXT         NOT NULL,
+    certifications  TEXT         NOT NULL,
+    status          VARCHAR(20)  NOT NULL DEFAULT 'pending',
+    created_at      DATETIME     NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    PRIMARY KEY (id),
+    UNIQUE KEY uq_ma_user (user_id),
+    CONSTRAINT fk_ma_user FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+) ENGINE = InnoDB;
+
+
 -- subject tags listed on a mentor's profile
 CREATE TABLE mentor_expertise_tags (
     id        INT          NOT NULL AUTO_INCREMENT,

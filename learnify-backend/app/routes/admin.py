@@ -138,19 +138,68 @@ def get_pending_approvals():
     if err:
         return err
 
+    from app.services.auth_service import ensure_mentor_applications_table
+    ensure_mentor_applications_table()
+
     page = max(1, int(request.args.get("page", 1)))
 
-    query = User.query.filter_by(status="pending")
-    total = query.count()
-    users = (
-        query.order_by(User.created_at.desc())
-             .offset((page - 1) * PAGE_SIZE)
-             .limit(PAGE_SIZE)
-             .all()
-    )
+    try:
+        total = db.session.execute(
+            text("SELECT COUNT(*) FROM mentor_applications WHERE status = 'pending'")
+        ).scalar() or 0
+
+        rows = db.session.execute(
+            text(
+                "SELECT ma.id, u.id as user_id, u.name, u.email, ma.qualifications, ma.certifications, ma.created_at "
+                "FROM mentor_applications ma "
+                "JOIN users u ON ma.user_id = u.id "
+                "WHERE ma.status = 'pending' "
+                "ORDER BY ma.created_at DESC "
+                "LIMIT :limit OFFSET :offset"
+            ),
+            {"limit": PAGE_SIZE, "offset": (page - 1) * PAGE_SIZE}
+        ).fetchall()
+
+        users = [
+            {
+                "application_id": r[0],
+                "id": r[1],
+                "name": r[2],
+                "email": r[3],
+                "qualifications": r[4],
+                "certifications": r[5],
+                "created_at": r[6].isoformat() if r[6] else None,
+                "role": "mentor",
+                "status": "pending"
+            }
+            for r in rows
+        ]
+    except Exception as e:
+        print(f"Error querying mentor_applications: {e}")
+        query = User.query.filter_by(status="pending")
+        total = query.count()
+        db_users = (
+            query.order_by(User.created_at.desc())
+                 .offset((page - 1) * PAGE_SIZE)
+                 .limit(PAGE_SIZE)
+                 .all()
+        )
+        users = [
+            {
+                "id": u.id,
+                "name": u.name,
+                "email": u.email,
+                "qualifications": "Standard Registration",
+                "certifications": "Standard Registration",
+                "created_at": u.created_at.isoformat() if u.created_at else None,
+                "role": u.role,
+                "status": u.status
+            }
+            for u in db_users
+        ]
 
     return success_response(data={
-        "users":       [u.to_dict() for u in users],
+        "users":       users,
         "total":       total,
         "page":        page,
         "page_size":   PAGE_SIZE,
@@ -170,8 +219,51 @@ def approve_user(user_id):
     if not user:
         return error_response("NOT_FOUND", "User not found", status=404)
 
-    user.status = "active"
-    db.session.commit()
+    # Check if there is a pending mentor application
+    from app.services.auth_service import ensure_mentor_applications_table
+    ensure_mentor_applications_table()
+
+    try:
+        app_row = db.session.execute(
+            text("SELECT id FROM mentor_applications WHERE user_id = :uid AND status = 'pending'"),
+            {"uid": user_id}
+        ).fetchone()
+    except Exception:
+        app_row = None
+
+    if app_row:
+        # Transition student to mentor
+        user.role = "mentor"
+        user.status = "active"
+
+        # Update application status
+        db.session.execute(
+            text("UPDATE mentor_applications SET status = 'approved' WHERE user_id = :uid"),
+            {"uid": user_id}
+        )
+
+        # Delete student profile
+        db.session.execute(
+            text("DELETE FROM student_profiles WHERE user_id = :uid"),
+            {"uid": user_id}
+        )
+
+        # Ensure mentor profile exists
+        from app.routes.mentor import ensure_mentor_profile
+        ensure_mentor_profile(user_id)
+
+        # Insert system notification
+        db.session.execute(
+            text(
+                "INSERT INTO notifications (user_id, type_id, title, body, is_read, created_at) "
+                "VALUES (:uid, 4, 'Mentor Account Approved', 'Your application to register as a mentor has been approved! You now have mentor access.', 0, :now)"
+            ),
+            {"uid": user_id, "now": datetime.utcnow()}
+        )
+        db.session.commit()
+    else:
+        user.status = "active"
+        db.session.commit()
 
     return success_response(data=user.to_dict(), message="User approved")
 
@@ -188,8 +280,35 @@ def reject_user(user_id):
     if not user:
         return error_response("NOT_FOUND", "User not found", status=404)
 
-    user.status = "inactive"
-    db.session.commit()
+    # Check if there is a pending mentor application
+    from app.services.auth_service import ensure_mentor_applications_table
+    ensure_mentor_applications_table()
+
+    try:
+        app_row = db.session.execute(
+            text("SELECT id FROM mentor_applications WHERE user_id = :uid AND status = 'pending'"),
+            {"uid": user_id}
+        ).fetchone()
+    except Exception:
+        app_row = None
+
+    if app_row:
+        db.session.execute(
+            text("UPDATE mentor_applications SET status = 'rejected' WHERE user_id = :uid"),
+            {"uid": user_id}
+        )
+
+        db.session.execute(
+            text(
+                "INSERT INTO notifications (user_id, type_id, title, body, is_read, created_at) "
+                "VALUES (:uid, 6, 'Mentor Application Declined', 'Your application to register as a mentor has been declined by the system administrators. You will retain student access.', 0, :now)"
+            ),
+            {"uid": user_id, "now": datetime.utcnow()}
+        )
+        db.session.commit()
+    else:
+        user.status = "inactive"
+        db.session.commit()
 
     return success_response(data=user.to_dict(), message="User rejected")
 

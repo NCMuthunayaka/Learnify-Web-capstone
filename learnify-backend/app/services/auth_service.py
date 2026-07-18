@@ -3,32 +3,101 @@ from app.models.user import User
 from datetime import datetime
 
 
-def register_user(name, email, password, role="student"):
+def ensure_mentor_applications_table():
+    from sqlalchemy import text
+    try:
+        db.session.execute(text("SELECT 1 FROM mentor_applications LIMIT 1"))
+    except Exception:
+        db.session.rollback()
+        try:
+            db.session.execute(
+                text(
+                    "CREATE TABLE IF NOT EXISTS mentor_applications ("
+                    "id INT NOT NULL AUTO_INCREMENT,"
+                    "user_id INT NOT NULL,"
+                    "qualifications TEXT NOT NULL,"
+                    "certifications TEXT NOT NULL,"
+                    "status VARCHAR(20) NOT NULL DEFAULT 'pending',"
+                    "created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,"
+                    "PRIMARY KEY (id),"
+                    "UNIQUE KEY uq_ma_user (user_id),"
+                    "CONSTRAINT fk_ma_user FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE"
+                    ") ENGINE = InnoDB;"
+                )
+            )
+            db.session.commit()
+        except Exception:
+            db.session.rollback()
+            try:
+                db.session.execute(
+                    text(
+                        "CREATE TABLE IF NOT EXISTS mentor_applications ("
+                        "id INTEGER PRIMARY KEY AUTOINCREMENT,"
+                        "user_id INTEGER NOT NULL UNIQUE,"
+                        "qualifications TEXT NOT NULL,"
+                        "certifications TEXT NOT NULL,"
+                        "status VARCHAR(20) NOT NULL DEFAULT 'pending',"
+                        "created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,"
+                        "FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE"
+                        ")"
+                    )
+                )
+                db.session.commit()
+            except Exception as ex:
+                db.session.rollback()
+                print(f"Failed to create mentor_applications table: {ex}")
+
+
+def register_user(name, email, password, role="student", qualifications=None, certifications=None):
     existing = User.query.filter_by(email=email).first()
     if existing:
         return None, "Email already registered"
 
     password_hash = bcrypt.generate_password_hash(password).decode("utf-8")
 
+    # If role is mentor, they register as a student role first while application is pending
+    actual_role = "student" if role == "mentor" else role
+
     user = User(
         name          = name,
         email         = email,
         password_hash = password_hash,
-        role          = role,
+        role          = actual_role,
         status        = "active",
     )
     db.session.add(user)
     db.session.commit()
 
-    if role == "student":
+    from sqlalchemy import text
+
+    # Seed student profiles for student and mentor-applicant accounts
+    if actual_role == "student":
         try:
-            from sqlalchemy import text
             db.session.execute(
                 text(
                     "INSERT INTO student_profiles (user_id, available_hours_per_week, study_streak_days, total_points, semester_goal_pct) "
                     "VALUES (:uid, 0, 0, 0, 0.0)"
                 ),
                 {"uid": user.id}
+            )
+            db.session.commit()
+        except Exception:
+            db.session.rollback()
+
+    # If they requested mentor, record the application details
+    if role == "mentor":
+        ensure_mentor_applications_table()
+        try:
+            db.session.execute(
+                text(
+                    "INSERT INTO mentor_applications (user_id, qualifications, certifications, status) "
+                    "VALUES (:uid, :qual, :cert, 'pending')"
+                ),
+                {
+                    "uid": user.id,
+                    "qual": qualifications or "Not provided",
+                    "cert": certifications or "Not provided"
+                }
             )
             db.session.commit()
         except Exception:

@@ -132,6 +132,7 @@ function RegisterPage() {
   const [formData, setFormData] = useState({
     firstName: "", lastName: "", email: "",
     password: "", confirmPassword: "", role: "",
+    qualifications: "", certifications: "",
   })
   const [loading, setLoading]   = useState(false)
   const [gLoading, setGLoading] = useState(false)
@@ -214,8 +215,16 @@ function RegisterPage() {
       newErrors.confirmPassword = "Passwords do not match"
     }
 
-    if (!formData.role)
+    if (!formData.role) {
       newErrors.role = "Please select a role"
+    } else if (formData.role === "mentor") {
+      if (!formData.qualifications.trim()) {
+        newErrors.qualifications = "Qualifications are required for mentors"
+      }
+      if (!formData.certifications.trim()) {
+        newErrors.certifications = "Certifications are required for mentors"
+      }
+    }
 
     setErrors(newErrors)
     return Object.keys(newErrors).length === 0
@@ -232,7 +241,12 @@ function RegisterPage() {
       setLoading(true)
       const fullName = `${formData.firstName} ${formData.lastName}`
       const response = await registerUser(
-        fullName, formData.email, formData.password, formData.role
+        fullName,
+        formData.email,
+        formData.password,
+        formData.role,
+        formData.qualifications,
+        formData.certifications
       )
       const { user, access_token, refresh_token } = response.data
       login(user, access_token, refresh_token)
@@ -662,6 +676,53 @@ function RegisterPage() {
                 </p>
               )}
             </div>
+
+            {formData.role === "mentor" && (
+              <div className="space-y-4 pt-2">
+                <div>
+                  <textarea
+                    name="qualifications"
+                    placeholder="Academic Qualifications (e.g. Degree, University, GPA)*"
+                    value={formData.qualifications}
+                    onChange={handleChange}
+                    rows={3}
+                    className={`w-full bg-[#1A3D63] bg-opacity-60 text-white
+                      placeholder-[#B3CFE5] font-body text-sm px-4 py-3
+                      rounded-lg border transition-colors focus:outline-none resize-none
+                      ${errors.qualifications
+                        ? "border-red-400"
+                        : "border-[#4A7FA7] border-opacity-40 focus:border-[#4A7FA7]"}`}
+                  />
+                  {errors.qualifications && (
+                    <p className="font-body text-xs text-red-400 mt-1 ml-1">
+                      {errors.qualifications}
+                    </p>
+                  )}
+                </div>
+
+                <div>
+                  <textarea
+                    name="certifications"
+                    placeholder="Certifications & Experience (e.g. teaching, certifications)*"
+                    value={formData.certifications}
+                    onChange={handleChange}
+                    rows={3}
+                    className={`w-full bg-[#1A3D63] bg-opacity-60 text-white
+                      placeholder-[#B3CFE5] font-body text-sm px-4 py-3
+                      rounded-lg border transition-colors focus:outline-none resize-none
+                      ${errors.certifications
+                        ? "border-red-400"
+                        : "border-[#4A7FA7] border-opacity-40 focus:border-[#4A7FA7]"}`}
+                  />
+                  {errors.certifications && (
+                    <p className="font-body text-xs text-red-400 mt-1 ml-1">
+                      {errors.certifications}
+                    </p>
+                  )}
+                </div>
+              </div>
+            )}
+
 
             {/* Submit Button */}
             <button onClick={handleSubmit}
