@@ -4,10 +4,11 @@ import {
   Users, Video, BookOpen, Star, Calendar, Clock,
   ArrowRight, CheckCircle, MessageSquare, Bell,
   AlertTriangle, Check, ShieldCheck, Play, BarChart4, FileText,
-  X, Copy, Plus, ChevronLeft, ChevronRight
+  X, Copy, Plus, ChevronLeft, ChevronRight,
+  Award, Zap, Flame, Trophy, HelpCircle, Send, RotateCcw, Sparkles
 } from "lucide-react"
 import { useAuth } from "../../hooks/useAuth"
-import { getMentorStats, updateMentorSettings } from "../../api/mentorApi"
+import { getMentorStats, updateMentorSettings, logWorkSession, submitSupportTicket } from "../../api/mentorApi"
 import LoadingSpinner from "../../components/common/LoadingSpinner"
 
 export default function MentorDashboardPage() {
@@ -59,6 +60,20 @@ export default function MentorDashboardPage() {
   const [sessions, setSessions] = useState([])
   const [performance, setPerformance] = useState([])
   const [notifications, setNotifications] = useState([])
+  const [achievements, setAchievements] = useState([])
+  const [aiInsights, setAiInsights] = useState([])
+
+  // Support modal state
+  const [showSupportModal, setShowSupportModal] = useState(false)
+  const [supportTitle, setSupportTitle] = useState("")
+  const [supportDesc, setSupportDesc] = useState("")
+  const [submittingSupport, setSubmittingSupport] = useState(false)
+
+  // Timer states
+  const [timerDuration, setTimerDuration] = useState(25) // minutes
+  const [timerSecondsLeft, setTimerSecondsLeft] = useState(25 * 60)
+  const [timerActive, setTimerActive] = useState(false)
+  const [timerCategory, setTimerCategory] = useState("Lesson Prep")
 
   // Availability section reference for scrolling
   const availabilityRef = useRef(null)
@@ -79,6 +94,66 @@ export default function MentorDashboardPage() {
   ])
   const [newTemplateTitle, setNewTemplateTitle] = useState("")
   const [newTemplateContent, setNewTemplateContent] = useState("")
+
+  // Work Prep Timer effect
+  useEffect(() => {
+    let interval = null
+    if (timerActive && timerSecondsLeft > 0) {
+      interval = setInterval(() => {
+        setTimerSecondsLeft(prev => prev - 1)
+      }, 1000)
+    } else if (timerSecondsLeft === 0 && timerActive) {
+      setTimerActive(false)
+      clearInterval(interval)
+      handleTimerComplete()
+    }
+    return () => clearInterval(interval)
+  }, [timerActive, timerSecondsLeft])
+
+  async function handleTimerComplete() {
+    try {
+      const res = await logWorkSession(timerDuration, timerCategory)
+      if (res.data) {
+        setProfile(prev => ({
+          ...prev,
+          total_points: res.data.total_points,
+          response_streak_days: res.data.response_streak_days
+        }))
+        setToastMessage(`Work session logged! You earned 10 XP!`)
+        setTimeout(() => setToastMessage(""), 3000)
+      }
+    } catch (err) {
+      console.error("Failed to log work session:", err)
+      setToastMessage("Session completed, but failed to log points.")
+      setTimeout(() => setToastMessage(""), 3000)
+    }
+    setTimerSecondsLeft(timerDuration * 60)
+  }
+
+  const handleDurationChange = (mins) => {
+    setTimerDuration(mins)
+    setTimerSecondsLeft(mins * 60)
+    setTimerActive(false)
+  }
+
+  async function handleSupportSubmit() {
+    if (!supportTitle.trim() || !supportDesc.trim()) return
+    try {
+      setSubmittingSupport(true)
+      await submitSupportTicket(supportTitle, supportDesc)
+      setToastMessage("Support ticket submitted successfully!")
+      setTimeout(() => setToastMessage(""), 3000)
+      setShowSupportModal(false)
+      setSupportTitle("")
+      setSupportDesc("")
+    } catch (err) {
+      console.error("Failed to submit support ticket:", err)
+      setToastMessage("Failed to submit support ticket.")
+      setTimeout(() => setToastMessage(""), 3000)
+    } finally {
+      setSubmittingSupport(false)
+    }
+  }
 
   // Fetch mentor details and dashboard statistics on mount
   useEffect(() => {
@@ -106,6 +181,8 @@ export default function MentorDashboardPage() {
         setSessions(data.sessions)
         setPerformance(data.performance)
         setNotifications(data.notifications)
+        if (data.achievements) setAchievements(data.achievements)
+        if (data.ai_insights) setAiInsights(data.ai_insights)
       } catch (err) {
         console.error("Failed to load mentor dashboard data:", err)
       } finally {
@@ -303,18 +380,25 @@ export default function MentorDashboardPage() {
             </div>
           </div>
 
-          <div className="flex items-center gap-3 mt-6 border-t border-gray-50 pt-4">
+          <div className="flex flex-col sm:flex-row items-center gap-3 mt-6 border-t border-gray-50 pt-4">
             <button
               onClick={() => navigate("/mentor/profile")}
-              className="flex-1 bg-[#0A1931] hover:bg-[#1A3D63] text-white font-body text-xs font-semibold py-2.5 px-4 rounded-xl shadow-sm transition-colors duration-200"
+              className="w-full sm:flex-1 bg-[#0A1931] hover:bg-[#1A3D63] text-white font-body text-xs font-semibold py-2.5 px-4 rounded-xl shadow-sm transition-colors duration-200"
             >
               Edit Profile
             </button>
             <button
               onClick={() => navigate("/mentor/profile")}
-              className="flex-1 border border-[#4A7FA7] text-[#4A7FA7] hover:bg-[#F6FAFD] font-body text-xs font-semibold py-2.5 px-4 rounded-xl transition-colors duration-200"
+              className="w-full sm:flex-1 border border-[#4A7FA7] text-[#4A7FA7] hover:bg-[#F6FAFD] font-body text-xs font-semibold py-2.5 px-4 rounded-xl transition-colors duration-200"
             >
               View Public Profile
+            </button>
+            <button
+              onClick={() => setShowSupportModal(true)}
+              className="w-full sm:flex-1 border border-rose-200 text-rose-500 hover:bg-rose-50 font-body text-xs font-semibold py-2.5 px-4 rounded-xl transition-colors duration-200 flex items-center justify-center gap-1.5 cursor-pointer"
+            >
+              <HelpCircle size={14} />
+              Ask Support
             </button>
           </div>
         </div>
@@ -478,6 +562,192 @@ export default function MentorDashboardPage() {
               </button>
             </div>
           </div>
+        </div>
+
+      </div>
+
+      {/* ── 2b. Gamified Progress & Work Timer Row ── */}
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+
+        {/* Gamified Achievements Card */}
+        <div className="lg:col-span-2 bg-white rounded-2xl p-6 border border-gray-100 shadow-sm flex flex-col justify-between">
+          <div className="space-y-6">
+            <div className="flex items-center justify-between border-b border-gray-50 pb-3">
+              <h3 className="font-heading text-sm font-bold text-[#0A1931] flex items-center gap-1.5">
+                <Trophy className="text-amber-500" size={18} />
+                Helper Progress &amp; Badges
+              </h3>
+              <span className="font-body text-xs text-slate-400">Gamified Stats</span>
+            </div>
+
+            {/* Points & Streak cards */}
+            <div className="grid grid-cols-2 gap-4">
+              <div className="bg-gradient-to-br from-amber-50 to-orange-50 border border-amber-100 rounded-xl p-4 flex items-center gap-3">
+                <Trophy className="text-amber-600 fill-amber-300" size={24} />
+                <div>
+                  <span className="font-heading text-xl font-extrabold text-amber-900 block">
+                    {profile.total_points ?? 0}
+                  </span>
+                  <span className="font-body text-[10px] text-amber-700 font-semibold block uppercase tracking-wider">
+                    Helper XP Points
+                  </span>
+                </div>
+              </div>
+
+              <div className="bg-gradient-to-br from-red-50 to-orange-50 border border-red-100 rounded-xl p-4 flex items-center gap-3">
+                <Flame className="text-red-600 fill-red-300" size={24} />
+                <div>
+                  <span className="font-heading text-xl font-extrabold text-red-900 block">
+                    {profile.response_streak_days ?? 0} days
+                  </span>
+                  <span className="font-body text-[10px] text-red-700 font-semibold block uppercase tracking-wider">
+                    Response Streak
+                  </span>
+                </div>
+              </div>
+            </div>
+
+            {/* Badges Grid */}
+            <div className="space-y-3">
+              <h4 className="font-heading text-xs font-bold text-gray-500 uppercase tracking-wider">Unlocked Tutoring Badges</h4>
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                {achievements.map((ach, idx) => {
+                  const unlocked = ach.unlocked
+                  return (
+                    <div
+                      key={idx}
+                      className={`p-3.5 border rounded-xl flex flex-col justify-between items-start gap-2 transition-all duration-200 ${
+                        unlocked 
+                          ? "bg-emerald-50/50 border-emerald-100" 
+                          : "bg-gray-50/50 border-gray-100 opacity-60"
+                      }`}
+                    >
+                      <div className="flex items-center gap-2">
+                        <div className={`w-8 h-8 rounded-lg flex items-center justify-center ${
+                          unlocked ? "bg-emerald-100 text-emerald-600" : "bg-gray-200 text-gray-400"
+                        }`}>
+                          {ach.name.includes("Solver") ? (
+                            <Check size={16} />
+                          ) : ach.name.includes("Streak") ? (
+                            <Flame size={16} />
+                          ) : (
+                            <BookOpen size={16} />
+                          )}
+                        </div>
+                        <span className="font-heading text-xs font-bold text-slate-800 leading-tight">
+                          {ach.name}
+                        </span>
+                      </div>
+                      <p className="font-body text-[10px] text-slate-500 leading-relaxed min-h-[30px]">
+                        {ach.description}
+                      </p>
+                      <span className={`font-body text-[9px] font-bold uppercase px-2 py-0.5 rounded-md ${
+                        unlocked ? "bg-emerald-100 text-emerald-700" : "bg-gray-100 text-gray-500"
+                      }`}>
+                        {unlocked ? "Unlocked" : "Locked"}
+                      </span>
+                    </div>
+                  )
+                })}
+              </div>
+            </div>
+
+          </div>
+        </div>
+
+        {/* Prep Timer & AI Insights */}
+        <div className="bg-white rounded-2xl p-6 border border-gray-100 shadow-sm flex flex-col justify-between space-y-6">
+          
+          {/* Prep Timer Card */}
+          <div className="space-y-4">
+            <div className="flex items-center justify-between border-b border-gray-50 pb-3">
+              <h3 className="font-heading text-sm font-bold text-[#0A1931] flex items-center gap-1.5">
+                <Clock className="text-[#4A7FA7]" size={16} />
+                Prep Work Timer
+              </h3>
+              <span className={`w-2.5 h-2.5 rounded-full ${timerActive ? "bg-red-500 animate-pulse" : "bg-gray-300"}`} />
+            </div>
+
+            {/* Selector */}
+            <div className="flex gap-2">
+              {["Lesson Prep", "Grading", "Admin support"].map(cat => (
+                <button
+                  key={cat}
+                  onClick={() => setTimerCategory(cat)}
+                  disabled={timerActive}
+                  className={`flex-1 py-1 px-2 border rounded-lg text-[10px] font-semibold font-body text-center transition-all ${
+                    timerCategory === cat
+                      ? "bg-[#0A1931] text-white border-[#0A1931]"
+                      : "bg-slate-50 border-slate-100 text-slate-500 hover:bg-slate-100 disabled:opacity-50 cursor-pointer"
+                  }`}
+                >
+                  {cat}
+                </button>
+              ))}
+            </div>
+
+            {/* Timer digits & controls */}
+            <div className="bg-slate-50 rounded-2xl p-4 border border-slate-100 text-center space-y-3">
+              <div className="font-heading text-3xl font-extrabold text-[#0A1931] tracking-tight">
+                {String(Math.floor(timerSecondsLeft / 60)).padStart(2, '0')}:
+                {String(timerSecondsLeft % 60).padStart(2, '0')}
+              </div>
+              
+              <div className="flex items-center justify-center gap-2">
+                <button
+                  onClick={() => setTimerActive(!timerActive)}
+                  className={`py-1.5 px-4 font-body text-xs font-bold text-white rounded-xl shadow-sm border-none cursor-pointer ${
+                    timerActive ? "bg-amber-500 hover:bg-amber-600" : "bg-emerald-500 hover:bg-emerald-600"
+                  }`}
+                >
+                  {timerActive ? "Pause" : "Start"}
+                </button>
+                <button
+                  onClick={() => { setTimerActive(false); setTimerSecondsLeft(timerDuration * 60) }}
+                  className="p-1.5 border border-slate-200 hover:bg-slate-100 rounded-xl transition-colors cursor-pointer"
+                >
+                  <RotateCcw size={14} className="text-slate-500" />
+                </button>
+              </div>
+
+              {/* Quick durations */}
+              <div className="flex items-center justify-center gap-1.5 pt-1.5 border-t border-slate-100/50">
+                {[1, 5, 15, 25].map(m => (
+                  <button
+                    key={m}
+                    onClick={() => handleDurationChange(m)}
+                    disabled={timerActive}
+                    className="font-body text-[9px] font-bold text-[#4A7FA7] hover:underline bg-transparent border-none cursor-pointer disabled:opacity-50"
+                  >
+                    {m}m
+                  </button>
+                ))}
+              </div>
+            </div>
+          </div>
+
+          {/* AI Insights Card */}
+          <div className="space-y-3 border-t border-gray-50 pt-4">
+            <h4 className="font-heading text-xs font-bold text-gray-500 uppercase tracking-wider flex items-center gap-1">
+              <Sparkles size={13} className="text-[#4A7FA7] fill-[#4A7FA7]" />
+              AI Coaching Insights
+            </h4>
+            <div className="space-y-2">
+              {aiInsights.map((ins, idx) => (
+                <div key={idx} className="p-2.5 bg-[#F6FAFD] border border-blue-50/50 rounded-xl space-y-1">
+                  <div className="flex items-center justify-between">
+                    <span className="font-heading text-[9px] font-extrabold uppercase tracking-wider text-[#4A7FA7]">
+                      {ins.badge}
+                    </span>
+                  </div>
+                  <p className="font-body text-[10px] text-slate-600 leading-normal">
+                    {ins.text}
+                  </p>
+                </div>
+              ))}
+            </div>
+          </div>
+
         </div>
 
       </div>
@@ -1159,6 +1429,69 @@ export default function MentorDashboardPage() {
                 className="w-full bg-[#0A1931] hover:bg-[#1A3D63] text-white font-body text-xs font-bold py-2 rounded-xl transition-all shadow-sm cursor-pointer border-none"
               >
                 Create Template
+              </button>
+            </div>
+          </div>
+      {/* ── Ask Support Modal ── */}
+      {showSupportModal && (
+        <div className="fixed inset-0 z-50 bg-[#0A1931]/75 backdrop-blur-sm flex items-center justify-center p-4">
+          <div className="bg-white rounded-2xl border border-gray-100 w-full max-w-md shadow-2xl p-6 space-y-4 animate-in fade-in zoom-in-95 duration-200">
+            <div className="flex items-center justify-between border-b border-slate-100 pb-3">
+              <div className="flex items-center gap-2">
+                <HelpCircle size={18} className="text-rose-500" />
+                <h3 className="font-heading text-sm font-bold text-[#0A1931]">Contact Administrator Support</h3>
+              </div>
+              <button 
+                onClick={() => setShowSupportModal(false)} 
+                className="p-1 rounded-lg hover:bg-slate-100 text-slate-400 hover:text-slate-600 transition-colors border-none bg-transparent cursor-pointer"
+              >
+                <X size={16} />
+              </button>
+            </div>
+
+            <div className="space-y-3 font-body text-xs text-slate-500 leading-relaxed">
+              <p>
+                Have a platform issue or need administrative assistance? Submit a ticket directly to the platform administrators below.
+              </p>
+
+              <div className="space-y-3">
+                <div className="space-y-1">
+                  <label className="font-bold text-slate-700">Ticket Title</label>
+                  <input
+                    type="text"
+                    placeholder="e.g. System glitch on availability slots"
+                    value={supportTitle}
+                    onChange={(e) => setSupportTitle(e.target.value)}
+                    className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-xs font-body focus:outline-none focus:border-rose-500"
+                  />
+                </div>
+
+                <div className="space-y-1">
+                  <label className="font-bold text-slate-700">Problem Description</label>
+                  <textarea
+                    placeholder="Describe your issue in detail..."
+                    value={supportDesc}
+                    onChange={(e) => setSupportDesc(e.target.value)}
+                    rows={4}
+                    className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-xs font-body focus:outline-none focus:border-rose-500 resize-none"
+                  />
+                </div>
+              </div>
+            </div>
+
+            <div className="flex items-center gap-3 pt-3 border-t border-slate-100">
+              <button
+                onClick={() => setShowSupportModal(false)}
+                className="flex-1 bg-slate-50 hover:bg-slate-100 text-slate-600 font-body text-xs font-bold py-2.5 rounded-xl border border-slate-200 cursor-pointer"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleSupportSubmit}
+                disabled={submittingSupport || !supportTitle.trim() || !supportDesc.trim()}
+                className="flex-1 bg-[#0A1931] hover:bg-[#1A3D63] text-white font-body text-xs font-bold py-2.5 rounded-xl transition-all shadow-sm cursor-pointer border-none disabled:opacity-50"
+              >
+                {submittingSupport ? "Submitting..." : "Submit Ticket"}
               </button>
             </div>
           </div>

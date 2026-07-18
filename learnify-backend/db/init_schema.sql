@@ -128,6 +128,8 @@ CREATE TABLE mentor_profiles (
     email_notifications   TINYINT(1)   NOT NULL DEFAULT 1,
     auto_accept_returning TINYINT(1)   NOT NULL DEFAULT 0,
     bio                   TEXT         NULL,
+    total_points          INT          NOT NULL DEFAULT 0,
+    response_streak_days  INT          NOT NULL DEFAULT 0,
     PRIMARY KEY (id),
     UNIQUE KEY uq_mp_user (user_id),
     CONSTRAINT fk_mp_user FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
@@ -591,4 +593,7 @@ INSERT INTO achievements (trigger_type_id, name, description, threshold) VALUES
 (1, 'Study Streak 30',     'Maintain a 30-day study streak', 30),
 (3, 'Help Seeker',         'Submit your first help request', 1),
 (4, 'Outstanding Student', 'Score above 90% on 5 consecutive tasks', 5),
-(3, 'Community Helper',    'Respond to 10 peer help requests', 10);
+(3, 'Community Helper',    'Respond to 10 peer help requests', 10),
+(3, 'Quick Solver',         'Resolve 5 student help requests', 5),
+(1, 'Streak Master',        'Maintain a 5-day active tutoring streak', 5),
+(3, 'Knowledge Contributor', 'Upload 5 published resources', 5);

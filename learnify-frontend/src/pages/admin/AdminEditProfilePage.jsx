@@ -104,7 +104,7 @@ export default function AdminEditProfilePage() {
       }
 
       try {
-        await api.put("/auth/me", { name: form.name, phone: form.phone })
+        await api.patch("/users/profile", { name: form.name, phone: form.phone })
       } catch {}
 
       pushToast("Profile updated successfully!", "success")
