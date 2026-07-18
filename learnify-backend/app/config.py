@@ -11,6 +11,20 @@ ALLOWED_EXTENSIONS = {
     "mp4":  "Video",
 }
 
+def _fix_db_url(url: str) -> str:
+    """
+    Fix database URL schemes that Railway/Heroku provide in legacy formats.
+    - mysql://      -> mysql+pymysql://   (Railway MySQL plugin)
+    - postgres://   -> postgresql://      (Railway/Heroku PostgreSQL)
+    """
+    if not url:
+        return url
+    if url.startswith("mysql://"):
+        url = url.replace("mysql://", "mysql+pymysql://", 1)
+    elif url.startswith("postgres://"):
+        url = url.replace("postgres://", "postgresql://", 1)
+    return url
+
 class BaseConfig:
     SECRET_KEY                     = os.getenv("JWT_SECRET_KEY", "change-me")
     JWT_SECRET_KEY                 = os.getenv("JWT_SECRET_KEY", "change-me")
@@ -35,10 +49,8 @@ class DevelopmentConfig(BaseConfig):
     SQLALCHEMY_DATABASE_URI = os.getenv("DATABASE_URL")
 
 class ProductionConfig(BaseConfig):
-    DEBUG = False
-    # Read at class load time — Railway injects env vars before the process starts,
-    # so os.getenv() will return the correct value here.
-    SQLALCHEMY_DATABASE_URI = os.getenv("DATABASE_URL")
+    DEBUG                   = False
+    SQLALCHEMY_DATABASE_URI = _fix_db_url(os.getenv("DATABASE_URL"))
 
 config = {
     "development": DevelopmentConfig,
