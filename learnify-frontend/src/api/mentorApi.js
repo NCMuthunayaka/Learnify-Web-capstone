@@ -48,3 +48,18 @@ export async function sendRequestReply(requestId, content) {
     const response = await api.post(`/mentor/requests/${requestId}/replies`, { content })
     return response.data
 }
+
+// ── Log Mentor Prep/Work Session ────────────────────────────
+// Logs duration and category of lesson prep/grading to earn points & streak
+export async function logWorkSession(duration, category) {
+    const response = await api.post("/mentor/work-session", { duration, category })
+    return response.data
+}
+
+// ── Submit System Support Ticket ────────────────────────────
+// Raises a support request ticket to platform administrators
+export async function submitSupportTicket(title, description) {
+    const response = await api.post("/mentor/support", { title, description })
+    return response.data
+}
+

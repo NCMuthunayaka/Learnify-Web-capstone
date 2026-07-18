@@ -317,6 +317,25 @@ export default function AdminApprovalsPage() {
                       </span>
                     </div>
                   </div>
+
+                  {/* Qualifications & Certifications */}
+                  {(featured.qualifications || featured.certifications) && (
+                    <div className="mt-4 p-4 bg-slate-50 border border-slate-100 rounded-xl space-y-3 text-xs font-body">
+                      {featured.qualifications && (
+                        <div>
+                          <span className="font-bold text-[#0A1931] uppercase tracking-wider text-[9px] block mb-1">Academic Qualifications</span>
+                          <p className="text-slate-600 leading-relaxed">{featured.qualifications}</p>
+                        </div>
+                      )}
+                      {featured.certifications && (
+                        <div>
+                          <span className="font-bold text-[#0A1931] uppercase tracking-wider text-[9px] block mb-1">Certifications &amp; Experience</span>
+                          <p className="text-slate-600 leading-relaxed">{featured.certifications}</p>
+                        </div>
+                      )}
+                    </div>
+                  )}
+
                 </div>
               </div>
 

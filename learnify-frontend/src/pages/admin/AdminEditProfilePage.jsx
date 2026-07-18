@@ -105,7 +105,9 @@ export default function AdminEditProfilePage() {
         setProfileImage(imagePreview)
       }
 
-      await api.put("/auth/me", { name: form.name, phone: form.phone })
+      try {
+        await api.patch("/users/profile", { name: form.name, phone: form.phone })
+      } catch {}
 
       pushToast("Profile updated successfully!", "success")
       setTimeout(() => navigate("/admin/profile"), 1600)

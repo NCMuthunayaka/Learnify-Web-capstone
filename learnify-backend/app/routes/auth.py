@@ -24,10 +24,12 @@ def register():
         return error_response("INVALID_ROLE", "Role must be student or mentor", "role", 400)
 
     user, err = register_user(
-        name     = data["name"],
-        email    = data["email"],
-        password = data["password"],
-        role     = data["role"],
+        name           = data["name"],
+        email          = data["email"],
+        password       = data["password"],
+        role           = data["role"],
+        qualifications = data.get("qualifications"),
+        certifications = data.get("certifications"),
     )
 
     if err:

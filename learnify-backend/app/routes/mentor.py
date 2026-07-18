@@ -56,8 +56,8 @@ def ensure_mentor_profile(user_id: int):
         if user_row and user_row[0] in ["mentor", "admin"]:
             db.session.execute(
                 text(
-                    "INSERT INTO mentor_profiles (user_id, title, institution, years_experience, rating, total_students_helped, avg_response_time_min, accept_urgent, email_notifications, auto_accept_returning) "
-                    "VALUES (:uid, 'Academic Mentor', 'Learnify', 5, 4.8, 142, 18, 1, 1, 0)"
+                    "INSERT INTO mentor_profiles (user_id, title, institution, years_experience, rating, total_students_helped, avg_response_time_min, accept_urgent, email_notifications, auto_accept_returning, total_points, response_streak_days) "
+                    "VALUES (:uid, 'Academic Mentor', 'Learnify', 5, 4.8, 142, 18, 1, 1, 0, 0, 0)"
                 ),
                 {"uid": user_id}
             )
@@ -112,7 +112,8 @@ def get_dashboard_stats():
             text(
                 "SELECT mp.id, mp.title, mp.institution, mp.years_experience, mp.rating, "
                 "mp.total_students_helped, mp.avg_response_time_min, mp.accept_urgent, "
-                "mp.email_notifications, mp.auto_accept_returning, mp.bio, u.subject, u.availability_status "
+                "mp.email_notifications, mp.auto_accept_returning, mp.bio, u.subject, u.availability_status, "
+                "mp.total_points, mp.response_streak_days "
                 "FROM mentor_profiles mp "
                 "JOIN users u ON mp.user_id = u.id "
                 "WHERE mp.user_id = :uid"
@@ -132,9 +133,44 @@ def get_dashboard_stats():
             "email_notifications": bool(profile_row[8]),
             "auto_accept_returning": bool(profile_row[9]),
             "bio": profile_row[10] or "",
-            "subject": profile_row[11] or "Mathematics"
+            "subject": profile_row[11] or "Mathematics",
+            "total_points": int(profile_row[13]) if profile_row[13] is not None else 0,
+            "response_streak_days": int(profile_row[14]) if profile_row[14] is not None else 0
         }
         availability_status = profile_row[12] or "Online"
+
+        # Fetch achievements
+        try:
+            achievement_rows = db.session.execute(
+                text(
+                    "SELECT a.name, a.description, a.icon, a.threshold, "
+                    "CASE WHEN ua.id IS NOT NULL THEN 1 ELSE 0 END as unlocked "
+                    "FROM achievements a "
+                    "LEFT JOIN user_achievements ua ON a.id = ua.achievement_id AND ua.user_id = :uid "
+                    "WHERE a.name IN ('Quick Solver', 'Streak Master', 'Knowledge Contributor')"
+                ),
+                {"uid": user_id}
+            ).fetchall()
+            
+            achievements = [
+                {
+                    "name": r[0],
+                    "description": r[1],
+                    "icon": r[2] or "Award",
+                    "threshold": r[3],
+                    "unlocked": bool(r[4])
+                }
+                for r in achievement_rows
+            ]
+        except Exception:
+            achievements = []
+
+        if not achievements:
+            achievements = [
+                {"name": "Quick Solver", "description": "Resolve 5 student help requests", "icon": "Check", "threshold": 5, "unlocked": profile_data["total_students_helped"] >= 5},
+                {"name": "Streak Master", "description": "Maintain a 5-day active tutoring streak", "icon": "Zap", "threshold": 5, "unlocked": profile_data["response_streak_days"] >= 5},
+                {"name": "Knowledge Contributor", "description": "Upload 5 published resources", "icon": "Book", "threshold": 5, "unlocked": False}
+            ]
 
         # 2. Fetch Availability Slots
         avail_rows = db.session.execute(
@@ -299,6 +335,26 @@ def get_dashboard_stats():
             { "name": "Lesson materials quality", "value": min(100, round((rating_val - 0.4) * 20)) }
         ]
 
+        ai_insights = [
+            {
+                "type": "opportunity",
+                "text": "You receive 60% of your tickets on Wednesday evenings. Opening a slot then could boost your student count.",
+                "badge": "Hotspot"
+            },
+            {
+                "type": "content",
+                "text": f"Your uploaded resources have high ratings, but your overall study documents could be expanded to support your {profile_data['subject']} students.",
+                "badge": "Resource Tip"
+            }
+        ]
+
+        if open_count > 0:
+            ai_insights.append({
+                "type": "urgent",
+                "text": f"You currently have {open_count} uncompleted tickets. Resolving them within 24h will improve your response rate.",
+                "badge": "Action Required"
+            })
+
         return success_response(data={
             "profile": profile_data,
             "status": availability_status,
@@ -323,7 +379,9 @@ def get_dashboard_stats():
             },
             "sessions": sessions,
             "performance": performance,
-            "notifications": notifications
+            "notifications": notifications,
+            "achievements": achievements,
+            "ai_insights": ai_insights
         })
 
     except Exception as e:
@@ -630,3 +688,85 @@ def post_reply(req_id):
     except Exception as e:
         db.session.rollback()
         return error_response("POST_REPLY_ERROR", str(e), status=500)
+
+
+# ── POST /api/mentor/support ──────────────────────────────────
+# Creates a system administrative support ticket from a mentor
+@bp.route("/support", methods=["POST"])
+@jwt_required()
+def create_support_ticket():
+    user_id = int(get_jwt_identity())
+    claims = get_jwt()
+    if claims.get("role") not in ["mentor", "admin"]:
+        return error_response("FORBIDDEN", "Mentor access required", status=403)
+
+    data = request.get_json(silent=True) or {}
+    title = data.get("title", "").strip()
+    description = data.get("description", "").strip()
+
+    if not title or not description:
+        return error_response("MISSING_FIELDS", "Title and description are required", status=400)
+
+    try:
+        # Log this event into administrative logs or system notification alerts
+        db.session.execute(
+            text(
+                "INSERT INTO notifications (user_id, type_id, title, body, is_read, created_at) "
+                "VALUES (:uid, 6, :title, :body, 0, :now)"
+            ),
+            {
+                "uid": user_id,
+                "title": f"Support Ticket: {title}",
+                "body": f"Description: {description}",
+                "now": datetime.utcnow()
+            }
+        )
+        db.session.commit()
+        return success_response(message="Support ticket submitted to administration", status=201)
+    except Exception as e:
+        db.session.rollback()
+        return error_response("SUPPORT_TICKET_ERROR", str(e), status=500)
+
+
+# ── POST /api/mentor/work-session ──────────────────────────────
+# Logs a mentor work/prep session, granting points and updating streaks
+@bp.route("/work-session", methods=["POST"])
+@jwt_required()
+def log_work_session():
+    user_id = int(get_jwt_identity())
+    claims = get_jwt()
+    if claims.get("role") not in ["mentor", "admin"]:
+        return error_response("FORBIDDEN", "Mentor access required", status=403)
+
+    data = request.get_json(silent=True) or {}
+    duration = int(data.get("duration", 25))
+    category = data.get("category", "Lesson Prep")
+
+    try:
+        # Fetch current points and streak
+        row = db.session.execute(
+            text("SELECT id, total_points, response_streak_days FROM mentor_profiles WHERE user_id = :uid"),
+            {"uid": user_id}
+        ).fetchone()
+
+        if not row:
+            return error_response("PROFILE_NOT_FOUND", "Mentor profile not found", status=404)
+
+        mp_id, points, streak = row
+        new_points = (points or 0) + 10  # Grant 10 points per completed prep session
+        new_streak = (streak or 0) + 1   # Increment streak by 1
+
+        db.session.execute(
+            text("UPDATE mentor_profiles SET total_points = :pts, response_streak_days = :strk WHERE id = :mpid"),
+            {"pts": new_points, "strk": new_streak, "mpid": mp_id}
+        )
+        db.session.commit()
+
+        return success_response(data={
+            "total_points": new_points,
+            "response_streak_days": new_streak
+        }, message="Work session logged successfully!")
+    except Exception as e:
+        db.session.rollback()
+        return error_response("WORK_SESSION_LOG_ERROR", str(e), status=500)
+

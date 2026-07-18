@@ -14,12 +14,14 @@ export async function loginUser(email, password) {
 // ── Register ──────────────────────────────────────────────
 // Sends user details to backend to create a new account
 // Returns user data and tokens on success
-export async function registerUser(name, email, password, role) {
+export async function registerUser(name, email, password, role, qualifications = "", certifications = "") {
     const response = await api.post("/auth/register", {
         name,
         email,
         password,
         role,
+        qualifications,
+        certifications,
     })
     return response.data
 }

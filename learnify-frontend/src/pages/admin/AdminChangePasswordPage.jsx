@@ -60,7 +60,7 @@ export default function AdminChangePasswordPage() {
 
     setSaving(true)
     try {
-      await api.post("/auth/change-password", {
+      await api.patch("/users/change-password", {
         current_password: form.current,
         new_password:     form.newPass,
       })
