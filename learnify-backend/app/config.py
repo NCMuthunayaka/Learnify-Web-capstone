@@ -13,6 +13,7 @@ ALLOWED_EXTENSIONS = {
 
 class BaseConfig:
     SECRET_KEY                     = os.getenv("JWT_SECRET_KEY", "change-me")
+    JWT_SECRET_KEY                 = os.getenv("JWT_SECRET_KEY", "change-me")
     SQLALCHEMY_TRACK_MODIFICATIONS = False
     JWT_ACCESS_TOKEN_EXPIRES       = 900
     JWT_REFRESH_TOKEN_EXPIRES      = 604800
@@ -36,6 +37,14 @@ class DevelopmentConfig(BaseConfig):
 class ProductionConfig(BaseConfig):
     DEBUG                   = False
     SQLALCHEMY_DATABASE_URI = os.getenv("DATABASE_URL")
+
+    def __init_subclass__(cls, **kwargs):
+        super().__init_subclass__(**kwargs)
+
+    @classmethod
+    def _validate(cls):
+        if os.getenv("JWT_SECRET_KEY", "change-me") == "change-me":
+            raise ValueError("JWT_SECRET_KEY environment variable must be set in production")
 
 config = {
     "development": DevelopmentConfig,
