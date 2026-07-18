@@ -1432,6 +1432,8 @@ export default function MentorDashboardPage() {
               </button>
             </div>
           </div>
+        </div>
+      )}
       {/* ── Ask Support Modal ── */}
       {showSupportModal && (
         <div className="fixed inset-0 z-50 bg-[#0A1931]/75 backdrop-blur-sm flex items-center justify-center p-4">
