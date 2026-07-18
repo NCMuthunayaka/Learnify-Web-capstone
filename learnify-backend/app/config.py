@@ -34,12 +34,27 @@ class DevelopmentConfig(BaseConfig):
     DEBUG                   = True
     SQLALCHEMY_DATABASE_URI = os.getenv("DATABASE_URL")
 
+def _get_database_url() -> str:
+    """
+    Reads DATABASE_URL from the environment and normalises the scheme.
+    Railway (and Heroku) historically provide 'postgres://' but SQLAlchemy
+    1.4+ requires 'postgresql://'.  Raises a clear error if not set at all.
+    """
+    url = os.getenv("DATABASE_URL")
+    if not url:
+        raise RuntimeError(
+            "DATABASE_URL environment variable is not set. "
+            "Add it in your Railway service → Variables tab."
+        )
+    # Fix legacy 'postgres://' scheme used by Railway / Heroku
+    if url.startswith("postgres://"):
+        url = url.replace("postgres://", "postgresql://", 1)
+    return url
+
+
 class ProductionConfig(BaseConfig):
     DEBUG                   = False
-    SQLALCHEMY_DATABASE_URI = os.getenv("DATABASE_URL")
-
-    def __init_subclass__(cls, **kwargs):
-        super().__init_subclass__(**kwargs)
+    SQLALCHEMY_DATABASE_URI = _get_database_url()
 
     @classmethod
     def _validate(cls):
