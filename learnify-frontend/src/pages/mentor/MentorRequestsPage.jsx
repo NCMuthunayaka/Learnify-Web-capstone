@@ -318,7 +318,7 @@ export default function MentorRequestsPage() {
                     {selectedRequest.attachment_url && (
                       <div className="pt-2 border-t border-gray-200/60">
                         <a
-                          href={`http://localhost:5000${selectedRequest.attachment_url}`}
+                          href={`${import.meta.env.VITE_BACKEND_URL || "http://localhost:5000"}${selectedRequest.attachment_url}`}
                           target="_blank"
                           rel="noopener noreferrer"
                           className="inline-flex items-center gap-1 font-body text-[11px] text-[#3b719f] hover:underline font-bold"

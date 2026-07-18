@@ -448,7 +448,7 @@ function HelpPage() {
                   {req.attachment_url && (
                     <div className="pt-1">
                       <a
-                        href={`http://localhost:5000${req.attachment_url}`}
+                        href={`${import.meta.env.VITE_BACKEND_URL || "http://localhost:5000"}${req.attachment_url}`}
                         target="_blank"
                         rel="noopener noreferrer"
                         className="inline-flex items-center gap-1 font-body text-[10px] text-[#3b719f] hover:underline font-bold"
