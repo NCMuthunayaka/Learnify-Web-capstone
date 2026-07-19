@@ -109,10 +109,10 @@ def register_user(name, email, password, role="student", qualifications=None, ce
 def login_user(email, password):
     user = User.query.filter_by(email=email).first()
     if not user:
-        return None, "Invalid email or password"
+        return None, "This email is not registered. Please register first."
 
     if not bcrypt.check_password_hash(user.password_hash, password):
-        return None, "Invalid email or password"
+        return None, "Incorrect password. Please try again."
 
     if user.status != "active":
         return None, "Account is not active"
@@ -122,7 +122,7 @@ def login_user(email, password):
     return user, None
 
 
-def google_auth_user(google_token):
+def google_auth_user(google_token, action=None):
     import requests as http_requests
     from datetime import datetime
 
@@ -147,6 +147,8 @@ def google_auth_user(google_token):
         user = User.query.filter_by(email=email).first()
 
         if user:
+            if action == "register":
+                return None, False, "An account with this email already exists. Please log in."
             # Existing user
             user.last_login = datetime.utcnow()
             if picture and not user.avatar_url:
@@ -155,6 +157,8 @@ def google_auth_user(google_token):
             return user, False, None  # False = not new user
 
         else:
+            if action == "login":
+                return None, False, "This email is not registered. Please register first."
             # New user
             import secrets
             random_password = secrets.token_hex(32)

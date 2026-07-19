@@ -26,9 +26,9 @@ export async function registerUser(name, email, password, role, qualifications =
     return response.data
 }
 
-export async function googleAuth(token) {
+export async function googleAuth(token, action = null) {
     // Send Google token to backend for verification
-    const response = await api.post("/auth/google", { token })
+    const response = await api.post("/auth/google", { token, action })
     return response.data
 }
 

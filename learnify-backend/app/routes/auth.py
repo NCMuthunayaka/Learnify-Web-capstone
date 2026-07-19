@@ -86,12 +86,13 @@ def login():
 def google_login():
     data         = request.get_json()
     google_token = data.get("token")
+    action       = data.get("action")
 
     if not google_token:
         return error_response("MISSING_FIELD", "Google token is required", status=400)
 
     # Now returns 3 values — user, is_new_user, error
-    user, is_new_user, err = google_auth_user(google_token)
+    user, is_new_user, err = google_auth_user(google_token, action)
 
     if err:
         return error_response("GOOGLE_AUTH_FAILED", err, status=401)

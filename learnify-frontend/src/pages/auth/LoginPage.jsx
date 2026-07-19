@@ -76,7 +76,7 @@ function LoginPage() {
       try {
         setGLoading(true)
         setApiError("")
-        const response                              = await googleAuth(tokenResponse.access_token)
+        const response                              = await googleAuth(tokenResponse.access_token, "login")
         const { user, access_token, refresh_token } = response.data
         login(user, access_token, refresh_token)
         navigate("/dashboard")

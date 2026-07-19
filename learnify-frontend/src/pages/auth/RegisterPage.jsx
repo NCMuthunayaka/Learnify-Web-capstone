@@ -270,7 +270,7 @@ function RegisterPage() {
       try {
         setGLoading(true)
         setApiError("")
-        const response = await googleAuth(tokenResponse.access_token)
+        const response = await googleAuth(tokenResponse.access_token, "register")
         const { user, access_token, refresh_token, is_new_user } = response.data
 
         if (is_new_user) {
