@@ -129,11 +129,12 @@ def google_auth_user(google_token):
     try:
         userinfo_response = http_requests.get(
             "https://www.googleapis.com/oauth2/v3/userinfo",
-            headers={"Authorization": f"Bearer {google_token}"}
+            headers={"Authorization": f"Bearer {google_token}"},
+            timeout=10
         )
 
         if userinfo_response.status_code != 200:
-            return None, False, "Invalid Google token"
+            return None, False, f"Invalid Google token (status {userinfo_response.status_code})"
 
         id_info = userinfo_response.json()
         email   = id_info.get("email")

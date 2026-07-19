@@ -67,7 +67,12 @@ function LoginPage() {
   }
 
   const handleGoogleLogin = useGoogleLogin({
+    flow: "implicit",
+    ux_mode: "popup",
+    prompt: "select_account",
+    scope: "openid email profile",
     onSuccess: async (tokenResponse) => {
+      console.log("Google Login onSuccess triggered. Token Response:", tokenResponse)
       try {
         setGLoading(true)
         setApiError("")
@@ -76,15 +81,24 @@ function LoginPage() {
         login(user, access_token, refresh_token)
         navigate("/dashboard")
       } catch (err) {
+        console.error("Google Login Backend API failed:", err)
         setApiError(
-          err.response?.data?.error?.message || "Google login failed."
+          err.response?.data?.error?.message || "Google login failed. Please try again."
         )
       } finally {
         setGLoading(false)
       }
     },
-    onError: () => setApiError("Google login was cancelled or failed.")
+    onError: (error) => {
+      console.error("Google Login onError triggered. Error details:", error)
+      setApiError(
+        error?.error === "popup_closed_by_user"
+          ? "Google sign-in was cancelled."
+          : "Google login failed. Make sure popups are not blocked and try again."
+      )
+    }
   })
+
 
   return (
     <div className="relative min-h-screen w-full flex items-center justify-center">

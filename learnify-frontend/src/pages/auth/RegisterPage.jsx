@@ -262,6 +262,10 @@ function RegisterPage() {
 
   // ── Google Register ────────────────────────────────────
   const handleGoogleRegister = useGoogleLogin({
+    flow: "implicit",
+    ux_mode: "popup",
+    prompt: "select_account",
+    scope: "openid email profile",
     onSuccess: async (tokenResponse) => {
       try {
         setGLoading(true)
@@ -281,13 +285,17 @@ function RegisterPage() {
         }
       } catch (err) {
         setApiError(
-          err.response?.data?.error?.message || "Google signup failed."
+          err.response?.data?.error?.message || "Google signup failed. Please try again."
         )
       } finally {
         setGLoading(false)
       }
     },
-    onError: () => setApiError("Google signup was cancelled or failed.")
+    onError: (error) => setApiError(
+      error?.error === "popup_closed_by_user"
+        ? "Google sign-in was cancelled."
+        : "Google signup failed. Make sure popups are not blocked and try again."
+    )
   })
 
   // ── Confirm Role After Google Auth ─────────────────────
