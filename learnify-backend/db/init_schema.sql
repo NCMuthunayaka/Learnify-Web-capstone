@@ -344,6 +344,7 @@ CREATE TABLE mentor_reviews (
 CREATE TABLE resources (
     id             INT          NOT NULL AUTO_INCREMENT,
     uploader_id    INT          NOT NULL,
+    uploader_type  ENUM('mentor', 'peer') NOT NULL DEFAULT 'mentor',
     subject_id     INT          NOT NULL,
     file_type_id   TINYINT      NOT NULL,
     title          VARCHAR(255) NOT NULL,
