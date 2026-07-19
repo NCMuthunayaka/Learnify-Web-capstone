@@ -472,7 +472,7 @@ function RegisterPage() {
           )}
 
           {/* Google Button */}
-          <button onClick={() => handleGoogleRegister()}
+          <button onClick={handleGoogleRegister}
             disabled={loading || gLoading}
             className="w-full flex items-center justify-center gap-3
               bg-white text-gray-700 font-body text-sm font-medium

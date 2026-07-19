@@ -1,4 +1,4 @@
-from flask import Flask, send_from_directory
+from flask import Flask, send_from_directory, request
 from app.extensions import db, jwt, migrate, bcrypt, cors
 from app.routes import auth, chat, scheduler, tracking, feedback, resources, admin, notifications, users, subjects, dashboard, progress, help_requests, mentor
 from app.config import config
@@ -24,10 +24,16 @@ def create_app(config_name="development"):
     jwt.init_app(app)
     migrate.init_app(app, db)
     bcrypt.init_app(app)
-    allowed_origin = os.getenv("FRONTEND_URL", "*")
+    
+    frontend_url_env = os.getenv("FRONTEND_URL", "*")
+    if frontend_url_env == "*":
+        allowed_origins = "*"
+    else:
+        allowed_origins = [url.strip().rstrip("/") for url in frontend_url_env.split(",") if url.strip()]
+        
     cors.init_app(app,
-        resources={r"/api/*": {"origins": allowed_origin}},
-        supports_credentials=allowed_origin != "*",
+        resources={r"/api/*": {"origins": allowed_origins}},
+        supports_credentials=allowed_origins != "*",
         allow_headers=["Content-Type", "Authorization"],
         methods=["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"]
     )
@@ -37,12 +43,27 @@ def create_app(config_name="development"):
     def add_headers(response):
         response.headers["Cross-Origin-Opener-Policy"]   = "unsafe-none"
         response.headers["Cross-Origin-Embedder-Policy"] = "unsafe-none"
-        origin = os.getenv("FRONTEND_URL", "*")
-        response.headers["Access-Control-Allow-Origin"]  = origin
+        
+        origin = request.headers.get("Origin")
+        frontend_url_env = os.getenv("FRONTEND_URL", "*")
+        
+        if frontend_url_env == "*":
+            response.headers["Access-Control-Allow-Origin"] = "*"
+        else:
+            allowed_origins = [url.strip().rstrip("/") for url in frontend_url_env.split(",") if url.strip()]
+            request_origin = origin.rstrip("/") if origin else None
+            
+            if request_origin and request_origin in allowed_origins:
+                response.headers["Access-Control-Allow-Origin"] = origin
+                response.headers["Access-Control-Allow-Credentials"] = "true"
+            else:
+                default_origin = allowed_origins[0] if allowed_origins else "*"
+                response.headers["Access-Control-Allow-Origin"] = default_origin
+                if default_origin != "*":
+                    response.headers["Access-Control-Allow-Credentials"] = "true"
+                    
         response.headers["Access-Control-Allow-Headers"] = "Content-Type, Authorization"
         response.headers["Access-Control-Allow-Methods"] = "GET, POST, PUT, PATCH, DELETE, OPTIONS"
-        if origin != "*":
-            response.headers["Access-Control-Allow-Credentials"] = "true"
         return response
 
     # ── Serve uploaded files ──────────────────────────────
