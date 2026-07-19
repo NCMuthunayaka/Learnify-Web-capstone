@@ -424,29 +424,31 @@ def _build_recent_activity(user_id):
 
 def _build_monthly_score_trend(user_id):
     try:
-        rows = db.session.execute(
-            text(
-                "SELECT s.name, DATE_FORMAT(ps.snapshot_date, '%b') as month, AVG(ps.avg_score) as avg_score "
-                "FROM progress_snapshots ps "
-                "JOIN subjects s ON ps.subject_id = s.id "
-                "WHERE ps.student_id = :uid "
-                "AND ps.avg_score IS NOT NULL "
-                "GROUP BY s.name, month"
-            ),
-            {"uid": user_id}
-        ).fetchall()
-        
-        subject_rows = db.session.execute(
+        # Get enrolled subjects
+        enrolled_rows = db.session.execute(
             text(
                 "SELECT DISTINCT s.name "
-                "FROM tasks t "
-                "JOIN subjects s ON t.subject_id = s.id "
-                "WHERE t.student_id = :uid"
+                "FROM student_subjects ss "
+                "JOIN subjects s ON ss.subject_id = s.id "
+                "JOIN student_profiles sp ON ss.student_id = sp.id "
+                "WHERE sp.user_id = :uid"
             ),
             {"uid": user_id}
         ).fetchall()
-        
-        subjects = [r[0] for r in subject_rows]
+        subjects = [r[0] for r in enrolled_rows]
+
+        if not subjects:
+            subject_rows = db.session.execute(
+                text(
+                    "SELECT DISTINCT s.name "
+                    "FROM tasks t "
+                    "JOIN subjects s ON t.subject_id = s.id "
+                    "WHERE t.student_id = :uid"
+                ),
+                {"uid": user_id}
+            ).fetchall()
+            subjects = [r[0] for r in subject_rows]
+
         if not subjects:
             session_subjects = db.session.execute(
                 text(
@@ -458,35 +460,112 @@ def _build_monthly_score_trend(user_id):
                 {"uid": user_id}
             ).fetchall()
             subjects = [r[0] for r in session_subjects]
-            
+
         if not subjects:
             subjects = ["Data Struct.", "Calculus", "Databases", "Soft. Eng.", "Networks", "Op. Systems"]
-        
+
         subjects = subjects[:6]
-        
-        # Get the names of the last 3 months
-        months = []
+
+        # Get last 3 months info
+        today = date.today()
+        months_info = []
         for i in range(2, -1, -1):
-            m_date = date.today() - timedelta(days=i*30)
-            months.append(m_date.strftime("%b"))
-            
+            first_day_of_current_month = today.replace(day=1)
+            if i == 2:
+                target_month_date = (first_day_of_current_month - timedelta(days=15)).replace(day=1)
+            elif i == 1:
+                target_month_date = (first_day_of_current_month - timedelta(days=1)).replace(day=1)
+            else:
+                target_month_date = first_day_of_current_month
+
+            next_month = (target_month_date + timedelta(days=32)).replace(day=1)
+            last_day_of_month = next_month - timedelta(days=1)
+            months_info.append({
+                "name": target_month_date.strftime("%b"),
+                "date_limit": last_day_of_month
+            })
+
+        months = [m["name"] for m in months_info]
         scores_map = {sub: [0, 0, 0] for sub in subjects}
-        
-        for row in rows:
-            sub_name, month_name, avg_s = row
-            if sub_name in scores_map and month_name in months:
-                m_idx = months.index(month_name)
-                scores_map[sub_name][m_idx] = float(avg_s)
-                
-        import hashlib
-        for sub in subjects:
-            for m_idx, month_name in enumerate(months):
-                if scores_map[sub][m_idx] == 0:
+
+        # Check if there is any user data at all
+        any_activity = db.session.execute(
+            text(
+                "SELECT (SELECT COUNT(*) FROM tasks WHERE student_id = :uid) + "
+                "(SELECT COUNT(*) FROM study_sessions WHERE student_id = :uid AND completed = 1)"
+            ),
+            {"uid": user_id}
+        ).fetchone()
+        has_any_data = (any_activity[0] > 0) if any_activity else False
+
+        if has_any_data:
+            # Query actual progress snapshots first
+            rows = db.session.execute(
+                text(
+                    "SELECT s.name, DATE_FORMAT(ps.snapshot_date, '%b') as month, AVG(ps.avg_score) as avg_score "
+                    "FROM progress_snapshots ps "
+                    "JOIN subjects s ON ps.subject_id = s.id "
+                    "WHERE ps.student_id = :uid "
+                    "AND ps.avg_score IS NOT NULL "
+                    "GROUP BY s.name, month"
+                ),
+                {"uid": user_id}
+            ).fetchall()
+
+            for row in rows:
+                sub_name, month_name, avg_s = row
+                if sub_name in scores_map and month_name in months:
+                    m_idx = months.index(month_name)
+                    scores_map[sub_name][m_idx] = float(avg_s)
+
+            # Calculate score for missing items dynamically
+            for sub in subjects:
+                for m_idx, m_info in enumerate(months_info):
+                    if scores_map[sub][m_idx] == 0:
+                        # 1. Look at tasks due in or before this month
+                        task_row = db.session.execute(
+                            text(
+                                "SELECT COUNT(*), SUM(CASE WHEN status = 'done' THEN 1 ELSE 0 END) "
+                                "FROM tasks "
+                                "WHERE student_id = :uid AND subject_id = (SELECT id FROM subjects WHERE name = :sub_name) "
+                                "AND DATE(created_at) <= :dlimit"
+                            ),
+                            {"uid": user_id, "sub_name": sub, "dlimit": m_info["date_limit"]}
+                        ).fetchone()
+
+                        total_tasks = task_row[0] if task_row else 0
+                        completed_tasks = task_row[1] if task_row and task_row[1] is not None else 0
+
+                        if total_tasks > 0:
+                            completion_pct = (completed_tasks / total_tasks * 100.0)
+                            scores_map[sub][m_idx] = round(70 + (completion_pct * 0.25))
+                        else:
+                            # 2. Check study hours
+                            hours_row = db.session.execute(
+                                text(
+                                    "SELECT COALESCE(SUM(duration_min), 0) "
+                                    "FROM study_sessions "
+                                    "WHERE student_id = :uid AND subject_id = (SELECT id FROM subjects WHERE name = :sub_name) "
+                                    "AND DATE(start_time) <= :dlimit AND completed = 1"
+                                ),
+                                {"uid": user_id, "sub_name": sub, "dlimit": m_info["date_limit"]}
+                            ).fetchone()
+                            study_hours = float(hours_row[0]) / 60.0
+                            if study_hours > 0:
+                                scores_map[sub][m_idx] = round(min(65 + study_hours * 5, 95))
+                            else:
+                                scores_map[sub][m_idx] = 0
+
+        else:
+            # Fallback to MD5 simulated scores for initial state
+            import hashlib
+            for sub in subjects:
+                for m_idx, month_name in enumerate(months):
                     h_val = int(hashlib.md5(f"{user_id}-{sub}-{month_name}".encode()).hexdigest(), 16)
-                    base_score = 50 + (h_val % 30)
-                    improvement = m_idx * (3 + (h_val % 7))
-                    scores_map[sub][m_idx] = min(base_score + improvement, 98)
-                    
+                    base_score = 65 + (h_val % 15)
+                    improvement = m_idx * (3 + (h_val % 5))
+                    scores_map[sub][m_idx] = min(base_score + improvement, 95)
+
         datasets = []
         bg_colors = ["rgba(179,207,229,0.75)", "rgba(74,127,167,0.65)", "#1A3D63"]
         for m_idx, month_name in enumerate(months):
@@ -496,7 +575,7 @@ def _build_monthly_score_trend(user_id):
                 "backgroundColor": bg_colors[m_idx % len(bg_colors)],
                 "borderRadius": 5
             })
-            
+
         return {
             "labels": subjects,
             "datasets": datasets
@@ -534,4 +613,53 @@ def get_progress_summary():
         })
     except Exception as e:
         return error_response("PROGRESS_ERROR", str(e), status=500)
+
+
+# ── GET /api/progress/report ──────────────────────────────
+@bp.route("/report", methods=["GET"])
+@jwt_required()
+def get_progress_report():
+    user_id = int(get_jwt_identity())
+    try:
+        # Gather user performance statistics
+        stats = _build_top_stats(user_id)
+        streak = _build_streak_count(user_id)
+        subject_progress = _build_subject_progress(user_id)
+
+        # Build clean prompt for the AI analysis report
+        subjects_detail = []
+        for sp in subject_progress:
+            subjects_detail.append(f"- {sp['name']}: {sp['pct']}% task completion")
+
+        subjects_str = "\n".join(subjects_detail) if subjects_detail else "No subjects or tasks recorded yet."
+
+        user_name_row = db.session.execute(
+            text("SELECT name FROM users WHERE id = :uid"),
+            {"uid": user_id}
+        ).fetchone()
+        user_name = user_name_row[0] if user_name_row else "Student"
+
+        # Ask the AI service to generate a report
+        from app.services.ai_service import get_ai_response
+
+        prompt = (
+            f"Please generate a comprehensive, personalized Monthly Study Analysis and Performance Report for a student named {user_name}.\n\n"
+            f"Here are their performance metrics for this month:\n"
+            f"- Study Hours: {stats.get('study_hours_month', 0)} hours\n"
+            f"- Completed Tasks: {stats.get('tasks_done', 0)} of {stats.get('tasks_total', 0)} total tasks\n"
+            f"- Current Study Streak: {streak} days\n"
+            f"Subject-wise Task Completion Rates:\n"
+            f"{subjects_str}\n\n"
+            f"Requirements for the report:\n"
+            f"1. Structure it into 3 clear sections: 'Monthly Overview', 'Strengths & Weaknesses', and 'Actionable Recommendations'.\n"
+            f"2. Keep the analysis constructive, encouraging, and tailored to their active subjects.\n"
+            f"3. Return the response in clean Markdown with appropriate formatting. Do not include markdown code block backticks (e.g. ```markdown) in your outer response."
+        )
+
+        # Get AI response (pass empty history for clean analysis)
+        ai_report = get_ai_response(prompt, history=[])
+
+        return success_response(data={"report": ai_report})
+    except Exception as e:
+        return error_response("REPORT_ERROR", str(e), status=500)
 
