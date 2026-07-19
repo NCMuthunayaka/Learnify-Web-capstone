@@ -422,6 +422,8 @@ export function MonthlyScoreChart({ chartData }) {
     }
   };
 
+  const isEmpty = !chartData || chartData.empty || !chartData.labels || chartData.labels.length === 0;
+
   return (
     <div className="h-full bg-white rounded-[18px] border border-[#D0E3F0] overflow-hidden shadow-[0_2px_8px_rgba(10,25,49,0.07)] flex flex-col">
       <div className="flex items-center justify-between px-6 py-4 border-b border-[#D0E3F0] shrink-0">
@@ -433,17 +435,31 @@ export function MonthlyScoreChart({ chartData }) {
             Assignment &amp; quiz scores across subjects
           </div>
         </div>
-        <button
-          onClick={openReport}
-          className="text-[12px] font-semibold text-[#4A7FA7] bg-[#deeef8] px-3 py-1.5 rounded-[7px] hover:bg-[#cce3f3] transition-colors cursor-pointer border-none"
-        >
-          Full Report
-        </button>
+        {!isEmpty && (
+          <button
+            onClick={openReport}
+            className="text-[12px] font-semibold text-[#4A7FA7] bg-[#deeef8] px-3 py-1.5 rounded-[7px] hover:bg-[#cce3f3] transition-colors cursor-pointer border-none"
+          >
+            Full Report
+          </button>
+        )}
       </div>
       <div className="flex-1 w-full relative min-h-[350px]">
-        <div className="absolute inset-0 px-6 py-5">
-          <canvas ref={canvasRef} />
-        </div>
+        {isEmpty ? (
+          <div className="absolute inset-0 flex flex-col items-center justify-center text-center p-6 text-[#8AAABF]">
+            <span className="text-[36px] mb-2">📊</span>
+            <div className="text-[14px] font-bold text-[#0A1931] mb-1" style={{ fontFamily: "Poppins, sans-serif" }}>
+              No Score Trend Available
+            </div>
+            <div className="text-[12px] max-w-xs leading-relaxed" style={{ fontFamily: "Inter, sans-serif" }}>
+              Enroll in subjects and log tasks or study sessions to start tracking your performance.
+            </div>
+          </div>
+        ) : (
+          <div className="absolute inset-0 px-6 py-5">
+            <canvas ref={canvasRef} />
+          </div>
+        )}
       </div>
 
       {/* AI Report Modal */}

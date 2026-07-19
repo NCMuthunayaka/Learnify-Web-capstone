@@ -462,7 +462,11 @@ def _build_monthly_score_trend(user_id):
             subjects = [r[0] for r in session_subjects]
 
         if not subjects:
-            subjects = ["Data Struct.", "Calculus", "Databases", "Soft. Eng.", "Networks", "Op. Systems"]
+            return {
+                "labels": [],
+                "datasets": [],
+                "empty": True
+            }
 
         subjects = subjects[:6]
 
