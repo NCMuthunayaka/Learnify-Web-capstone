@@ -318,7 +318,7 @@ function AIChatPage() {
               <Badge variant="success" size="sm" className="bg-green-500/20 text-green-400 border border-green-500/30">
                 ● AI ACTIVE
               </Badge>
-              <span className="text-[10px] text-white/40 font-body">Powered by Gemini 1.5 Flash</span>
+              <span className="text-[10px] text-white/40 font-body">Powered by Gemini 2.5 Flash</span>
             </div>
             <h2 className="font-heading text-2xl font-bold tracking-tight">AI Assistant Center</h2>
             <p className="font-body text-sm text-[#B3CFE5] max-w-2xl leading-relaxed">
@@ -461,7 +461,7 @@ function AIChatPage() {
               </div>
             </div>
             <span className="px-2 py-0.5 bg-[#4A7FA7]/10 text-[#4A7FA7] rounded font-body text-[10px] font-bold">
-              Gemini 1.5 Flash
+              Gemini 2.5 Flash
             </span>
           </div>
 
@@ -676,7 +676,7 @@ function AIChatPage() {
               </div>
             </div>
             <p className="font-body text-[9px] text-gray-300 mt-1.5 text-center">
-              Gemini 1.5 Flash · Responses may be inaccurate · For academic guidance only
+              Gemini 2.5 Flash · Responses may be inaccurate · For academic guidance only
             </p>
           </div>
 

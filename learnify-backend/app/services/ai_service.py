@@ -19,7 +19,7 @@ from google.genai import types as genai_types
 _gemini_key = os.getenv("GEMINI_API_KEY", "")
 gemini_client = genai.Client(api_key=_gemini_key) if _gemini_key else None
 
-GEMINI_MODEL = "gemini-2.5-flash-lite"
+GEMINI_MODEL = "gemini-flash-latest"
 
 # ── OpenAI (fallback) ─────────────────────────────────────────────────────────
 _openai_key    = os.getenv("OPENAI_API_KEY", "")
@@ -167,7 +167,7 @@ def _build_timetable_prompt(intensity, focus_subject, exam_date, subjects):
         f"- Each session must have exactly these keys: "
         f'"day" (Monday-Sunday), "start_time" (HH:MM 24h), "end_time" (HH:MM 24h), '
         f'"subject" (must match one of the listed subjects), '
-        f'"session_type" (study|revision|practice|rest)\n'
+        f'"session_type" (study|exam_prep|break)\n'
         f"- Keep subject names short (exactly as listed).\n"
         f"- Output must be valid JSON parseable by Python json.loads()."
     )

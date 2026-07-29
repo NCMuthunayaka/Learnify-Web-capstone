@@ -6,6 +6,19 @@ from app.utils.response_utils import success_response, error_response
 
 bp = Blueprint("scheduler", __name__)
 
+# Safety-net: map any AI-returned session_type to valid DB ENUM values
+SESSION_TYPE_MAP = {
+    "study":     "study",
+    "exam_prep": "exam_prep",
+    "break":     "break",
+    # Legacy / hallucinated values → map to closest valid ENUM
+    "revision":  "study",
+    "practice":  "study",
+    "rest":      "break",
+    "review":    "study",
+}
+
+
 
 # ── Helper: resolve student_id from user_id ───────────────
 def _get_student_profile_id(user_id: int):
@@ -563,7 +576,9 @@ def generate_timetable():
             start_str  = session.get("start_time", "08:00")
             end_str    = session.get("end_time",   "10:00")
             subj_name  = session.get("subject", focus_subject)
-            sess_type  = session.get("session_type", "study")
+            sess_type  = SESSION_TYPE_MAP.get(
+                session.get("session_type", "study").lower(), "study"
+            )
 
             day_offset  = DAY_MAP.get(day_name, 0)
             session_date = week_start + timedelta(days=day_offset)

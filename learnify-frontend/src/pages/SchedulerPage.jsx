@@ -12,7 +12,6 @@ import { startSession, endSession } from "../api/trackingApi"
 // ── statsData is now built dynamically from API (see dynamicStats below)
 
 const days = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"]
-const timeSlots = ["8:00 AM", "10:00 AM", "12:00 PM", "1:00 PM", "3:00 PM", "5:00 PM"]
 
 const subjectColors = {
   Mathematics: "bg-[#0D2440]",
@@ -32,87 +31,31 @@ const subjectTextColors = {
   English: "text-[#0D2440]",
 }
 
-const timetable = {
-  "8:00 AM": {
-    Monday: { subject: "Mathematics", detail: "Calculus - Ch.4" },
-    Tuesday: null,
-    Wednesday: { subject: "Mathematics", detail: "Algebra" },
-    Thursday: null,
-    Friday: { subject: "Physics", detail: "Mechanics" },
-    Saturday: null,
-  },
-  "10:00 AM": {
-    Monday: { subject: "Chemistry", detail: "Organic - Lab" },
-    Tuesday: { subject: "Physics", detail: "Waves & Optics" },
-    Wednesday: { subject: "English", detail: "Essay Writing" },
-    Thursday: { subject: "Chemistry", detail: "Periodic Table" },
-    Friday: { subject: "Mathematics", detail: "Statistics" },
-    Saturday: { subject: "Biology", detail: "Cell Biology" },
-  },
-  "12:00 PM": {
-    Monday: null, Tuesday: null, Wednesday: null,
-    Thursday: null, Friday: null, Saturday: null,
-  },
-  "1:00 PM": {
-    Monday: { subject: "Biology", detail: "Genetics" },
-    Tuesday: { subject: "English Lit", detail: "Shakespeare" },
-    Wednesday: { subject: "Physics", detail: "Thermodynamics" },
-    Thursday: { subject: "Biology", detail: "Ecosystems" },
-    Friday: null,
-    Saturday: { subject: "Chemistry", detail: "Revision" },
-  },
-  "3:00 PM": {
-    Monday: { subject: "English", detail: "Reading" },
-    Tuesday: { subject: "Mathematics", detail: "Problem Set" },
-    Wednesday: null,
-    Thursday: { subject: "Mathematics", detail: "Practice" },
-    Friday: { subject: "Biology", detail: "Diagrams" },
-    Saturday: null,
-  },
-  "5:00 PM": {
-    Monday: null,
-    Tuesday: { subject: "Chemistry", detail: "Past Papers" },
-    Wednesday: { subject: "Biology", detail: "Flash Cards" },
-    Thursday: { subject: "English", detail: "Poetry" },
-    Friday: null,
-    Saturday: { subject: "Mathematics", detail: "Mock Test" },
-  },
+// Helper: convert 24h hour to readable slot label
+function hourToSlotLabel(hour) {
+  if (hour === 0) return "12:00 AM"
+  if (hour < 12) return `${hour}:00 AM`
+  if (hour === 12) return "12:00 PM"
+  return `${hour - 12}:00 PM`
 }
 
-const todaysSessions = [
-  {
-    subject: "Mathematics — Statistics",
-    detail: "Chapter 7: Probability",
-    time: "8:00 – 9:30 AM",
-    status: "Done",
-    statusColor: "text-green-500",
-    dot: "bg-blue-500",
-  },
-  {
-    subject: "Physics — Thermodynamics",
-    detail: "Heat Transfer & Entropy",
-    time: "10:00 – 11:30 AM",
-    status: "Active",
-    statusColor: "text-yellow-500",
-    dot: "bg-sky-500",
-  },
-  {
-    subject: "Chemistry — Organic Lab",
-    detail: "Organic reactions write-up",
-    time: "1:00 – 2:30 PM",
-    status: "Soon",
-    statusColor: "text-gray-400",
-    dot: "bg-cyan-500",
-  },
-  {
-    subject: "English — Essay Writing",
-    detail: "Argumentative structure",
-    time: "3:00 – 4:00 PM",
-    status: "Soon",
-    statusColor: "text-gray-400",
-    dot: "bg-indigo-500",
-  },
-]
+// Helper: get Monday of the week for a given offset from current week
+function getWeekStart(offset = 0) {
+  const today = new Date()
+  const day = today.getDay()
+  const diff = today.getDate() - day + (day === 0 ? -6 : 1) + (offset * 7)
+  const monday = new Date(today.setDate(diff))
+  monday.setHours(0, 0, 0, 0)
+  return monday
+}
+
+function formatWeekRange(weekStart) {
+  const weekEnd = new Date(weekStart)
+  weekEnd.setDate(weekEnd.getDate() + 6)
+  const opts = { month: "short", day: "numeric" }
+  const yearOpts = { ...opts, year: "numeric" }
+  return `${weekStart.toLocaleDateString([], opts)} – ${weekEnd.toLocaleDateString([], yearOpts)}`
+}
 
 
 
@@ -155,6 +98,9 @@ function SchedulerPage() {
   const [allSubjects, setAllSubjects] = useState([])
   const [isCustomSubject, setIsCustomSubject] = useState(false)
   const [customSubjectName, setCustomSubjectName] = useState("")
+
+  // ── Week navigation state ──────────────────────────────
+  const [weekOffset, setWeekOffset] = useState(0)
 
   // ── Live API state ────────────────────────────────────
   const [apiStats, setApiStats]           = useState(null)
@@ -204,13 +150,7 @@ function SchedulerPage() {
       const dayName = daysOfWeek[dateObj.getDay()]
       
       const hour = dateObj.getHours()
-      let slot = null
-      if (hour === 8) slot = "8:00 AM"
-      else if (hour === 10) slot = "10:00 AM"
-      else if (hour === 12) slot = "12:00 PM"
-      else if (hour === 13) slot = "1:00 PM"
-      else if (hour === 15) slot = "3:00 PM"
-      else if (hour === 17) slot = "5:00 PM"
+      const slot = hourToSlotLabel(hour)
 
       handleOpenModal(
         slot || "",
@@ -336,40 +276,54 @@ function SchedulerPage() {
       color:   s.color_hex,
     }))
 
-  // Build dynamic timetable grid from apiTimetable
+  // Build dynamic timetable grid from apiTimetable — auto-discover time slots
   const dynamicTimetable = {}
-  timeSlots.forEach(slot => {
-    dynamicTimetable[slot] = {
-      Monday: null, Tuesday: null, Wednesday: null, Thursday: null, Friday: null, Saturday: null, Sunday: null
-    }
-  })
+  const discoveredSlots = new Set()
+  const daysOfWeek = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"]
 
   apiTimetable.forEach(session => {
     if (!session.start_time) return
     const dateObj = new Date(session.start_time)
-    const daysOfWeek = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"]
     const dayName = daysOfWeek[dateObj.getDay()]
-    
     const hour = dateObj.getHours()
-    let slot = null
-    if (hour === 8) slot = "8:00 AM"
-    else if (hour === 10) slot = "10:00 AM"
-    else if (hour === 12) slot = "12:00 PM"
-    else if (hour === 13) slot = "1:00 PM"
-    else if (hour === 15) slot = "3:00 PM"
-    else if (hour === 17) slot = "5:00 PM"
-    
-    if (slot && dayName in dynamicTimetable[slot]) {
-      dynamicTimetable[slot][dayName] = {
-        id: session.id,
-        subject: session.subject_name,
-        detail: session.session_type,
-        completed: session.completed,
-        color_hex: session.color_hex,
-        raw: session
+    const slot = hourToSlotLabel(hour)
+
+    discoveredSlots.add(hour) // track the raw hour for sorting
+
+    if (!dynamicTimetable[slot]) {
+      dynamicTimetable[slot] = {
+        Monday: null, Tuesday: null, Wednesday: null, Thursday: null, Friday: null, Saturday: null, Sunday: null
+      }
+    }
+
+    dynamicTimetable[slot][dayName] = {
+      id: session.id,
+      subject: session.subject_name,
+      detail: session.session_type,
+      completed: session.completed,
+      color_hex: session.color_hex,
+      raw: session
+    }
+  })
+
+  // Sort time slots chronologically
+  const sortedHours = [...discoveredSlots].sort((a, b) => a - b)
+  const timeSlots = sortedHours.length > 0
+    ? sortedHours.map(h => hourToSlotLabel(h))
+    : ["8:00 AM", "10:00 AM", "12:00 PM", "1:00 PM", "3:00 PM", "5:00 PM"]
+
+  // Ensure all displayed slots have entries in dynamicTimetable
+  timeSlots.forEach(slot => {
+    if (!dynamicTimetable[slot]) {
+      dynamicTimetable[slot] = {
+        Monday: null, Tuesday: null, Wednesday: null, Thursday: null, Friday: null, Saturday: null, Sunday: null
       }
     }
   })
+
+  // Compute current week range for display
+  const currentWeekStart = getWeekStart(weekOffset)
+  const weekRangeLabel = formatWeekRange(currentWeekStart)
 
   // Timetable study status logs state (initialised with logs to sum to exactly 24.5h and 18 completed sessions)
   const [timetableLogs, setTimetableLogs] = useState({})
@@ -488,10 +442,10 @@ function SchedulerPage() {
   const totalHours = apiStats
     ? apiStats.weekly_hours
     : Object.values(timetableLogs).reduce((sum, log) => sum + log.hours, 0)
-  const focusScore = apiStats ? apiStats.focus_score : 91
-  const upcomingCount = apiStats ? apiStats.upcoming_deadlines : 4
-  const weekDeadlines = apiStats ? apiStats.week_deadlines : 2
-  const completionRate = apiStats ? apiStats.completion_rate : 86
+  const focusScore = apiStats ? apiStats.focus_score : 0
+  const upcomingCount = apiStats ? apiStats.upcoming_deadlines : 0
+  const weekDeadlines = apiStats ? apiStats.week_deadlines : 0
+  const completionRate = apiStats ? apiStats.completion_rate : 0
 
   const dynamicStats = [
     {
@@ -577,17 +531,29 @@ function SchedulerPage() {
               Weekly Timetable
             </h3>
             <div className="flex items-center gap-2">
-              <button className="p-1 rounded hover:bg-gray-100
-                text-gray-400 transition-colors">
+              <button
+                onClick={() => setWeekOffset(prev => prev - 1)}
+                className="p-1 rounded hover:bg-gray-100 text-gray-400 transition-colors"
+              >
                 <ChevronLeft size={16} />
               </button>
               <span className="font-body text-xs text-gray-500">
-                Apr 14 – Apr 20, 2026
+                {weekRangeLabel}
               </span>
-              <button className="p-1 rounded hover:bg-gray-100
-                text-gray-400 transition-colors">
+              <button
+                onClick={() => setWeekOffset(prev => prev + 1)}
+                className="p-1 rounded hover:bg-gray-100 text-gray-400 transition-colors"
+              >
                 <ChevronRight size={16} />
               </button>
+              {weekOffset !== 0 && (
+                <button
+                  onClick={() => setWeekOffset(0)}
+                  className="font-body text-[10px] text-[#4A7FA7] hover:underline ml-1"
+                >
+                  Today
+                </button>
+              )}
             </div>
           </div>
 
