@@ -93,6 +93,7 @@ function SchedulerPage() {
   const [intensity, setIntensity] = useState("Balanced (4–5 hrs/day)")
   const [subject, setSubject]     = useState("Mathematics")
   const [examDate, setExamDate]   = useState("")
+  const [unavailableSlots, setUnavailableSlots] = useState("")
   const [generating, setGenerating] = useState(false)
   const [generateMsg, setGenerateMsg] = useState(null)
   const [allSubjects, setAllSubjects] = useState([])
@@ -228,6 +229,7 @@ function SchedulerPage() {
         intensity,
         focus_subject: finalSubject,
         exam_date: examDate,
+        unavailable_slots: unavailableSlots,
       })
       const resData = res?.data ?? res
       const count = resData?.sessions_created || 0
@@ -737,7 +739,20 @@ function SchedulerPage() {
                   type="date"
                   value={examDate}
                   onChange={(e) => setExamDate(e.target.value)}
-                  className="w-full bg-[#0A1931] text-white font-body text-xs px-3 py-2.5 rounded-lg border border-white/10 focus:outline-none focus:border-[#4A7FA7] transition-colors"
+                  className="w-full bg-[#071325] text-white font-body text-xs px-3 py-2.5 rounded-lg border border-white/20 focus:outline-none focus:border-sky-400 transition-colors"
+                />
+              </div>
+
+              <div>
+                <label className="font-body text-xs text-[#B3CFE5] mb-1 block font-semibold">
+                  Busy / Blocked Hours (Optional)
+                </label>
+                <input
+                  type="text"
+                  placeholder="e.g. School Mon-Fri 8am-2pm, Work Sat 5pm-9pm"
+                  value={unavailableSlots}
+                  onChange={(e) => setUnavailableSlots(e.target.value)}
+                  className="w-full bg-[#071325] text-white placeholder-gray-400 font-body text-xs px-3 py-2.5 rounded-lg border border-white/20 focus:outline-none focus:border-sky-400 transition-colors"
                 />
               </div>
               {generateMsg && (

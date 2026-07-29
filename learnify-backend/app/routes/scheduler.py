@@ -518,9 +518,10 @@ def generate_timetable():
     user_id = int(get_jwt_identity())
     data    = request.get_json(silent=True) or {}
 
-    intensity     = data.get("intensity", "Balanced (4-5 hrs/day)")
-    focus_subject = data.get("focus_subject", "General")
-    exam_date     = data.get("exam_date", "")
+    intensity         = data.get("intensity", "Balanced (4-5 hrs/day)")
+    focus_subject     = data.get("focus_subject", "General")
+    exam_date         = data.get("exam_date", "")
+    unavailable_slots = data.get("unavailable_slots", "")
 
     # Fetch the user's enrolled subjects for context
     try:
@@ -550,6 +551,7 @@ def generate_timetable():
             focus_subject=focus_subject,
             exam_date=exam_date,
             subjects=subjects,
+            unavailable_slots=unavailable_slots,
         )
     except RuntimeError as e:
         return error_response("AI_ERROR", str(e), status=503)
