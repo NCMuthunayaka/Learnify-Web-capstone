@@ -703,9 +703,9 @@ function SchedulerPage() {
                   <button
                     type="button"
                     onClick={() => setIsCustomSubject(!isCustomSubject)}
-                    className="font-body text-[10px] text-[#4A7FA7] hover:underline bg-transparent border-none cursor-pointer"
+                    className="font-body text-[11px] font-semibold text-sky-300 hover:text-white bg-sky-950/60 hover:bg-sky-900/80 px-2 py-0.5 rounded-md border border-sky-400/30 transition-all cursor-pointer"
                   >
-                    {isCustomSubject ? "Select existing" : "Type custom name"}
+                    {isCustomSubject ? "← Select existing" : "+ Type custom name"}
                   </button>
                 </div>
                 {isCustomSubject ? (
@@ -714,13 +714,13 @@ function SchedulerPage() {
                     placeholder="e.g. Human Computer Interaction"
                     value={customSubjectName}
                     onChange={(e) => setCustomSubjectName(e.target.value)}
-                    className="w-full bg-[#0A1931] text-white font-body text-xs px-3 py-2.5 rounded-lg border border-white/10 focus:outline-none focus:border-[#4A7FA7] transition-colors"
+                    className="w-full bg-[#071325] text-white placeholder-gray-400 font-body text-xs px-3 py-2.5 rounded-lg border border-sky-400/40 focus:outline-none focus:border-sky-400 transition-colors shadow-inner"
                   />
                 ) : (
                   <select
                     value={subject}
                     onChange={(e) => setSubject(e.target.value)}
-                    className="w-full bg-[#0A1931] text-white font-body text-xs px-3 py-2.5 rounded-lg border border-white/10 focus:outline-none focus:border-[#4A7FA7] transition-colors"
+                    className="w-full bg-[#071325] text-white font-body text-xs px-3 py-2.5 rounded-lg border border-white/20 focus:outline-none focus:border-sky-400 transition-colors"
                   >
                     {(allSubjects.length > 0 ? allSubjects.map(s => s.name) : ["Mathematics", "Physics", "Chemistry", "Biology", "English"]).map(s => (
                       <option key={s}>{s}</option>
