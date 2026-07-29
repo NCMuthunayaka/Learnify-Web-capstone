@@ -40,12 +40,13 @@ def _get_student_profile_id(user_id: int):
 @jwt_required()
 def get_timetable():
     user_id = int(get_jwt_identity())
+    week_offset = request.args.get("week_offset", type=int, default=0)
 
     try:
         from datetime import date, timedelta
-        today     = date.today()
-        # Get Monday of current week
-        week_start = today - timedelta(days=today.weekday())
+        today      = date.today()
+        # Get Monday of week based on week_offset (+1 = +7 days, +2 = +14 days, etc.)
+        week_start = today - timedelta(days=today.weekday()) + timedelta(weeks=week_offset)
         week_end   = week_start + timedelta(days=6)
 
         rows = db.session.execute(

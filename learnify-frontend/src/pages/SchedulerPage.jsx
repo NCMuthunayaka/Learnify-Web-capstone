@@ -41,10 +41,10 @@ function hourToSlotLabel(hour) {
 
 // Helper: get Monday of the week for a given offset from current week
 function getWeekStart(offset = 0) {
-  const today = new Date()
-  const day = today.getDay()
-  const diff = today.getDate() - day + (day === 0 ? -6 : 1) + (offset * 7)
-  const monday = new Date(today.setDate(diff))
+  const d = new Date()
+  const day = d.getDay()
+  const diff = d.getDate() - day + (day === 0 ? -6 : 1) + (offset * 7)
+  const monday = new Date(d.getFullYear(), d.getMonth(), diff)
   monday.setHours(0, 0, 0, 0)
   return monday
 }
@@ -181,7 +181,7 @@ function SchedulerPage() {
         const [statsRes, tasksRes, timetableRes, subjectsRes] = await Promise.allSettled([
           getSchedulerStats(),
           getTasks(),
-          getTimetable(),
+          getTimetable(weekOffset),
           getSubjects(),
         ])
         if (statsRes.status === "fulfilled") setApiStats(statsRes.value?.data ?? statsRes.value)
@@ -192,7 +192,7 @@ function SchedulerPage() {
       finally { setStatsLoading(false) }
     }
     loadSchedulerData()
-  }, [])
+  }, [weekOffset])
 
   useEffect(() => {
     if (allSubjects.length > 0 && !subject) {
@@ -206,7 +206,7 @@ function SchedulerPage() {
       const [statsRes, tasksRes, timetableRes] = await Promise.allSettled([
         getSchedulerStats(),
         getTasks(),
-        getTimetable(),
+        getTimetable(weekOffset),
       ])
       if (statsRes.status === "fulfilled") setApiStats(statsRes.value?.data ?? statsRes.value)
       if (tasksRes.status === "fulfilled") setApiTasks((tasksRes.value?.data ?? tasksRes.value)?.tasks || [])
@@ -528,7 +528,7 @@ function SchedulerPage() {
         {/* Weekly Timetable — spans 2 cols */}
         <div className="lg:col-span-2 bg-white rounded-2xl p-6 shadow-lg border border-gray-100">
 
-          <div className="flex items-center justify-between mb-4">
+          <div className="flex flex-wrap items-center justify-between gap-2 mb-4">
             <h3 className="font-heading text-sm font-semibold text-[#0A1931]">
               Weekly Timetable
             </h3>
@@ -536,26 +536,49 @@ function SchedulerPage() {
               <button
                 onClick={() => setWeekOffset(prev => prev - 1)}
                 className="p-1 rounded hover:bg-gray-100 text-gray-400 transition-colors"
+                title="Previous Week"
               >
                 <ChevronLeft size={16} />
               </button>
-              <span className="font-body text-xs text-gray-500">
+              <span className="font-body text-xs font-bold text-[#0A1931]">
                 {weekRangeLabel}
               </span>
               <button
                 onClick={() => setWeekOffset(prev => prev + 1)}
                 className="p-1 rounded hover:bg-gray-100 text-gray-400 transition-colors"
+                title="Next Week (+7 Days)"
               >
                 <ChevronRight size={16} />
               </button>
-              {weekOffset !== 0 && (
+
+              <div className="flex items-center gap-1 ml-2">
+                {weekOffset !== 0 && (
+                  <button
+                    onClick={() => setWeekOffset(0)}
+                    className="font-body text-[10px] font-bold text-[#4A7FA7] hover:underline bg-blue-50 px-2 py-0.5 rounded-md"
+                  >
+                    Today
+                  </button>
+                )}
                 <button
-                  onClick={() => setWeekOffset(0)}
-                  className="font-body text-[10px] text-[#4A7FA7] hover:underline ml-1"
+                  onClick={() => setWeekOffset(1)}
+                  className={`font-body text-[10px] font-semibold px-2 py-0.5 rounded-md transition-colors ${
+                    weekOffset === 1 ? "bg-[#1A3D63] text-white" : "bg-gray-100 text-gray-600 hover:bg-gray-200"
+                  }`}
+                  title="View Next Week (+7 Days)"
                 >
-                  Today
+                  +7 Days
                 </button>
-              )}
+                <button
+                  onClick={() => setWeekOffset(2)}
+                  className={`font-body text-[10px] font-semibold px-2 py-0.5 rounded-md transition-colors ${
+                    weekOffset === 2 ? "bg-[#1A3D63] text-white" : "bg-gray-100 text-gray-600 hover:bg-gray-200"
+                  }`}
+                  title="View 2 Weeks Forward (+14 Days)"
+                >
+                  +14 Days
+                </button>
+              </div>
             </div>
           </div>
 
