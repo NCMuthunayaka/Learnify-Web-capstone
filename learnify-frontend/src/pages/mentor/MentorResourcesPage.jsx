@@ -14,7 +14,7 @@ import {
   updateResource,
   shareResource,
 } from "../../api/resourcesApi"
-import { getSubjects } from "../../api/subjectsApi"
+import { getSubjects, createSubject } from "../../api/subjectsApi"
 import { getStudentsList } from "../../api/usersApi"
 
 const fileTypeIdMap = { "PDF": 1, "DOCX": 2, "PPTX": 3, "Video": 4 }
@@ -39,16 +39,23 @@ function TypeBadge({ type }) {
 // ── Upload Modal ───────────────────────────────────────────
 
 
-function UploadModal({ onClose, onUploadSuccess, subjects }) {
-  const [title, setTitle]           = useState("")
-  const [subjectId, setSubjectId]   = useState("")
-  const [selectedFile, setSelectedFile] = useState(null)
-  const [uploading, setUploading]   = useState(false)
-  const [progress, setProgress]     = useState("")
-  const [error, setError]           = useState("")
-  const [isPublic, setIsPublic]     = useState(true)
-  const [students, setStudents]     = useState([])
-  const [selectedStudent, setSelectedStudent] = useState("")
+function UploadModal({ onClose, onUploadSuccess, subjects, editResource = null }) {
+  const isEditing = Boolean(editResource)
+
+  const [title, setTitle]                 = useState(editResource?.title || "")
+  const [subjectId, setSubjectId]         = useState(
+    editResource?.subject_id?.toString() || editResource?.subject?.id?.toString() || ""
+  )
+  const [customSubject, setCustomSubject] = useState("")
+  const [selectedFile, setSelectedFile]   = useState(null)
+  const [uploading, setUploading]         = useState(false)
+  const [progress, setProgress]           = useState("")
+  const [error, setError]                 = useState("")
+  const [isPublic, setIsPublic]           = useState(editResource?.is_public ?? true)
+  const [students, setStudents]           = useState([])
+  const [selectedStudent, setSelectedStudent] = useState(
+    editResource?.recipient_id?.toString() || ""
+  )
 
   useEffect(() => {
     async function loadStudents() {
@@ -96,7 +103,11 @@ function UploadModal({ onClose, onUploadSuccess, subjects }) {
       setError("Please select a subject")
       return
     }
-    if (!selectedFile) {
+    if (subjectId === "NEW_CUSTOM_SUBJECT" && !customSubject.trim()) {
+      setError("Please type the new subject name")
+      return
+    }
+    if (!isEditing && !selectedFile) {
       setError("Please select a file to upload")
       return
     }
@@ -108,30 +119,61 @@ function UploadModal({ onClose, onUploadSuccess, subjects }) {
     try {
       setUploading(true)
 
-      // Step 1 — Upload actual file to server
-      setProgress("Uploading file to server...")
-      const uploadRes  = await uploadFile(selectedFile)
-      const fileUrl    = uploadRes.data.file_url
-      const fileSizeMb = uploadRes.data.file_size_mb
-      const fileTypeId = uploadRes.data.file_type_id
+      let finalSubjectId = subjectId
+      if (subjectId === "NEW_CUSTOM_SUBJECT") {
+        setProgress("Creating new subject...")
+        const newSubRes = await createSubject(customSubject.trim())
+        finalSubjectId = newSubRes.data.id
+      }
 
-      // Step 2 — Save resource record in DB
-      setProgress("Saving resource details...")
-      await uploadResource({
-        title:        title,
-        subject_id:   parseInt(subjectId),
-        file_type_id: fileTypeId,   // ✅ auto-detected from file
-        file_url:     fileUrl,      // ✅ server path
-        file_size_mb: fileSizeMb,   // ✅ auto-calculated
-        is_public:    isPublic,
-        recipient_id: selectedStudent ? parseInt(selectedStudent) : null
-      })
+      let fileUrl = editResource?.file_url
+      let fileSizeMb = editResource?.file_size_mb
+      let fileTypeId = editResource?.file_type_id
+
+      if (selectedFile) {
+        // Step 1 — Upload actual file to server
+        setProgress("Uploading file to server...")
+        const uploadRes  = await uploadFile(selectedFile)
+        fileUrl    = uploadRes.data.file_url
+        fileSizeMb = uploadRes.data.file_size_mb
+        fileTypeId = uploadRes.data.file_type_id
+      }
+
+      // Step 2 — Save/Update resource record in DB
+      if (isEditing) {
+        setProgress("Updating resource details...")
+        await updateResource(editResource.id, {
+          title:        title.trim(),
+          subject_id:   parseInt(finalSubjectId),
+          file_type_id: fileTypeId,
+          file_url:     fileUrl,
+          file_size_mb: fileSizeMb,
+          is_public:    isPublic,
+          recipient_id: selectedStudent ? parseInt(selectedStudent) : null
+        })
+      } else {
+        setProgress("Saving resource details...")
+        await uploadResource({
+          title:        title.trim(),
+          subject_id:   parseInt(finalSubjectId),
+          file_type_id: fileTypeId,
+          file_url:     fileUrl,
+          file_size_mb: fileSizeMb,
+          is_public:    isPublic,
+          recipient_id: selectedStudent ? parseInt(selectedStudent) : null
+        })
+      }
 
       onUploadSuccess()
       onClose()
 
     } catch (err) {
-      setError(err.response?.data?.error?.message || "Upload failed. Please try again.")
+      setError(
+        err.response?.data?.error?.message ||
+        err.response?.data?.message ||
+        err.message ||
+        "Operation failed. Please try again."
+      )
     } finally {
       setUploading(false)
       setProgress("")
@@ -139,7 +181,7 @@ function UploadModal({ onClose, onUploadSuccess, subjects }) {
   }
 
   return (
-    <Modal isOpen={true} onClose={onClose} title="Upload Material" size="md">
+    <Modal isOpen={true} onClose={onClose} title={isEditing ? "Edit Material" : "Upload Material"} size="md">
       <div className="space-y-4">
 
         {error && (
@@ -162,7 +204,7 @@ function UploadModal({ onClose, onUploadSuccess, subjects }) {
           />
         </div>
 
-        {/* Subject — from DB */}
+        {/* Subject — from DB with Add Custom Subject Option */}
         <div>
           <label className="font-body text-xs text-gray-500 mb-1 block">
             Subject *
@@ -178,7 +220,18 @@ function UploadModal({ onClose, onUploadSuccess, subjects }) {
             {subjects.map(s => (
               <option key={s.id} value={s.id}>{s.name}</option>
             ))}
+            <option value="NEW_CUSTOM_SUBJECT">➕ Add New Subject...</option>
           </select>
+
+          {subjectId === "NEW_CUSTOM_SUBJECT" && (
+            <input
+              type="text"
+              placeholder="Type new subject name (e.g. Artificial Intelligence)"
+              value={customSubject}
+              onChange={(e) => setCustomSubject(e.target.value)}
+              className="w-full mt-2 border border-gray-200 rounded-lg px-3 py-2.5 font-body text-xs text-gray-700 focus:outline-none focus:border-[#4A7FA7] bg-blue-50/40"
+            />
+          )}
         </div>
 
         {/* Visibility toggle & target student share */}
@@ -223,13 +276,13 @@ function UploadModal({ onClose, onUploadSuccess, subjects }) {
           </div>
         </div>
 
-        {/* File Upload — real file picker ✅ */}
+        {/* File Upload — real file picker */}
         <div>
           <label className="font-body text-xs text-gray-500 mb-1 block">
-            File * — PDF, DOCX, PPTX, MP4 (max 100MB)
+            File {isEditing ? "(Optional to replace existing file)" : "*"} — PDF, DOCX, PPTX, MP4 (max 100MB)
           </label>
           <div
-            onClick={() => document.getElementById("student-file-input").click()}
+            onClick={() => document.getElementById("mentor-resource-file-input").click()}
             className={`border-2 border-dashed rounded-lg p-6 text-center
               cursor-pointer transition-colors
               ${selectedFile
@@ -254,6 +307,7 @@ function UploadModal({ onClose, onUploadSuccess, subjects }) {
                   {selectedFile.name.split(".").pop().toUpperCase()}
                 </p>
                 <button
+                  type="button"
                   onClick={(e) => {
                     e.stopPropagation()
                     setSelectedFile(null)
@@ -263,6 +317,16 @@ function UploadModal({ onClose, onUploadSuccess, subjects }) {
                 >
                   ✕ Remove file
                 </button>
+              </div>
+            ) : isEditing ? (
+              <div className="space-y-2">
+                <p className="text-3xl">📄</p>
+                <p className="font-body text-sm text-gray-600 font-medium">
+                  Current file: {editResource.title} ({editResource.file_size_mb} MB)
+                </p>
+                <p className="font-body text-xs text-gray-400">
+                  Click to replace with a new file (PDF, DOCX, PPTX, MP4)
+                </p>
               </div>
             ) : (
               <div className="space-y-2">
@@ -277,7 +341,7 @@ function UploadModal({ onClose, onUploadSuccess, subjects }) {
             )}
           </div>
           <input
-            id="student-file-input"
+            id="mentor-resource-file-input"
             type="file"
             accept=".pdf,.docx,.pptx,.mp4"
             onChange={handleFileSelect}
@@ -304,7 +368,7 @@ function UploadModal({ onClose, onUploadSuccess, subjects }) {
           </Button>
           <Button variant="primary" fullWidth
             onClick={handleUpload} disabled={uploading}>
-            {uploading ? "Uploading..." : "Upload"}
+            {uploading ? (isEditing ? "Updating..." : "Uploading...") : (isEditing ? "Update" : "Upload")}
           </Button>
         </div>
 
@@ -497,14 +561,14 @@ function MentorResourcesPage() {
       {showUpload && (
         <UploadModal
           onClose={() => setShowUpload(false)}
-          onUploadSuccess={fetchAll}
+          onUploadSuccess={() => { fetchAll(); fetchSubjects(); }}
           subjects={subjects}
         />
       )}
       {editResource && (
         <UploadModal
           onClose={() => setEditResource(null)}
-          onUploadSuccess={fetchAll}
+          onUploadSuccess={() => { fetchAll(); fetchSubjects(); }}
           subjects={subjects}
           editResource={editResource}
         />
