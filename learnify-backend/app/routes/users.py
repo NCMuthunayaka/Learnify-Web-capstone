@@ -213,6 +213,49 @@ def delete_account():
         return error_response("DELETE_ACCOUNT_ERROR", str(e), status=500)
 
 
+def calculate_user_eligibility(user_id):
+    from sqlalchemy import text
+    try:
+        pub_cnt = db.session.execute(
+            text("SELECT COUNT(*) FROM public_replies WHERE author_id = :uid"),
+            {"uid": user_id}
+        ).scalar() or 0
+    except Exception:
+        pub_cnt = 0
+
+    try:
+        dir_cnt = db.session.execute(
+            text("SELECT COUNT(*) FROM direct_messages WHERE sender_id = :uid"),
+            {"uid": user_id}
+        ).scalar() or 0
+    except Exception:
+        dir_cnt = 0
+
+    try:
+        help_resp_count = db.session.execute(
+            text("SELECT COUNT(*) FROM help_requests WHERE student_id = :uid OR assigned_to = :uid"),
+            {"uid": user_id}
+        ).scalar() or 0
+    except Exception:
+        help_resp_count = 0
+
+    assistance_count = pub_cnt + dir_cnt + help_resp_count
+
+    try:
+        total_points = db.session.execute(
+            text("SELECT total_points FROM student_profiles WHERE user_id = :uid"),
+            {"uid": user_id}
+        ).scalar() or 0
+    except Exception:
+        total_points = 0
+
+    REQUIRED_ASSISTANCE = 3
+    REQUIRED_POINTS = 30
+    is_eligible = (assistance_count >= REQUIRED_ASSISTANCE or total_points >= REQUIRED_POINTS)
+
+    return is_eligible, assistance_count, REQUIRED_ASSISTANCE, total_points, REQUIRED_POINTS
+
+
 # ── GET /api/users/mentor-eligibility ─────────────────────
 # Returns eligibility status and application state for student applying to be mentor
 @bp.route("/mentor-eligibility", methods=["GET"])
@@ -228,45 +271,7 @@ def get_mentor_eligibility():
     from app.services.auth_service import ensure_mentor_applications_table
     ensure_mentor_applications_table()
 
-    # Calculate peer assistance interactions
-    try:
-        public_replies_count = db.session.execute(
-            text("SELECT COUNT(*) FROM public_replies WHERE author_id = :uid"),
-            {"uid": user_id}
-        ).scalar() or 0
-    except Exception:
-        public_replies_count = 0
-
-    try:
-        direct_msgs_count = db.session.execute(
-            text("SELECT COUNT(*) FROM direct_messages WHERE sender_id = :uid"),
-            {"uid": user_id}
-        ).scalar() or 0
-    except Exception:
-        direct_msgs_count = 0
-
-    try:
-        help_resp_count = db.session.execute(
-            text("SELECT COUNT(*) FROM help_requests WHERE student_id = :uid OR assigned_to = :uid"),
-            {"uid": user_id}
-        ).scalar() or 0
-    except Exception:
-        help_resp_count = 0
-
-    assistance_count = public_replies_count + direct_msgs_count + help_resp_count
-
-    try:
-        total_points = db.session.execute(
-            text("SELECT total_points FROM student_profiles WHERE user_id = :uid"),
-            {"uid": user_id}
-        ).scalar() or 0
-    except Exception:
-        total_points = 0
-
-    # Eligibility threshold: assistance_count >= 3 OR total_points >= 30
-    REQUIRED_ASSISTANCE = 3
-    REQUIRED_POINTS = 30
-    is_eligible = (assistance_count >= REQUIRED_ASSISTANCE or total_points >= REQUIRED_POINTS)
+    is_eligible, assistance_count, REQUIRED_ASSISTANCE, total_points, REQUIRED_POINTS = calculate_user_eligibility(user_id)
 
     # Fetch application state
     application_data = None
@@ -316,34 +321,8 @@ def apply_mentor():
     from app.services.auth_service import ensure_mentor_applications_table
     ensure_mentor_applications_table()
 
-    # Re-verify eligibility
-    try:
-        pub_cnt = db.session.execute(
-            text("SELECT COUNT(*) FROM public_replies WHERE author_id = :uid"),
-            {"uid": user_id}
-        ).scalar() or 0
-    except Exception:
-        pub_cnt = 0
-
-    try:
-        dir_cnt = db.session.execute(
-            text("SELECT COUNT(*) FROM direct_messages WHERE sender_id = :uid"),
-            {"uid": user_id}
-        ).scalar() or 0
-    except Exception:
-        dir_cnt = 0
-
-    assistance_count = pub_cnt + dir_cnt
-
-    try:
-        total_points = db.session.execute(
-            text("SELECT total_points FROM student_profiles WHERE user_id = :uid"),
-            {"uid": user_id}
-        ).scalar() or 0
-    except Exception:
-        total_points = 0
-
-    is_eligible = (assistance_count >= 3 or total_points >= 30)
+    # Re-verify eligibility using shared calculation
+    is_eligible, assistance_count, REQUIRED_ASSISTANCE, total_points, REQUIRED_POINTS = calculate_user_eligibility(user_id)
     if not is_eligible:
         return error_response(
             "NOT_ELIGIBLE",
