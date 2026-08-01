@@ -276,38 +276,6 @@ function HelpPage() {
                   </select>
                 </div>
 
-                {/* Request Type Toggle */}
-                <div>
-                  <label className="font-heading text-[10px] font-bold text-[#4A7FA7] uppercase tracking-wider block mb-1.5">
-                    Request Type
-                  </label>
-                  <div className="flex gap-2">
-                    <button
-                      type="button"
-                      onClick={() => setRequestType("Mentor")}
-                      className={`flex items-center gap-1.5 px-4 py-2 rounded-full font-body text-xs font-semibold transition-all border-none cursor-pointer ${
-                        requestType === "Mentor"
-                          ? "bg-[#3b719f] text-white"
-                          : "bg-[#e2edf7] text-[#3b719f] hover:bg-[#d4e3f0]"
-                      }`}
-                    >
-                      <GraduationCap size={14} />
-                      Mentor
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => setRequestType("Peer")}
-                      className={`flex items-center gap-1.5 px-4 py-2 rounded-full font-body text-xs font-semibold transition-all border-none cursor-pointer ${
-                        requestType === "Peer"
-                          ? "bg-[#3b719f] text-white"
-                          : "bg-[#e2edf7] text-[#3b719f] hover:bg-[#d4e3f0]"
-                      }`}
-                    >
-                      <Users size={14} />
-                      Peer
-                    </button>
-                  </div>
-                </div>
 
                 {/* Topic / Title */}
                 <div>
