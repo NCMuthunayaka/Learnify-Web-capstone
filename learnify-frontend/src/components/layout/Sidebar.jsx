@@ -16,6 +16,7 @@ const studentNavItems = [
   { label: "AI Assistant", icon: Bot,             path: "/ai-chat"    },
   { label: "Materials",    icon: BookOpen,        path: "/resources"  },
   { label: "Community",    icon: Users,           path: "/community"  },
+  { label: "Feedback",     icon: MessageSquare,   path: "/feedback"   },
 ]
 
 const mentorNavItems = [
@@ -24,6 +25,7 @@ const mentorNavItems = [
   { label: "AI Assistant",     icon: Bot,             path: "/ai-chat"          },
   { label: "My Resources",     icon: BookOpen,        path: "/mentor/resources" },
   { label: "Community",        icon: Users,           path: "/community"        },
+  { label: "Feedback",         icon: Settings,        path: "/feedback"         },
 ]
 
 const adminNavItems = [
