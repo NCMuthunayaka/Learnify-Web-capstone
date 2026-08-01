@@ -117,9 +117,9 @@ function CommunityPage() {
     }
   }
 
-  const fetchPublicFeed = async () => {
+  const fetchPublicFeed = async (showLoading = false) => {
     try {
-      setPublicLoading(true)
+      if (showLoading) setPublicLoading(true)
       const params = {}
       if (selectedSubjectFilter) params.subject_id = selectedSubjectFilter
       if (myRequestsFilter) params.my_requests = "true"
@@ -141,9 +141,9 @@ function CommunityPage() {
     }
   }
 
-  const fetchDirectFeed = async () => {
+  const fetchDirectFeed = async (showLoading = false) => {
     try {
-      setDirectLoading(true)
+      if (showLoading) setDirectLoading(true)
       const res = await getDirectRequests(directTab)
       setDirectThreads(res.data.threads || [])
     } catch (err) {
@@ -160,12 +160,12 @@ function CommunityPage() {
 
   useEffect(() => {
     if (mainTab === "public") {
-      fetchPublicFeed()
-      const interval = setInterval(fetchPublicFeed, 5000) // Live feed update
+      fetchPublicFeed(true)
+      const interval = setInterval(() => fetchPublicFeed(false), 5000) // Silent background sync
       return () => clearInterval(interval)
     } else {
-      fetchDirectFeed()
-      const interval = setInterval(fetchDirectFeed, 4000) // Live chat update
+      fetchDirectFeed(true)
+      const interval = setInterval(() => fetchDirectFeed(false), 5000) // Silent background sync
       return () => clearInterval(interval)
     }
   }, [mainTab, selectedSubjectFilter, myRequestsFilter, statusFilter, searchQuery, directTab])
