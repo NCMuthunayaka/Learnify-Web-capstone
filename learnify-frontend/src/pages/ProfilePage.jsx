@@ -11,11 +11,13 @@ import { getProfile, updateProfile, deleteAccount, getMentorEligibility, applyFo
 import Avatar from "../components/common/Avatar"
 import profileImg from "../assets/icons/profile.png"
 
-const yearOptions = ["1st Year", "2nd Year", "3rd Year", "4th Year"]
-const MAX_BIO     = 300
+const yearOptions   = ["1st Year", "2nd Year", "3rd Year", "4th Year", "Postgraduate / Masters"]
+const gradeOptions  = ["Grade 6", "Grade 7", "Grade 8", "Grade 9", "Grade 10", "Grade 11 (O/L)", "Grade 12 (A/L)", "Grade 13 (A/L)"]
+const streamOptions = ["Physical Science / Maths", "Biological Science", "Commerce", "Arts", "Technology (Engineering/Bio)", "General Studies"]
+const MAX_BIO       = 300
 
 function InputField({ label, icon: Icon, type = "text", value,
-  onChange, name, disabled, error }) {
+  onChange, name, disabled, error, placeholder }) {
   return (
     <div>
       <label className="font-body text-xs text-gray-500 mb-1.5 block">
@@ -32,6 +34,7 @@ function InputField({ label, icon: Icon, type = "text", value,
           value={value || ""}
           onChange={onChange}
           disabled={disabled}
+          placeholder={placeholder}
           className={`w-full ${Icon ? "pl-9" : "pl-3"} pr-3 py-2.5
             border rounded-lg font-body text-sm text-gray-700
             focus:outline-none transition-colors
@@ -52,15 +55,19 @@ function InputField({ label, icon: Icon, type = "text", value,
 
 function ProfilePage() {
   const [formData, setFormData] = useState({
-    firstName:  "",
-    lastName:   "",
-    email:      "",
-    phone:      "",
-    university: "",
-    faculty:    "",
-    year:       "1st Year",
-    studentId:  "",
-    bio:        "",
+    firstName:      "",
+    lastName:       "",
+    email:          "",
+    phone:          "",
+    educationLevel: "university",
+    schoolName:     "",
+    gradeLevel:     "Grade 12 (A/L)",
+    streamFocus:    "Physical Science / Maths",
+    university:     "",
+    faculty:        "",
+    year:           "1st Year",
+    studentId:      "",
+    bio:            "",
   })
   const [originalData, setOriginalData] = useState({})
 
@@ -68,6 +75,9 @@ function ProfilePage() {
   const [saving, setSaving]       = useState(false)
   const [saved, setSaved]         = useState(false)
   const [error, setError]         = useState("")
+  const [fieldErrors, setFieldErrors] = useState({})
+  const [activeTab, setActiveTab] = useState("personal")
+
   // ── Mentor Application States ────────────────────────────
   const [eligibility, setEligibility]         = useState(null)
   const [eligibilityLoading, setEligibilityLoading] = useState(false)
@@ -109,15 +119,19 @@ function ProfilePage() {
         const lastName  = nameParts.slice(1).join(" ") || ""
 
         const data = {
-          firstName:  firstName,
-          lastName:   lastName,
-          email:      user.email      || "",
-          phone:      user.phone      || "",
-          university: user.university || "",
-          faculty:    user.faculty    || "",
-          year:       user.year       || "1st Year",
-          studentId:  user.student_id || "",
-          bio:        user.bio        || "",
+          firstName:      firstName,
+          lastName:       lastName,
+          email:          user.email           || "",
+          phone:          user.phone           || "",
+          educationLevel: user.education_level || "university",
+          schoolName:     user.school_name     || "",
+          gradeLevel:     user.grade_level     || "Grade 12 (A/L)",
+          streamFocus:    user.stream_focus    || "Physical Science / Maths",
+          university:     user.university      || "",
+          faculty:        user.faculty         || "",
+          year:           user.year            || "1st Year",
+          studentId:      user.student_id      || "",
+          bio:            user.bio             || "",
         }
 
         setFormData(data)
@@ -199,13 +213,17 @@ function ProfilePage() {
       const fullName = `${formData.firstName} ${formData.lastName}`.trim()
 
       await updateProfile({
-        name:       fullName,
-        phone:      formData.phone,
-        bio:        formData.bio,
-        student_id: formData.studentId,
-        university: formData.university,
-        faculty:    formData.faculty,
-        year:       formData.year,
+        name:            fullName,
+        phone:           formData.phone,
+        bio:             formData.bio,
+        education_level: formData.educationLevel,
+        school_name:     formData.schoolName,
+        grade_level:     formData.gradeLevel,
+        stream_focus:    formData.streamFocus,
+        student_id:      formData.studentId,
+        university:      formData.university,
+        faculty:         formData.faculty,
+        year:            formData.year,
       })
 
       // Update original to reflect saved state
@@ -613,51 +631,155 @@ function ProfilePage() {
 
       {/* Academic Info */}
       {activeTab === "academic" && (
-        <div className="bg-white rounded-2xl p-6 shadow-sm border border-gray-100">
-          <h3 className="font-heading text-base font-semibold
-            text-[#0A1931] mb-5">
-            Academic Information
-          </h3>
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <InputField
-              label="Student ID"
-              icon={GraduationCap}
-              name="studentId"
-              value={formData.studentId}
-              onChange={handleChange}
-            />
-            <div>
-              <label className="font-body text-xs text-gray-500 mb-1.5 block">
-                Year of Study
-              </label>
-              <select
-                name="year"
-                value={formData.year}
-                onChange={handleChange}
-                className="w-full px-3 py-2.5 border border-gray-200
-                  rounded-lg font-body text-sm text-gray-700
-                  focus:outline-none focus:border-[#4A7FA7]"
-              >
-                {yearOptions.map(y => (
-                  <option key={y}>{y}</option>
-                ))}
-              </select>
-            </div>
-            <InputField
-              label="University"
-              icon={BookOpen}
-              name="university"
-              value={formData.university}
-              onChange={handleChange}
-            />
-            <InputField
-              label="Faculty"
-              icon={BookOpen}
-              name="faculty"
-              value={formData.faculty}
-              onChange={handleChange}
-            />
+        <div className="bg-white rounded-2xl p-6 shadow-sm border border-gray-100 space-y-6">
+          <div>
+            <h3 className="font-heading text-base font-semibold text-[#0A1931] mb-1">
+              Academic Information
+            </h3>
+            <p className="font-body text-xs text-gray-500">
+              Select your education level to customize your academic profile fields.
+            </p>
           </div>
+
+          {/* Education Level Type Selector Cards */}
+          <div>
+            <label className="font-heading text-[10px] font-bold text-[#4A7FA7] uppercase tracking-wider block mb-2">
+              Education Category
+            </label>
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+              {[
+                { id: "school", label: "School Student", desc: "Grade / High School", icon: "🏫" },
+                { id: "university", label: "University Student", desc: "Undergraduate / Postgrad", icon: "🎓" },
+                { id: "other", label: "Other / Learner", desc: "Self-taught / Institute", icon: "💡" },
+              ].map(opt => (
+                <button
+                  key={opt.id}
+                  type="button"
+                  onClick={() => setFormData(prev => ({ ...prev, educationLevel: opt.id }))}
+                  className={`p-3.5 rounded-xl border text-left transition-all cursor-pointer ${
+                    formData.educationLevel === opt.id
+                      ? "border-[#3b719f] bg-blue-50/50 shadow-xs"
+                      : "border-gray-200 bg-white hover:border-gray-300"
+                  }`}
+                >
+                  <div className="text-xl mb-1">{opt.icon}</div>
+                  <div className="font-heading text-xs font-bold text-[#0A1931]">{opt.label}</div>
+                  <div className="font-body text-[10px] text-gray-400 mt-0.5">{opt.desc}</div>
+                </button>
+              ))}
+            </div>
+          </div>
+
+          {/* ── Fields for School Students ── */}
+          {formData.educationLevel === "school" && (
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 pt-2 border-t border-gray-100">
+              <InputField
+                label="School Name *"
+                icon={BookOpen}
+                name="schoolName"
+                value={formData.schoolName}
+                onChange={handleChange}
+                placeholder="e.g. Royal College, Colombo"
+              />
+              <div>
+                <label className="font-body text-xs text-gray-500 mb-1.5 block">
+                  Grade / Class Level *
+                </label>
+                <select
+                  name="gradeLevel"
+                  value={formData.gradeLevel}
+                  onChange={handleChange}
+                  className="w-full px-3 py-2.5 border border-gray-200 rounded-lg font-body text-sm text-gray-700 focus:outline-none focus:border-[#4A7FA7] cursor-pointer"
+                >
+                  {gradeOptions.map(g => (
+                    <option key={g} value={g}>{g}</option>
+                  ))}
+                </select>
+              </div>
+              <div className="md:col-span-2">
+                <label className="font-body text-xs text-gray-500 mb-1.5 block">
+                  Stream / Subject Focus
+                </label>
+                <select
+                  name="streamFocus"
+                  value={formData.streamFocus}
+                  onChange={handleChange}
+                  className="w-full px-3 py-2.5 border border-gray-200 rounded-lg font-body text-sm text-gray-700 focus:outline-none focus:border-[#4A7FA7] cursor-pointer"
+                >
+                  {streamOptions.map(s => (
+                    <option key={s} value={s}>{s}</option>
+                  ))}
+                </select>
+              </div>
+            </div>
+          )}
+
+          {/* ── Fields for University Students ── */}
+          {formData.educationLevel === "university" && (
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 pt-2 border-t border-gray-100">
+              <InputField
+                label="University Name *"
+                icon={BookOpen}
+                name="university"
+                value={formData.university}
+                onChange={handleChange}
+                placeholder="e.g. Sabaragamuwa University of Sri Lanka"
+              />
+              <InputField
+                label="Faculty / Department *"
+                icon={BookOpen}
+                name="faculty"
+                value={formData.faculty}
+                onChange={handleChange}
+                placeholder="e.g. Faculty of Computing / Software Engineering"
+              />
+              <div>
+                <label className="font-body text-xs text-gray-500 mb-1.5 block">
+                  Year of Study *
+                </label>
+                <select
+                  name="year"
+                  value={formData.year}
+                  onChange={handleChange}
+                  className="w-full px-3 py-2.5 border border-gray-200 rounded-lg font-body text-sm text-gray-700 focus:outline-none focus:border-[#4A7FA7] cursor-pointer"
+                >
+                  {yearOptions.map(y => (
+                    <option key={y} value={y}>{y}</option>
+                  ))}
+                </select>
+              </div>
+              <InputField
+                label="Student / Registration ID"
+                icon={GraduationCap}
+                name="studentId"
+                value={formData.studentId}
+                onChange={handleChange}
+                placeholder="e.g. 2022/SE/045"
+              />
+            </div>
+          )}
+
+          {/* ── Fields for Other / Independent Learners ── */}
+          {formData.educationLevel === "other" && (
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 pt-2 border-t border-gray-100">
+              <InputField
+                label="Institution / Organization"
+                icon={BookOpen}
+                name="schoolName"
+                value={formData.schoolName}
+                onChange={handleChange}
+                placeholder="e.g. Online Academy, Vocational Institute, Self-Taught"
+              />
+              <InputField
+                label="Field of Study / Primary Focus"
+                icon={GraduationCap}
+                name="streamFocus"
+                value={formData.streamFocus}
+                onChange={handleChange}
+                placeholder="e.g. Web Development, Data Science, General Studies"
+              />
+            </div>
+          )}
         </div>
       )}
 

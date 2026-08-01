@@ -7,9 +7,31 @@ from app.utils.response_utils import success_response, error_response
 bp = Blueprint("users", __name__)
 
 
+def ensure_user_education_columns():
+    from sqlalchemy import text
+    cols = [
+        ("education_level", "VARCHAR(50) DEFAULT 'university'"),
+        ("school_name", "VARCHAR(200) NULL"),
+        ("grade_level", "VARCHAR(50) NULL"),
+        ("stream_focus", "VARCHAR(100) NULL"),
+    ]
+    for col_name, col_type in cols:
+        try:
+            db.session.execute(text(f"SELECT {col_name} FROM users LIMIT 1"))
+        except Exception:
+            db.session.rollback()
+            try:
+                db.session.execute(text(f"ALTER TABLE users ADD COLUMN {col_name} {col_type}"))
+                db.session.commit()
+            except Exception as e:
+                db.session.rollback()
+                print(f"Error adding {col_name} column: {e}")
+
+
 @bp.route("/profile", methods=["GET"])
 @jwt_required()
 def get_profile():
+    ensure_user_education_columns()
     user_id = int(get_jwt_identity())
     user    = User.query.get(user_id)
 
@@ -22,6 +44,7 @@ def get_profile():
 @bp.route("/profile", methods=["PATCH"])
 @jwt_required()
 def update_profile():
+    ensure_user_education_columns()
     user_id = int(get_jwt_identity())
     user    = User.query.get(user_id)
 
@@ -32,13 +55,17 @@ def update_profile():
 
     # ── All updatable fields for both roles ───────────────
     allowed_fields = [
-        # Common fields
+        # Common & Education level fields
         "name",
         "phone",
         "bio",
-        "university",
         "avatar_url",
         "role",
+        "education_level",
+        "school_name",
+        "grade_level",
+        "stream_focus",
+        "university",
         # Student fields
         "student_id",
         "faculty",
