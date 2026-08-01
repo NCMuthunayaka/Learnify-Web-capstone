@@ -184,15 +184,23 @@ function Navbar({ onToggleSidebar }) {
     }
   }
 
-  async function handleMarkRead(id) {
+  async function handleMarkRead(notification) {
     try {
-      await markAsRead(id)
-      setNotifications(notifications.map(n =>
-        n.id === id ? { ...n, is_read: true } : n
-      ))
-      setUnreadCount(prev => Math.max(0, prev - 1))
+      if (!notification.is_read) {
+        markAsRead(notification.id).catch(() => {})
+        setNotifications(prev => prev.map(n =>
+          n.id === notification.id ? { ...n, is_read: true } : n
+        ))
+        setUnreadCount(prev => Math.max(0, prev - 1))
+      }
+      setShowDropdown(false)
+      if (notification.action_url) {
+        navigate(notification.action_url)
+      } else {
+        navigate("/notifications")
+      }
     } catch (err) {
-      console.error("Failed to mark as read:", err)
+      console.error("Failed to handle notification click:", err)
     }
   }
 
@@ -292,7 +300,7 @@ function Navbar({ onToggleSidebar }) {
                   notifications.slice(0, 5).map((notification) => (
                     <div
                       key={notification.id}
-                      onClick={() => handleMarkRead(notification.id)}
+                      onClick={() => handleMarkRead(notification)}
                       className={`flex items-start gap-3 px-4 py-3
                         border-b border-gray-50 cursor-pointer
                         hover:bg-gray-50 transition-colors

@@ -311,10 +311,16 @@ function NotificationsPage() {
                       </p>
                       {/* Show clickable link if action_url exists */}
                       {notification.action_url && (
-                        <span className="font-body text-[11px] text-[#4A7FA7]
-                          hover:text-[#1A3D63]">
+                        <button
+                          type="button"
+                          onClick={(e) => {
+                            e.stopPropagation()
+                            handleMarkRead(notification)
+                          }}
+                          className="font-body text-[11px] font-bold text-[#4A7FA7] hover:text-[#1A3D63] transition-colors border-none bg-transparent cursor-pointer p-0 underline"
+                        >
                           View →
-                        </span>
+                        </button>
                       )}
                     </div>
                   </div>
