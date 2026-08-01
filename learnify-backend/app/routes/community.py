@@ -342,7 +342,7 @@ def create_public_reply(request_id):
         """), {"rid": request_id, "uid": user_id}).fetchone()
 
         if existing:
-            return error_response("ONE_REPLY_LIMIT", "You have already posted a reply to this question.", status=400)
+            return error_response("ONE_REPLY_LIMIT", "You have already posted a reply to this question. Other community members can submit their own replies.", status=400)
 
         # Insert reply
         db.session.execute(text("""

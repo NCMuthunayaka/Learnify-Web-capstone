@@ -596,12 +596,12 @@ function CommunityPage() {
               )}
             </div>
 
-            {/* Post Answer Section (Enforces 1 reply limit) */}
-            {activePublicRequest.has_user_replied ? (
+            {/* Post Answer Section (Enforces 1 reply per user limit) */}
+            {activePublicRequest.replies?.some(rep => rep.author_id === currentUserId) || activePublicRequest.has_user_replied ? (
               <div className="p-4 bg-gray-100 border border-gray-200 rounded-2xl text-center">
                 <p className="font-body text-xs text-gray-600 font-semibold flex items-center justify-center gap-1.5">
-                  <CheckCircle2 size={16} className="text-green-600" />
-                  You have already posted an answer to this question.
+                  <CheckCircle2 size={16} className="text-emerald-600" />
+                  You have already posted an answer to this question. Other community members can contribute their own answers below.
                 </p>
               </div>
             ) : (
