@@ -38,6 +38,36 @@ def create_app(config_name="development"):
         methods=["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"]
     )
 
+    # ── Auto-ensure database tables & columns exist ──────────
+    with app.app_context():
+        try:
+            from sqlalchemy import text
+            db.session.execute(text(
+                "CREATE TABLE IF NOT EXISTS resource_ratings ("
+                "id INT AUTO_INCREMENT PRIMARY KEY, "
+                "resource_id INT NOT NULL, "
+                "user_id INT NOT NULL, "
+                "rating TINYINT NOT NULL CHECK (rating BETWEEN 1 AND 5), "
+                "created_at DATETIME DEFAULT CURRENT_TIMESTAMP, "
+                "UNIQUE KEY uq_resource_user (resource_id, user_id), "
+                "CONSTRAINT fk_rr_resource FOREIGN KEY (resource_id) REFERENCES resources(id) ON DELETE CASCADE, "
+                "CONSTRAINT fk_rr_user FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE"
+                ") ENGINE=InnoDB"
+            ))
+            db.session.commit()
+        except Exception as e:
+            db.session.rollback()
+            print(f"Auto DB setup warning (resource_ratings): {e}")
+
+        try:
+            from sqlalchemy import text
+            db.session.execute(text(
+                "ALTER TABLE resources ADD COLUMN uploader_type ENUM('mentor', 'peer') NOT NULL DEFAULT 'mentor' AFTER uploader_id"
+            ))
+            db.session.commit()
+        except Exception:
+            db.session.rollback()
+
     # ── Fix Google OAuth popup issue ──────────────────────
     @app.after_request
     def add_headers(response):

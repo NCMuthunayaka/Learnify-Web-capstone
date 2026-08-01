@@ -31,24 +31,28 @@ def allowed_file(filename):
            filename.rsplit(".", 1)[1].lower() in ALLOWED_EXTENSIONS
 
 def get_resource_rating_stats(resource_id, current_user_id=None):
-    from sqlalchemy import text
-    row = db.session.execute(
-        text("SELECT AVG(rating), COUNT(id) FROM resource_ratings WHERE resource_id = :rid"),
-        {"rid": resource_id}
-    ).fetchone()
-    avg_rating = round(float(row[0]), 1) if row and row[0] is not None else 0.0
-    rating_count = int(row[1]) if row and row[1] is not None else 0
-    
-    user_rating = None
-    if current_user_id:
-        user_row = db.session.execute(
-            text("SELECT rating FROM resource_ratings WHERE resource_id = :rid AND user_id = :uid"),
-            {"rid": resource_id, "uid": current_user_id}
+    try:
+        from sqlalchemy import text
+        row = db.session.execute(
+            text("SELECT AVG(rating), COUNT(id) FROM resource_ratings WHERE resource_id = :rid"),
+            {"rid": resource_id}
         ).fetchone()
-        if user_row:
-            user_rating = int(user_row[0])
-            
-    return avg_rating, rating_count, user_rating
+        avg_rating = round(float(row[0]), 1) if row and row[0] is not None else 0.0
+        rating_count = int(row[1]) if row and row[1] is not None else 0
+        
+        user_rating = None
+        if current_user_id:
+            user_row = db.session.execute(
+                text("SELECT rating FROM resource_ratings WHERE resource_id = :rid AND user_id = :uid"),
+                {"rid": resource_id, "uid": current_user_id}
+            ).fetchone()
+            if user_row:
+                user_rating = int(user_row[0])
+                
+        return avg_rating, rating_count, user_rating
+    except Exception as e:
+        print(f"Rating stats calculation error: {e}")
+        return 0.0, 0, None
 
 
 # ── POST /api/resources/upload-file ──────────────────────
