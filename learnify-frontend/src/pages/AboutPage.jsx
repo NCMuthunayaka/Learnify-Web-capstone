@@ -48,7 +48,7 @@ function AboutPage() {
           Our Story
         </p>
         <h1 className="font-heading text-4xl font-bold mb-4">
-          About Learnify
+          About WhisperHive
         </h1>
         <p className="font-body text-[#B3CFE5] text-sm max-w-xl mx-auto leading-relaxed">
           Built by students, for students — at Sabaragamuwa University of Sri Lanka.
@@ -70,13 +70,13 @@ function AboutPage() {
               Transforming How Students Learn
             </h2>
             <p className="font-body text-sm text-gray-500 leading-relaxed">
-              Learnify was born out of a simple observation — university students
+              WhisperHive was born out of a simple observation — university students
               spend more time managing their studies than actually studying. Between
               tracking deadlines, finding resources, and figuring out what to study
               next, the actual learning gets lost.
             </p>
             <p className="font-body text-sm text-gray-500 leading-relaxed">
-              We built Learnify to solve exactly this. By automating scheduling,
+              We built WhisperHive to solve exactly this. By automating scheduling,
               connecting students with the right mentors, and providing AI-powered
               guidance, we let students focus on what matters — learning.
             </p>
@@ -166,7 +166,7 @@ function AboutPage() {
       {/* CTA */}
       <section className="bg-white px-10 py-16 text-center">
         <h2 className="font-heading text-2xl font-bold text-[#0A1931] mb-4">
-          Join the Learnify community
+          Join the WhisperHive community
         </h2>
         <Link to="/register"
           className="inline-block font-body text-sm font-medium

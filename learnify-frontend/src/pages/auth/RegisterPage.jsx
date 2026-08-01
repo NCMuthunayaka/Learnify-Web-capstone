@@ -426,7 +426,7 @@ function RegisterPage() {
               disabled:opacity-50 disabled:cursor-not-allowed">
             {roleLoading
               ? <LoadingSpinner size="sm" color="white" />
-              : "Continue to Learnify"}
+              : "Continue to WhisperHive"}
           </button>
         </div>
       </div>
@@ -447,7 +447,7 @@ function RegisterPage() {
         <div className="hidden md:flex flex-1 flex-col justify-center
           px-10 py-12 bg-transparent space-y-4">
           <h1 className="font-heading text-5xl font-bold text-white">
-            Learnify
+            WhisperHive
           </h1>
           <div className="font-heading text-2xl font-bold text-white space-y-1">
             <p>Plan better.</p>

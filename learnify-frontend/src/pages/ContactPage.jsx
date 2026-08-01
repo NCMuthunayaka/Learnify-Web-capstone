@@ -16,7 +16,7 @@ function ContactPage() {
 
     // ✅ Real send — opens user's email client
     // Pre-fills recipient, subject and body
-    const recipient = "learnify.official.edu@gmail.com"
+    const recipient = "whisperhive.official.edu@gmail.com"
     const subject   = encodeURIComponent(
       formData.subject || `Message from ${formData.name}`
     )
@@ -41,7 +41,7 @@ function ContactPage() {
     {
       icon:  Mail,
       label: "Email",
-      value: "learnify.official.edu@gmail.com",
+      value: "whisperhive.official.edu@gmail.com",
     },
   ]
 

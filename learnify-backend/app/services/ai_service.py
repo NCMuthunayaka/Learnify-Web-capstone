@@ -33,7 +33,7 @@ if _openai_key and _openai_key != "your-openai-api-key-here":
 
 # ── System prompt ─────────────────────────────────────────────────────────────
 SYSTEM_PROMPT = (
-    "You are Learnify's academic assistant. Help university students with "
+    "You are WhisperHive's academic assistant. Help university students with "
     "study planning, coursework questions, scheduling advice, and productivity. "
     "Be concise, encouraging, and professional. "
     "When analysing uploaded files, extract key academic content and summarise clearly."

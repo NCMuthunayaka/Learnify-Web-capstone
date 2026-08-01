@@ -58,7 +58,7 @@ export default function ProfileDropdown({
               {user.name || "Admin User"}
             </p>
             <p className="font-body text-xs text-white/55 mt-0.5 truncate">
-              {user.email || "admin@learnify.com"}
+              {user.email || "admin@whisperhive.com"}
             </p>
             <span className="inline-flex items-center gap-1 mt-2 px-2 py-0.5
               bg-white/15 rounded-md font-body text-[10px] font-bold

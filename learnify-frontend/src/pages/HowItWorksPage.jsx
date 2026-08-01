@@ -18,7 +18,7 @@ const steps = [
     number:      "02",
     icon:        setting,
     title:       "Get Your Smart Schedule",
-    description: "Learnify auto-generates a personalized timetable based on your priorities and difficulty levels. Our AI balances your workload so you never feel overwhelmed.",
+    description: "WhisperHive auto-generates a personalized timetable based on your priorities and difficulty levels. Our AI balances your workload so you never feel overwhelmed.",
     details:     ["AI analyzes subject difficulty", "Balances sessions across free time", "Prioritizes urgent deadlines", "Adapts as you complete sessions"],
   },
   {
@@ -46,11 +46,11 @@ function HowItWorksPage() {
           Simple Process
         </p>
         <h1 className="font-heading text-4xl font-bold mb-4">
-          How Learnify Works
+          How WhisperHive Works
         </h1>
         <p className="font-body text-[#B3CFE5] text-sm max-w-lg mx-auto leading-relaxed">
           Get started in minutes. No complicated setup — just sign up,
-          add your subjects, and let Learnify handle the rest.
+          add your subjects, and let WhisperHive handle the rest.
         </p>
       </section>
 

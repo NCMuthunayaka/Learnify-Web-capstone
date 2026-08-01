@@ -86,11 +86,11 @@ function Sidebar({ isOpen }) {
           border-b border-white/10">
           <img
             src={learnifyLogo}
-            alt="Learnify Logo"
+            alt="WhisperHive Logo"
             className="w-10 h-10 object-contain"
           />
           {isOpen && (
-            <span className="font-semibold text-lg">Learnify</span>
+            <span className="font-semibold text-lg">WhisperHive</span>
           )}
         </div>
 

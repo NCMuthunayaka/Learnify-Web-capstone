@@ -39,7 +39,7 @@ export default function MentorDashboardPage() {
   const [loading, setLoading] = useState(true)
   const [profile, setProfile] = useState({
     title: "Academic Mentor",
-    institution: "Learnify",
+    institution: "WhisperHive",
     years_experience: 5,
     rating: 4.8,
     total_students_helped: 142,
@@ -1112,7 +1112,7 @@ export default function MentorDashboardPage() {
                   <label className="text-[10px] text-slate-400 font-bold uppercase tracking-wider block">Quick Share Material</label>
                   <button 
                     onClick={() => {
-                      navigator.clipboard.writeText("https://learnify.edu/shared/notes-calculus");
+                      navigator.clipboard.writeText("https://whisperhive.app/shared/notes-calculus");
                       setToastMessage("Resource link copied!");
                       setTimeout(() => setToastMessage(""), 2000);
                     }}

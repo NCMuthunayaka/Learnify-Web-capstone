@@ -12,11 +12,11 @@ function LandingNavbar() {
           justify-center">
           <img
             src={learnify_logo}
-            alt="Learnify Logo"
+            alt="WhisperHive Logo"
             className="w-6 h-6 object-contain"
           />
         </div>
-        <span className="font-semibold text-lg text-[#1A3D63]">Learnify</span>
+        <span className="font-semibold text-lg text-[#1A3D63]">WhisperHive</span>
       </Link>
 
       {/* Nav Links */}
