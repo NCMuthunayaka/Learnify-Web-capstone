@@ -1,8 +1,9 @@
-import { useState, useEffect, useRef } from "react"
+import { useState, useEffect, useRef, useMemo } from "react"
 import { useNavigate } from "react-router-dom"
 import { 
   Users, MessageSquare, Plus, Search, Filter, Paperclip, Send, 
-  ArrowRight, ArrowLeft, CheckCircle2, Clock, FileText, Check, AlertCircle, Sparkles, X, Lock
+  ArrowRight, ArrowLeft, CheckCircle2, Clock, FileText, Check, AlertCircle, Sparkles, X, Lock,
+  ChevronRight, SortAsc, SortDesc, CalendarDays, User
 } from "lucide-react"
 import Avatar from "../components/common/Avatar"
 import Badge from "../components/common/Badge"
@@ -48,6 +49,189 @@ function formatFileSize(bytes) {
   const i = Math.floor(Math.log(bytes) / Math.log(k))
   return parseFloat((bytes / Math.pow(k, i)).toFixed(1)) + " " + sizes[i]
 }
+
+// Mock Direct Threads from Fake Users for demonstration
+const MOCK_DIRECT_THREADS = [
+  {
+    id: "mock-thread-1",
+    other_user_id: "mock-user-1",
+    other_user_name: "Dr. Sarah Jenkins",
+    other_user_role: "mentor",
+    subject: "Guidance on Binary Search Tree Balancing & AVL Rotations",
+    initial_message: "Hello! I reviewed your attempt on the AVL Tree balancing problem. Notice how the height difference exceeds 1 during the right rotation step.",
+    status: "in_progress",
+    created_at: "2026-08-01T14:30:00Z",
+    unread_count: 1,
+    messages: [
+      {
+        id: "m-101",
+        sender_id: "mock-user-1",
+        sender_name: "Dr. Sarah Jenkins",
+        sender_role: "mentor",
+        body: "Hello! I reviewed your attempt on the AVL Tree balancing problem. Notice how the height difference exceeds 1 during the right rotation step.",
+        created_at: "2026-08-01T14:30:00Z"
+      },
+      {
+        id: "m-102",
+        sender_id: "current-user",
+        sender_name: "You",
+        sender_role: "student",
+        body: "Thank you Dr. Sarah! Should I apply a double rotation (LR) when the left subtree is right-heavy?",
+        created_at: "2026-08-01T14:35:00Z"
+      },
+      {
+        id: "m-103",
+        sender_id: "mock-user-1",
+        sender_name: "Dr. Sarah Jenkins",
+        sender_role: "mentor",
+        body: "Yes, exactly! Perform a left rotation on the left child first, followed by a right rotation on the root node to restore balance.",
+        created_at: "2026-08-01T14:40:00Z"
+      }
+    ]
+  },
+  {
+    id: "mock-thread-2",
+    other_user_id: "mock-user-1",
+    other_user_name: "Dr. Sarah Jenkins",
+    other_user_role: "mentor",
+    subject: "Feedback on Graph Dijkstra Algorithm Priority Queue Implementation",
+    initial_message: "Your priority queue implementation looks solid, but check line 45 for potential infinite loops when the distance array is not updated properly.",
+    status: "resolved",
+    created_at: "2026-07-29T10:15:00Z",
+    unread_count: 0,
+    messages: [
+      {
+        id: "m-104",
+        sender_id: "mock-user-1",
+        sender_name: "Dr. Sarah Jenkins",
+        sender_role: "mentor",
+        body: "Your priority queue implementation looks solid, but check line 45 for potential infinite loops when the distance array is not updated properly.",
+        created_at: "2026-07-29T10:15:00Z"
+      },
+      {
+        id: "m-105",
+        sender_id: "current-user",
+        sender_name: "You",
+        sender_role: "student",
+        body: "Fixed it by adding the skip condition `if (d > dist[u]) continue`. Thank you!",
+        created_at: "2026-07-29T11:00:00Z"
+      }
+    ]
+  },
+  {
+    id: "mock-thread-3",
+    other_user_id: "mock-user-2",
+    other_user_name: "Alex Rivera",
+    other_user_role: "student",
+    subject: "Question on React UseEffect Clean-up Functions & AbortController",
+    initial_message: "Hi! Could you explain why a memory leak warning occurs when unmounting a component before async fetch completes?",
+    status: "pending",
+    created_at: "2026-08-01T18:20:00Z",
+    unread_count: 2,
+    messages: [
+      {
+        id: "m-201",
+        sender_id: "mock-user-2",
+        sender_name: "Alex Rivera",
+        sender_role: "student",
+        body: "Hi! Could you explain why a memory leak warning occurs when unmounting a component before async fetch completes?",
+        created_at: "2026-08-01T18:20:00Z"
+      },
+      {
+        id: "m-202",
+        sender_id: "mock-user-2",
+        sender_name: "Alex Rivera",
+        sender_role: "student",
+        body: "Also, is AbortController the best standard practice for cancelling HTTP requests in React 18?",
+        created_at: "2026-08-01T18:22:00Z"
+      }
+    ]
+  },
+  {
+    id: "mock-thread-4",
+    other_user_id: "mock-user-2",
+    other_user_name: "Alex Rivera",
+    other_user_role: "student",
+    subject: "State Management: React Context API vs Redux Toolkit Comparison",
+    initial_message: "When building medium-scale Learnify modules, should we prefer Redux Toolkit over React Context for performance?",
+    status: "in_progress",
+    created_at: "2026-07-30T11:00:00Z",
+    unread_count: 0,
+    messages: [
+      {
+        id: "m-203",
+        sender_id: "mock-user-2",
+        sender_name: "Alex Rivera",
+        sender_role: "student",
+        body: "When building medium-scale Learnify modules, should we prefer Redux Toolkit over React Context for performance?",
+        created_at: "2026-07-30T11:00:00Z"
+      }
+    ]
+  },
+  {
+    id: "mock-thread-5",
+    other_user_id: "mock-user-3",
+    other_user_name: "Prof. Michael Vance",
+    other_user_role: "mentor",
+    subject: "Database Normalization (3NF vs BCNF) Schema Examples",
+    initial_message: "Here are the sample relational schemas for Boyce-Codd Normal Form. Notice every determinant X -> Y must have X as a candidate key.",
+    status: "accepted",
+    created_at: "2026-07-31T09:45:00Z",
+    unread_count: 1,
+    messages: [
+      {
+        id: "m-301",
+        sender_id: "mock-user-3",
+        sender_name: "Prof. Michael Vance",
+        sender_role: "mentor",
+        body: "Here are the sample relational schemas for Boyce-Codd Normal Form. Notice every determinant X -> Y must have X as a candidate key.",
+        created_at: "2026-07-31T09:45:00Z"
+      }
+    ]
+  },
+  {
+    id: "mock-thread-6",
+    other_user_id: "mock-user-3",
+    other_user_name: "Prof. Michael Vance",
+    other_user_role: "mentor",
+    subject: "SQL Query Indexing & Optimization for Large Tables",
+    initial_message: "Make sure you add composite indexes on (user_id, created_at) to speed up community query execution times by 10x.",
+    status: "resolved",
+    created_at: "2026-07-25T16:00:00Z",
+    unread_count: 0,
+    messages: [
+      {
+        id: "m-302",
+        sender_id: "mock-user-3",
+        sender_name: "Prof. Michael Vance",
+        sender_role: "mentor",
+        body: "Make sure you add composite indexes on (user_id, created_at) to speed up community query execution times by 10x.",
+        created_at: "2026-07-25T16:00:00Z"
+      }
+    ]
+  },
+  {
+    id: "mock-thread-7",
+    other_user_id: "mock-user-4",
+    other_user_name: "Elena Rostova",
+    other_user_role: "student",
+    subject: "Python Asyncio Event Loop & Task Cancellation Best Practices",
+    initial_message: "How do task cancellations work when using asyncio.gather with return_exceptions=True?",
+    status: "pending",
+    created_at: "2026-08-01T11:10:00Z",
+    unread_count: 0,
+    messages: [
+      {
+        id: "m-401",
+        sender_id: "mock-user-4",
+        sender_name: "Elena Rostova",
+        sender_role: "student",
+        body: "How do task cancellations work when using asyncio.gather with return_exceptions=True?",
+        created_at: "2026-08-01T11:10:00Z"
+      }
+    ]
+  }
+]
 
 function CommunityPage() {
   const navigate = useNavigate()
@@ -98,6 +282,11 @@ function CommunityPage() {
   const [directMessageBody, setDirectMessageBody] = useState("")
   const [directMessageAttachments, setDirectMessageAttachments] = useState([])
   const [sendingDirectMsg, setSendingDirectMsg] = useState(false)
+  // ── Two-level Direct Requests navigation ──────────────────
+  const [selectedSender, setSelectedSender] = useState(null)  // { id, name, role }
+  const [directSortBy, setDirectSortBy] = useState("newest")  // 'newest' | 'oldest' | 'unread' | 'status' | 'az' | 'za'
+  const [senderSearchQuery, setSenderSearchQuery] = useState("")
+  const [cardSearchQuery, setCardSearchQuery] = useState("")
 
   // ── Modals & Creation Forms ────────────────────────────────
   const [showAddSubjectModal, setShowAddSubjectModal] = useState(false)
@@ -204,10 +393,20 @@ function CommunityPage() {
   const fetchDirectFeed = async (showLoading = false) => {
     try {
       if (showLoading) setDirectLoading(true)
-      const res = await getDirectRequests(directTab)
-      setDirectThreads(res.data.threads || [])
+      const res = await getDirectRequests(directTab).catch(() => null)
+      const apiThreads = res?.data?.threads || []
+      const combined = [...apiThreads]
+
+      // Merge mock threads from fake users so demonstration functionality is always available
+      MOCK_DIRECT_THREADS.forEach(mock => {
+        if (!combined.some(t => String(t.id) === String(mock.id))) {
+          combined.push(mock)
+        }
+      })
+      setDirectThreads(combined)
     } catch (err) {
       console.error("Failed to load direct requests:", err)
+      setDirectThreads(MOCK_DIRECT_THREADS)
     } finally {
       setDirectLoading(false)
     }
@@ -232,6 +431,18 @@ function CommunityPage() {
 
   // Open Direct Thread & Mark Read
   const openDirectThread = async (threadId) => {
+    // Handle mock thread if threadId starts with 'mock-'
+    if (String(threadId).startsWith("mock-")) {
+      const targetMock = MOCK_DIRECT_THREADS.find(m => m.id === threadId)
+      if (targetMock) {
+        targetMock.unread_count = 0
+        setActiveDirectThread(targetMock)
+        setDirectMessages(targetMock.messages || [])
+        setDirectThreads(prev => prev.map(t => t.id === threadId ? { ...t, unread_count: 0 } : t))
+        return
+      }
+    }
+
     try {
       const res = await getDirectThread(threadId)
       setActiveDirectThread(res.data.thread)
@@ -242,9 +453,9 @@ function CommunityPage() {
     }
   }
 
-  // Poll active direct thread messages if open
+  // Poll active direct thread messages if open (skip for mock threads)
   useEffect(() => {
-    if (activeDirectThread) {
+    if (activeDirectThread && !String(activeDirectThread.id).startsWith("mock-")) {
       const interval = setInterval(async () => {
         const res = await getDirectThread(activeDirectThread.id).catch(() => null)
         if (res && res.data) {
@@ -368,6 +579,44 @@ function CommunityPage() {
   // ── Actions: Send Direct Message ──────────────────────────
   const handleSendDirectMessage = async () => {
     if (!directMessageBody.trim() || !activeDirectThread) return
+
+    // Handle mock threads demo messaging
+    if (String(activeDirectThread.id).startsWith("mock-")) {
+      const userMsg = {
+        id: `m-user-${Date.now()}`,
+        sender_id: "current-user",
+        sender_name: "You",
+        sender_role: "student",
+        body: directMessageBody.trim(),
+        attachments: directMessageAttachments,
+        created_at: new Date().toISOString()
+      }
+
+      const updatedMsgs = [...directMessages, userMsg]
+      setDirectMessages(updatedMsgs)
+
+      const targetMock = MOCK_DIRECT_THREADS.find(m => m.id === activeDirectThread.id)
+      if (targetMock) targetMock.messages = updatedMsgs
+
+      setDirectMessageBody("")
+      setDirectMessageAttachments([])
+
+      // Simulate a live reply from the fake user after 1 second!
+      setTimeout(() => {
+        const fakeReply = {
+          id: `m-reply-${Date.now()}`,
+          sender_id: activeDirectThread.other_user_id,
+          sender_name: activeDirectThread.other_user_name,
+          sender_role: activeDirectThread.other_user_role,
+          body: `Thanks for your response regarding "${activeDirectThread.subject}"! I've updated the question card status. Let me know if you have any more questions!`,
+          created_at: new Date().toISOString()
+        }
+        setDirectMessages(prev => [...prev, fakeReply])
+        if (targetMock) targetMock.messages = [...(targetMock.messages || []), fakeReply]
+      }, 1000)
+      return
+    }
+
     try {
       setSendingDirectMsg(true)
       await sendDirectMessage(activeDirectThread.id, {
@@ -386,6 +635,69 @@ function CommunityPage() {
   }
 
   const unreadTotalDirect = directThreads.reduce((acc, t) => acc + (t.unread_count || 0), 0)
+
+  // ── Unique senders list for the first-level view ──────────
+  const uniqueSenders = useMemo(() => {
+    const map = new Map()
+    directThreads.forEach(t => {
+      const key = t.other_user_id ?? t.other_user_name
+      if (!map.has(key)) {
+        map.set(key, {
+          id:    key,
+          name:  t.other_user_name,
+          role:  t.other_user_role,
+          unread: t.unread_count || 0,
+          latest: t.created_at,
+        })
+      } else {
+        const existing = map.get(key)
+        existing.unread += (t.unread_count || 0)
+        if (t.created_at > existing.latest) existing.latest = t.created_at
+      }
+    })
+    let sendersList = Array.from(map.values())
+    if (senderSearchQuery.trim()) {
+      const q = senderSearchQuery.toLowerCase()
+      sendersList = sendersList.filter(s =>
+        (s.name || "").toLowerCase().includes(q) ||
+        (s.role || "").toLowerCase().includes(q)
+      )
+    }
+    return sendersList.sort((a, b) => new Date(b.latest) - new Date(a.latest))
+  }, [directThreads, senderSearchQuery])
+
+  // ── Threads (Question Cards) for the selected sender, with sorting & search ─────────
+  const senderThreads = useMemo(() => {
+    if (!selectedSender) return []
+    let filtered = directThreads.filter(t =>
+      (t.other_user_id ?? t.other_user_name) === selectedSender.id
+    )
+
+    if (cardSearchQuery.trim()) {
+      const q = cardSearchQuery.toLowerCase()
+      filtered = filtered.filter(t =>
+        (t.subject || "").toLowerCase().includes(q) ||
+        (t.initial_message || "").toLowerCase().includes(q) ||
+        (t.status || "").toLowerCase().includes(q)
+      )
+    }
+
+    switch (directSortBy) {
+      case "oldest":
+        return [...filtered].sort((a, b) => new Date(a.created_at) - new Date(b.created_at))
+      case "unread":
+        return [...filtered].sort((a, b) => (b.unread_count || 0) - (a.unread_count || 0) || new Date(b.created_at) - new Date(a.created_at))
+      case "status":
+        return [...filtered].sort((a, b) => (a.status || "").localeCompare(b.status || ""))
+      case "az":
+        return [...filtered].sort((a, b) => (a.subject || "").localeCompare(b.subject || ""))
+      case "za":
+        return [...filtered].sort((a, b) => (b.subject || "").localeCompare(a.subject || ""))
+      case "newest":
+      default:
+        return [...filtered].sort((a, b) => new Date(b.created_at) - new Date(a.created_at))
+    }
+  }, [directThreads, selectedSender, directSortBy, cardSearchQuery])
 
   return (
     <div className="space-y-6 max-w-7xl mx-auto">
@@ -959,13 +1271,13 @@ function CommunityPage() {
 
           </div>
         ) : (
-          /* Direct Requests List */
+          /* Direct Requests — Two-Level Navigation */
           <div className="space-y-4">
             {/* Mentor Inbox vs Sent Toggle (Hidden for Students) */}
             {isMentor && (
               <div className="flex items-center gap-2 border-b border-gray-200 pb-3">
                 <button
-                  onClick={() => setDirectTab("inbox")}
+                  onClick={() => { setDirectTab("inbox"); setSelectedSender(null) }}
                   className={`font-heading text-xs font-bold px-4 py-2 rounded-full border-none cursor-pointer ${
                     directTab === "inbox" ? "bg-[#0A1931] text-white" : "bg-gray-100 text-gray-600"
                   }`}
@@ -973,7 +1285,7 @@ function CommunityPage() {
                   Inbox (Received)
                 </button>
                 <button
-                  onClick={() => setDirectTab("sent")}
+                  onClick={() => { setDirectTab("sent"); setSelectedSender(null) }}
                   className={`font-heading text-xs font-bold px-4 py-2 rounded-full border-none cursor-pointer ${
                     directTab === "sent" ? "bg-[#0A1931] text-white" : "bg-gray-100 text-gray-600"
                   }`}
@@ -992,44 +1304,232 @@ function CommunityPage() {
                   No direct requests in your {directTab}.
                 </p>
               </div>
-            ) : (
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                {directThreads.map(t => (
-                  <div
-                    key={t.id}
-                    onClick={() => openDirectThread(t.id)}
-                    className="bg-white rounded-2xl p-4 shadow-sm border border-gray-100 space-y-3 hover:shadow-md transition-shadow cursor-pointer relative"
-                  >
-                    {t.unread_count > 0 && (
-                      <span className="w-2.5 h-2.5 rounded-full bg-blue-500 absolute top-4 right-4" />
-                    )}
-                    <div className="flex items-center gap-3">
-                      <Avatar name={t.other_user_name} color="primary" size="xs" />
+
+            ) : selectedSender ? (
+              /* ── LEVEL 2: Selected Sender's Specific Window (Question Cards) ── */
+              <div className="space-y-5">
+                {/* Window Header Bar */}
+                <div className="bg-white rounded-2xl p-5 shadow-sm border border-gray-100 flex items-center justify-between gap-4 flex-wrap">
+                  <div className="flex items-center gap-3">
+                    <button
+                      onClick={() => { setSelectedSender(null); setCardSearchQuery(""); setDirectSortBy("newest") }}
+                      className="flex items-center gap-1.5 font-body text-xs font-bold text-[#4A7FA7] hover:text-[#1A3D63] bg-gray-50 hover:bg-blue-50 px-3 py-1.5 rounded-xl border border-gray-200 transition-colors cursor-pointer"
+                    >
+                      <ArrowLeft size={15} />
+                      Back to Senders
+                    </button>
+                    <span className="text-gray-300 text-sm">|</span>
+                    <div className="flex items-center gap-2.5">
+                      <Avatar name={selectedSender.name} color="primary" size="sm" />
                       <div>
-                        <h4 className="font-heading text-xs font-bold text-[#0A1931]">
-                          {t.other_user_name}
-                        </h4>
-                        <p className="font-body text-[10px] text-gray-400">{t.other_user_role}</p>
+                        <div className="flex items-center gap-2">
+                          <h3 className="font-heading text-base font-bold text-[#0A1931]">{selectedSender.name}</h3>
+                          <span className="font-body text-[10px] font-bold px-2 py-0.5 rounded-full bg-blue-50 text-[#1A3D63] border border-blue-100 capitalize">
+                            {selectedSender.role}
+                          </span>
+                        </div>
+                        <p className="font-body text-[11px] text-gray-400">
+                          Direct Question Cards Window
+                        </p>
                       </div>
                     </div>
-
-                    <div className="space-y-1">
-                      <h5 className="font-heading text-xs font-bold text-[#0A1931] line-clamp-1">
-                        {t.subject}
-                      </h5>
-                      <p className="font-body text-[11px] text-gray-500 line-clamp-2">
-                        {t.initial_message}
-                      </p>
-                    </div>
-
-                    <div className="pt-2 border-t border-gray-50 flex items-center justify-between text-[10px] text-gray-400">
-                      <span>{t.created_at ? new Date(t.created_at).toLocaleDateString() : ""}</span>
-                      <span className="font-bold text-[#3b719f] flex items-center gap-1">
-                        Open Thread <ArrowRight size={10} />
-                      </span>
-                    </div>
                   </div>
-                ))}
+
+                  <div className="flex items-center gap-2">
+                    <span className="font-body text-xs font-semibold text-gray-500 bg-gray-100 px-3 py-1 rounded-full border border-gray-200">
+                      {senderThreads.length} Question Card{senderThreads.length !== 1 ? "s" : ""}
+                    </span>
+                  </div>
+                </div>
+
+                {/* Specific Window Controls: Search & Sorting Panel */}
+                <div className="bg-white rounded-2xl p-4 shadow-sm border border-gray-100 flex flex-col md:flex-row md:items-center justify-between gap-4">
+                  {/* Search inside this sender's question cards */}
+                  <div className="relative flex-1 max-w-md">
+                    <input
+                      type="text"
+                      placeholder={`Search question cards for ${selectedSender.name}...`}
+                      value={cardSearchQuery}
+                      onChange={(e) => setCardSearchQuery(e.target.value)}
+                      className="w-full bg-gray-50 border border-gray-200 rounded-xl pl-9 pr-4 py-2 font-body text-xs text-gray-800 focus:outline-none focus:border-[#4A7FA7] transition-colors"
+                    />
+                    <Search size={14} className="absolute left-3 top-2.5 text-gray-400" />
+                    {cardSearchQuery && (
+                      <button
+                        onClick={() => setCardSearchQuery("")}
+                        className="absolute right-3 top-2.5 text-gray-400 hover:text-gray-600 bg-transparent border-none cursor-pointer"
+                      >
+                        <X size={13} />
+                      </button>
+                    )}
+                  </div>
+
+                  {/* Sorting Option for this specific window */}
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <span className="font-heading text-xs font-bold text-gray-500 flex items-center gap-1.5">
+                      <SortAsc size={14} className="text-[#3b719f]" /> Sort Cards:
+                    </span>
+                    {[
+                      { key: "newest", label: "Newest" },
+                      { key: "oldest", label: "Oldest" },
+                      { key: "unread", label: "Unread First" },
+                      { key: "status", label: "Status" },
+                      { key: "az",     label: "A → Z" },
+                      { key: "za",     label: "Z → A" },
+                    ].map(opt => (
+                      <button
+                        key={opt.key}
+                        onClick={() => setDirectSortBy(opt.key)}
+                        className={`font-body text-[11px] font-semibold px-3 py-1.5 rounded-full border transition-all cursor-pointer ${
+                          directSortBy === opt.key
+                            ? "bg-[#0A1931] text-white border-[#0A1931] shadow-sm"
+                            : "bg-white text-gray-600 border-gray-200 hover:border-[#4A7FA7] hover:text-[#4A7FA7]"
+                        }`}
+                      >
+                        {opt.label}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
+                {/* Question Cards Grid */}
+                {senderThreads.length === 0 ? (
+                  <div className="bg-white rounded-2xl p-12 text-center border border-gray-100 space-y-2 shadow-sm">
+                    <FileText size={32} className="text-gray-300 mx-auto" />
+                    <p className="font-heading text-sm font-semibold text-gray-600">
+                      No question cards found matching your filter.
+                    </p>
+                    <p className="font-body text-xs text-gray-400">
+                      Try clearing search queries or switching sorting options.
+                    </p>
+                  </div>
+                ) : (
+                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                    {senderThreads.map(t => {
+                      const isUnread = t.unread_count > 0
+                      const status = t.status || "pending"
+
+                      return (
+                        <div
+                          key={t.id}
+                          onClick={() => openDirectThread(t.id)}
+                          className="bg-white rounded-2xl p-5 shadow-sm border border-gray-100 flex flex-col justify-between space-y-4 hover:shadow-lg hover:border-[#4A7FA7]/40 transition-all cursor-pointer relative group"
+                        >
+                          {/* Top Card Badge & Status */}
+                          <div className="flex items-center justify-between gap-2">
+                            <span className={`px-2.5 py-0.5 rounded-full font-body text-[10px] font-bold border capitalize ${
+                              status === "resolved"
+                                ? "bg-green-50 text-green-700 border-green-200"
+                                : status === "accepted" || status === "in_progress"
+                                ? "bg-blue-50 text-blue-700 border-blue-200"
+                                : "bg-amber-50 text-amber-700 border-amber-200"
+                            }`}>
+                              {status === "in_progress" ? "In Progress" : status}
+                            </span>
+
+                            {isUnread && (
+                              <span className="bg-blue-500 text-white font-body text-[10px] font-bold px-2 py-0.5 rounded-full animate-pulse flex items-center gap-1">
+                                <span className="w-1.5 h-1.5 rounded-full bg-white" /> Unread
+                              </span>
+                            )}
+                          </div>
+
+                          {/* Question Content */}
+                          <div className="space-y-1.5 flex-1">
+                            <h4 className="font-heading text-sm font-bold text-[#0A1931] line-clamp-2 group-hover:text-[#4A7FA7] transition-colors leading-snug">
+                              {t.subject}
+                            </h4>
+                            <p className="font-body text-xs text-gray-600 line-clamp-3 leading-relaxed">
+                              {t.initial_message}
+                            </p>
+                          </div>
+
+                          {/* Question Card Footer */}
+                          <div className="pt-3 border-t border-gray-100 flex items-center justify-between text-[11px] text-gray-400">
+                            <span className="flex items-center gap-1.5 font-body">
+                              <CalendarDays size={12} className="text-gray-400" />
+                              {t.created_at ? new Date(t.created_at).toLocaleDateString("en-GB", { day: "2-digit", month: "short", year: "numeric" }) : ""}
+                            </span>
+                            <span className="font-heading text-xs font-bold text-[#3b719f] group-hover:text-[#1A3D63] flex items-center gap-1 group-hover:gap-2 transition-all">
+                              Open Question Card <ArrowRight size={12} />
+                            </span>
+                          </div>
+                        </div>
+                      )
+                    })}
+                  </div>
+                )}
+              </div>
+
+            ) : (
+              /* ── LEVEL 1: Senders List View ───────────────────────── */
+              <div className="space-y-4">
+                {/* Search Bar for Senders */}
+                <div className="bg-white rounded-2xl p-4 shadow-sm border border-gray-100 flex items-center justify-between gap-4 flex-wrap">
+                  <div className="relative flex-1 max-w-md">
+                    <input
+                      type="text"
+                      placeholder="Search senders by name or role..."
+                      value={senderSearchQuery}
+                      onChange={(e) => setSenderSearchQuery(e.target.value)}
+                      className="w-full bg-gray-50 border border-gray-200 rounded-xl pl-9 pr-4 py-2 font-body text-xs text-gray-800 focus:outline-none focus:border-[#4A7FA7] transition-colors"
+                    />
+                    <Search size={14} className="absolute left-3 top-2.5 text-gray-400" />
+                    {senderSearchQuery && (
+                      <button
+                        onClick={() => setSenderSearchQuery("")}
+                        className="absolute right-3 top-2.5 text-gray-400 hover:text-gray-600 bg-transparent border-none cursor-pointer"
+                      >
+                        <X size={13} />
+                      </button>
+                    )}
+                  </div>
+                  <p className="font-body text-xs text-gray-400">
+                    {uniqueSenders.length} sender{uniqueSenders.length !== 1 ? "s" : ""} — click a name to open their question cards window
+                  </p>
+                </div>
+
+                {/* Senders List */}
+                <div className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden divide-y divide-gray-100">
+                  {uniqueSenders.map(sender => {
+                    const senderThreadCount = directThreads.filter(t => (t.other_user_id ?? t.other_user_name) === sender.id).length
+
+                    return (
+                      <button
+                        key={sender.id}
+                        onClick={() => { setSelectedSender(sender); setCardSearchQuery("") }}
+                        className="w-full flex items-center gap-4 px-6 py-4 hover:bg-blue-50/60 transition-colors text-left group cursor-pointer"
+                      >
+                        <Avatar name={sender.name} color="primary" size="md" />
+                        <div className="flex-1 min-w-0">
+                          <div className="flex items-center gap-2">
+                            <span className="font-heading text-sm font-bold text-[#0A1931] group-hover:text-[#4A7FA7] transition-colors">
+                              {sender.name}
+                            </span>
+                            <span className="font-body text-[10px] font-semibold px-2 py-0.5 rounded-full bg-gray-100 text-gray-600 capitalize">
+                              {sender.role}
+                            </span>
+                            {sender.unread > 0 && (
+                              <span className="bg-blue-500 text-white font-body text-[10px] font-bold px-2 py-0.5 rounded-full leading-none flex items-center gap-1">
+                                <span className="w-1.5 h-1.5 rounded-full bg-white animate-ping" />
+                                {sender.unread} unread
+                              </span>
+                            )}
+                          </div>
+                          <p className="font-body text-xs text-gray-400 mt-1">
+                            {senderThreadCount} question card{senderThreadCount !== 1 ? "s" : ""} exchanged
+                          </p>
+                        </div>
+                        <div className="flex items-center gap-3 text-gray-400 group-hover:text-[#4A7FA7] transition-colors">
+                          <span className="font-body text-xs text-gray-400 group-hover:text-[#4A7FA7]">
+                            {sender.latest ? new Date(sender.latest).toLocaleDateString("en-GB", { day: "2-digit", month: "short", year: "numeric" }) : ""}
+                          </span>
+                          <ChevronRight size={18} className="group-hover:translate-x-1 transition-transform" />
+                        </div>
+                      </button>
+                    )
+                  })}
+                </div>
               </div>
             )}
           </div>
