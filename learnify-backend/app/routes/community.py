@@ -67,6 +67,66 @@ def ensure_community_tables():
             );
         """))
         db.session.commit()
+
+        # Legacy sync: Migrate past help_requests into Community Hub tables
+        try:
+            legacy_rows = db.session.execute(text("""
+                SELECT id, student_id, subject_id, assigned_to, topic_title, description, status, attachment_url, created_at
+                FROM help_requests
+            """)).fetchall()
+
+            for hr in legacy_rows:
+                hr_id, sid, subid, assigned, title, desc, st, attach_url, created = hr
+                if assigned:
+                    # Sync to direct_requests
+                    existing = db.session.execute(text("""
+                        SELECT id FROM direct_requests WHERE sender_id = :sid AND recipient_id = :rid AND subject = :subj LIMIT 1
+                    """), {"sid": sid, "rid": assigned, "subj": title}).fetchone()
+
+                    if not existing:
+                        st_mapped = 'resolved' if st == 'resolved' else 'in_progress' if st == 'accepted' else 'pending'
+                        db.session.execute(text("""
+                            INSERT INTO direct_requests (sender_id, recipient_id, subject, initial_message, status, created_at)
+                            VALUES (:sid, :rid, :subj, :msg, :st, :created)
+                        """), {"sid": sid, "rid": assigned, "subj": title, "msg": desc, "st": st_mapped, "created": created or datetime.utcnow()})
+                        db.session.commit()
+
+                        dr_id = db.session.execute(text("SELECT LAST_INSERT_ID()")).scalar()
+                        db.session.execute(text("""
+                            INSERT INTO direct_messages (request_id, sender_id, body, created_at)
+                            VALUES (:tid, :sid, :msg, :created)
+                        """), {"tid": dr_id, "sid": sid, "msg": desc, "created": created or datetime.utcnow()})
+                        db.session.commit()
+
+                        if attach_url:
+                            db.session.execute(text("""
+                                INSERT INTO request_attachments (request_id, request_type, file_url, file_name, file_size, uploaded_by, created_at)
+                                VALUES (:rid, 'direct', :furl, 'Attachment', 0, :uid, :created)
+                            """), {"rid": dr_id, "furl": attach_url, "uid": sid, "created": created or datetime.utcnow()})
+                            db.session.commit()
+                else:
+                    # Sync to public_requests
+                    existing = db.session.execute(text("""
+                        SELECT id FROM public_requests WHERE requester_id = :sid AND title = :title LIMIT 1
+                    """), {"sid": sid, "title": title}).fetchone()
+
+                    if not existing:
+                        st_mapped = 'answered' if st == 'resolved' else 'open'
+                        db.session.execute(text("""
+                            INSERT INTO public_requests (requester_id, subject_id, title, description, status, created_at)
+                            VALUES (:uid, :subid, :title, :desc, :st, :created)
+                        """), {"uid": sid, "subid": subid or 1, "title": title, "desc": desc, "st": st_mapped, "created": created or datetime.utcnow()})
+                        db.session.commit()
+
+                        pr_id = db.session.execute(text("SELECT LAST_INSERT_ID()")).scalar()
+                        if attach_url:
+                            db.session.execute(text("""
+                                INSERT INTO request_attachments (request_id, request_type, file_url, file_name, file_size, uploaded_by, created_at)
+                                VALUES (:rid, 'public', :furl, 'Attachment', 0, :uid, :created)
+                            """), {"rid": pr_id, "furl": attach_url, "uid": sid, "created": created or datetime.utcnow()})
+                            db.session.commit()
+        except Exception as sync_legacy_err:
+            pass
     except Exception as e:
         db.session.rollback()
         print(f"Community table init error: {e}")
