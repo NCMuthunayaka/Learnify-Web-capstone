@@ -119,7 +119,8 @@ function NotificationsPage() {
     }
 
     if (notification.action_url) {
-      navigate(notification.action_url)
+      const targetUrl = notification.action_url === "/help" ? "/community" : notification.action_url
+      navigate(targetUrl)
     }
   }
 

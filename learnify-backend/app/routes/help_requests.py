@@ -413,7 +413,7 @@ def add_help_reply(request_id):
                     type_name="system",
                     title="New Reply on Help Request",
                     body=f"{sender_name} replied to '{topic_title}': '{content[:50]}...'",
-                    action_url="/help"
+                    action_url="/community"
                 )
             except Exception as notif_err:
                 print(f"Error creating notification: {notif_err}")
