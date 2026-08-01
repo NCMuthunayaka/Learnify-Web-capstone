@@ -216,24 +216,27 @@ def delete_account():
 def calculate_user_eligibility(user_id):
     from sqlalchemy import text
     try:
+        # Count accepted public forum replies
         pub_cnt = db.session.execute(
-            text("SELECT COUNT(*) FROM public_replies WHERE author_id = :uid"),
+            text("SELECT COUNT(*) FROM public_replies WHERE author_id = :uid AND (is_accepted = 1 OR is_accepted IS TRUE)"),
             {"uid": user_id}
         ).scalar() or 0
     except Exception:
         pub_cnt = 0
 
     try:
+        # Count resolved 1-on-1 direct requests
         dir_cnt = db.session.execute(
-            text("SELECT COUNT(*) FROM direct_messages WHERE sender_id = :uid"),
+            text("SELECT COUNT(*) FROM direct_requests WHERE (sender_id = :uid OR recipient_id = :uid) AND status = 'resolved'"),
             {"uid": user_id}
         ).scalar() or 0
     except Exception:
         dir_cnt = 0
 
     try:
+        # Count resolved help requests
         help_resp_count = db.session.execute(
-            text("SELECT COUNT(*) FROM help_requests WHERE student_id = :uid OR assigned_to = :uid"),
+            text("SELECT COUNT(*) FROM help_requests WHERE (student_id = :uid OR assigned_to = :uid) AND status = 'resolved'"),
             {"uid": user_id}
         ).scalar() or 0
     except Exception:

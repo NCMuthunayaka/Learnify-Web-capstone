@@ -68,6 +68,12 @@ def ensure_community_tables():
         """))
         db.session.commit()
 
+        try:
+            db.session.execute(text("ALTER TABLE public_replies ADD COLUMN is_accepted TINYINT(1) DEFAULT 0"))
+            db.session.commit()
+        except Exception:
+            db.session.rollback()
+
         # Legacy sync: Migrate past help_requests into Community Hub tables
         try:
             legacy_rows = db.session.execute(text("""
@@ -211,11 +217,11 @@ def get_public_requests():
 
             # Fetch replies for this public request
             reply_rows = db.session.execute(text("""
-                SELECT prp.id, prp.author_id, u.name, u.role, prp.body, prp.created_at
+                SELECT prp.id, prp.author_id, u.name, u.role, prp.body, prp.created_at, COALESCE(prp.is_accepted, 0)
                 FROM public_replies prp
                 JOIN users u ON prp.author_id = u.id
                 WHERE prp.request_id = :req_id
-                ORDER BY prp.created_at ASC
+                ORDER BY prp.is_accepted DESC, prp.created_at ASC
             """), {"req_id": req_id}).fetchall()
 
             replies = []
@@ -239,6 +245,7 @@ def get_public_requests():
                     "body": rep[4],
                     "created_at": rep[5].isoformat() if rep[5] else None,
                     "is_mentor": (rep[3] in ["mentor", "admin"]),
+                    "is_accepted": bool(rep[6]),
                     "attachments": [{"id": a[0], "file_url": a[1], "file_name": a[2], "file_size": a[3]} for a in att_rows]
                 })
 
@@ -371,6 +378,71 @@ def create_public_reply(request_id):
     except Exception as e:
         db.session.rollback()
         return error_response("CREATE_PUBLIC_REPLY_ERROR", str(e), status=500)
+
+
+# POST /api/community/public/<id>/reply/<reply_id>/accept
+@bp.route("/public/<int:request_id>/reply/<int:reply_id>/accept", methods=["POST"])
+@jwt_required()
+def accept_public_reply(request_id, reply_id):
+    ensure_community_tables()
+    user_id = int(get_jwt_identity())
+
+    try:
+        # Check if current user is the owner of the question
+        req = db.session.execute(
+            text("SELECT requester_id FROM public_requests WHERE id = :rid"),
+            {"rid": request_id}
+        ).fetchone()
+
+        if not req:
+            return error_response("NOT_FOUND", "Question not found", status=404)
+
+        if req[0] != user_id:
+            return error_response("FORBIDDEN", "Only the owner of this question can mark an answer as accepted.", status=403)
+
+        # Check if reply exists
+        reply = db.session.execute(
+            text("SELECT author_id FROM public_replies WHERE id = :repid AND request_id = :rid"),
+            {"repid": reply_id, "rid": request_id}
+        ).fetchone()
+
+        if not reply:
+            return error_response("NOT_FOUND", "Reply not found", status=404)
+
+        reply_author_id = reply[0]
+
+        # Reset any previous accepted reply for this request
+        db.session.execute(
+            text("UPDATE public_replies SET is_accepted = 0 WHERE request_id = :rid"),
+            {"rid": request_id}
+        )
+
+        # Set this reply as accepted
+        db.session.execute(
+            text("UPDATE public_replies SET is_accepted = 1 WHERE id = :repid"),
+            {"repid": reply_id}
+        )
+
+        # Update question status to answered
+        db.session.execute(
+            text("UPDATE public_requests SET status = 'answered' WHERE id = :rid"),
+            {"rid": request_id}
+        )
+
+        # Award +10 points to the author of the accepted answer
+        try:
+            db.session.execute(
+                text("UPDATE student_profiles SET total_points = total_points + 10 WHERE user_id = :uid"),
+                {"uid": reply_author_id}
+            )
+        except Exception:
+            pass
+
+        db.session.commit()
+        return success_response(message="Answer accepted successfully! +10 Points awarded to helper.")
+    except Exception as e:
+        db.session.rollback()
+        return error_response("ACCEPT_REPLY_ERROR", str(e), status=500)
 
 # ── DIRECT REQUESTS ENDPOINTS (1-on-1 PRIVATE MESSAGING) ──
 

@@ -249,7 +249,7 @@ def get_user_platform_performance(user_id):
     help_cnt = 0
     try:
         pub_cnt = db.session.execute(
-            text("SELECT COUNT(*) FROM public_replies WHERE author_id = :uid"),
+            text("SELECT COUNT(*) FROM public_replies WHERE author_id = :uid AND (is_accepted = 1 OR is_accepted IS TRUE)"),
             {"uid": user_id}
         ).scalar() or 0
     except Exception:
@@ -257,7 +257,7 @@ def get_user_platform_performance(user_id):
 
     try:
         dir_cnt = db.session.execute(
-            text("SELECT COUNT(*) FROM direct_messages WHERE sender_id = :uid"),
+            text("SELECT COUNT(*) FROM direct_requests WHERE (sender_id = :uid OR recipient_id = :uid) AND status = 'resolved'"),
             {"uid": user_id}
         ).scalar() or 0
     except Exception:
@@ -265,7 +265,7 @@ def get_user_platform_performance(user_id):
 
     try:
         help_cnt = db.session.execute(
-            text("SELECT COUNT(*) FROM help_requests WHERE student_id = :uid OR assigned_to = :uid"),
+            text("SELECT COUNT(*) FROM help_requests WHERE (student_id = :uid OR assigned_to = :uid) AND status = 'resolved'"),
             {"uid": user_id}
         ).scalar() or 0
     except Exception:

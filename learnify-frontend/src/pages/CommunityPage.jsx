@@ -9,7 +9,7 @@ import Badge from "../components/common/Badge"
 import Button from "../components/common/Button"
 import Modal from "../components/common/Modal"
 import { 
-  getCommunitySummary, getPublicRequests, createPublicRequest, createPublicReply,
+  getCommunitySummary, getPublicRequests, createPublicRequest, createPublicReply, acceptPublicReply,
   getDirectRequests, createDirectRequest, getDirectThread, sendDirectMessage, escalateToDirect
 } from "../api/communityApi"
 import { getSubjects, createSubject } from "../api/subjectsApi"
@@ -28,6 +28,18 @@ function getRoleFromToken() {
   }
 }
 
+// Helper to get user_id from JWT token
+function getUserIdFromToken() {
+  try {
+    const token = localStorage.getItem("access_token")
+    if (!token) return null
+    const payload = JSON.parse(atob(token.split(".")[1]))
+    return payload.sub ? parseInt(payload.sub, 10) : null
+  } catch {
+    return null
+  }
+}
+
 // Format byte sizes into KB / MB
 function formatFileSize(bytes) {
   if (!bytes) return "0 B"
@@ -40,7 +52,24 @@ function formatFileSize(bytes) {
 function CommunityPage() {
   const navigate = useNavigate()
   const currentRole = getRoleFromToken()
+  const currentUserId = getUserIdFromToken()
   const isMentor = currentRole === "mentor" || currentRole === "admin"
+
+  async function handleAcceptReply(requestId, replyId) {
+    try {
+      await acceptPublicReply(requestId, replyId)
+      fetchPublicRequests()
+      if (activePublicRequest && activePublicRequest.id === requestId) {
+        setActivePublicRequest(prev => ({
+          ...prev,
+          status: "answered",
+          replies: prev.replies.map(r => r.id === replyId ? { ...r, is_accepted: true } : { ...r, is_accepted: false })
+        }))
+      }
+    } catch (err) {
+      alert(err.response?.data?.message || "Failed to mark reply as accepted.")
+    }
+  }
 
   // Main navigation tab: "public" or "direct"
   const [mainTab, setMainTab] = useState("public")
@@ -507,6 +536,23 @@ function CommunityPage() {
                           </span>
                         </div>
                         <div className="flex items-center gap-3">
+                          {rep.is_accepted ? (
+                            <span className="bg-emerald-50 text-emerald-700 border border-emerald-200 font-body text-[10px] font-bold px-2.5 py-0.5 rounded-full flex items-center gap-1">
+                              <CheckCircle2 size={11} className="text-emerald-600" />
+                              Accepted Answer (+10 Pts)
+                            </span>
+                          ) : (
+                            activePublicRequest.requester_id === currentUserId && (
+                              <button
+                                onClick={() => handleAcceptReply(activePublicRequest.id, rep.id)}
+                                className="bg-emerald-600 hover:bg-emerald-700 text-white font-body text-[10px] font-bold px-3 py-1 rounded-full transition-all shadow-xs flex items-center gap-1 border-none cursor-pointer"
+                              >
+                                <CheckCircle2 size={11} />
+                                Accept Answer
+                              </button>
+                            )
+                          )}
+
                           <span className="font-body text-[10px] text-gray-400">
                             {rep.created_at ? new Date(rep.created_at).toLocaleString() : ""}
                           </span>

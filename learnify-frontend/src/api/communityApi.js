@@ -22,6 +22,11 @@ export async function createPublicReply(requestId, replyData) {
   return response.data
 }
 
+export async function acceptPublicReply(requestId, replyId) {
+  const response = await api.post(`/community/public/${requestId}/reply/${replyId}/accept`)
+  return response.data
+}
+
 // ── Direct Requests APIs (1-on-1 Private Messaging) ─────────
 export async function getDirectRequests(tab = "inbox") {
   const response = await api.get("/community/direct", { params: { tab } })
