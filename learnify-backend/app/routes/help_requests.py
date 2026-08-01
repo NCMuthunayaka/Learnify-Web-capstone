@@ -63,6 +63,9 @@ def get_help_requests():
 
             display_helper_name = row[8] or ("You (Peer Helper)" if is_assigned_to_me else "Unassigned")
 
+            raw_st = (row[6] or "pending").lower()
+            formatted_st = "In Progress" if raw_st in ["in_progress", "accepted"] else ("Resolved" if raw_st == "resolved" else "Pending")
+
             requests_list.append({
                 "id": req_id,
                 "subject_id": row[1],
@@ -70,7 +73,7 @@ def get_help_requests():
                 "title": row[3],
                 "description": row[4],
                 "priority": row[5].capitalize() if row[5] else "Medium",
-                "status": row[6].capitalize() if row[6] else "Pending",
+                "status": formatted_st,
                 "assigned_to": assigned_to,
                 "student_id": student_id,
                 "student_name": student_name,

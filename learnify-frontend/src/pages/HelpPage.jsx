@@ -602,20 +602,20 @@ function HelpPage() {
                     
                     {/* Status Badge */}
                     <span className={`px-2 py-0.5 rounded-full font-body text-[10px] font-bold flex items-center gap-1.5 ${
-                      req.status === "Accepted" || req.status === "In progress" || req.status === "In Progress"
+                      req.status?.toLowerCase().includes("progress") || req.status?.toLowerCase() === "accepted"
                         ? "bg-blue-50 text-blue-600 border border-blue-100"
-                        : req.status === "Resolved"
+                        : req.status?.toLowerCase() === "resolved"
                           ? "bg-green-50 text-green-600 border border-green-100"
                           : "bg-amber-50 text-amber-600 border border-amber-100"
                     }`}>
                       <span className={`w-1.5 h-1.5 rounded-full ${
-                        req.status === "Accepted" || req.status === "In progress" || req.status === "In Progress"
+                        req.status?.toLowerCase().includes("progress") || req.status?.toLowerCase() === "accepted"
                           ? "bg-blue-500"
-                          : req.status === "Resolved"
+                          : req.status?.toLowerCase() === "resolved"
                             ? "bg-green-500"
                             : "bg-amber-500"
                       }`} />
-                      {req.status}
+                      {req.status?.toLowerCase().includes("progress") ? "In Progress" : req.status}
                     </span>
                   </div>
 
