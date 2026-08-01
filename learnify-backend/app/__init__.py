@@ -13,6 +13,7 @@ from app.models.token_blocklist   import TokenBlocklist
 import os
 from app.models.chat_message      import ChatSession, ChatMessage
 from app.models.feedback          import Feedback
+from app.models.resource_rating   import ResourceRating
 
 
 def create_app(config_name="development"):
@@ -40,6 +41,11 @@ def create_app(config_name="development"):
 
     # ── Auto-ensure database tables & columns exist ──────────
     with app.app_context():
+        try:
+            db.create_all()
+        except Exception as e:
+            print(f"db.create_all() warning: {e}")
+
         try:
             from sqlalchemy import text
             db.session.execute(text(
