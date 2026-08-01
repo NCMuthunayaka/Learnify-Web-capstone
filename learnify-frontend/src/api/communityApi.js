@@ -55,3 +55,18 @@ export async function escalateToDirect(publicRequestId, publicReplyId) {
   })
   return response.data
 }
+
+// ── Voting APIs ─────────────────────────────────────────────
+
+// Vote on a public question: voteType = 'up' | 'down'
+// Calling with the same voteType again removes the vote (toggle)
+export async function votePublicRequest(requestId, voteType) {
+  const response = await api.post(`/community/public/${requestId}/vote`, { vote_type: voteType })
+  return response.data
+}
+
+// Vote on a public reply/answer: voteType = 'up' | 'down'
+export async function votePublicReply(requestId, replyId, voteType) {
+  const response = await api.post(`/community/public/${requestId}/reply/${replyId}/vote`, { vote_type: voteType })
+  return response.data
+}

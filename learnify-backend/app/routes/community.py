@@ -66,6 +66,26 @@ def ensure_community_tables():
                 created_at DATETIME DEFAULT CURRENT_TIMESTAMP
             );
         """))
+        db.session.execute(text("""
+            CREATE TABLE IF NOT EXISTS public_request_votes (
+                id INT AUTO_INCREMENT PRIMARY KEY,
+                request_id INT NOT NULL,
+                user_id INT NOT NULL,
+                vote_type ENUM('up', 'down') NOT NULL,
+                created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+                UNIQUE KEY uq_req_vote (request_id, user_id)
+            );
+        """))
+        db.session.execute(text("""
+            CREATE TABLE IF NOT EXISTS public_reply_votes (
+                id INT AUTO_INCREMENT PRIMARY KEY,
+                reply_id INT NOT NULL,
+                user_id INT NOT NULL,
+                vote_type ENUM('up', 'down') NOT NULL,
+                created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+                UNIQUE KEY uq_rep_vote (reply_id, user_id)
+            );
+        """))
         db.session.commit()
 
         try:
@@ -229,7 +249,23 @@ def get_public_requests():
             for rep in reply_rows:
                 if rep[1] == user_id:
                     has_user_replied = True
-                
+
+                # Fetch reply vote counts and user's vote
+                reply_vote_counts = db.session.execute(text("""
+                    SELECT
+                        COALESCE(SUM(CASE WHEN vote_type='up' THEN 1 ELSE 0 END), 0) AS up_votes,
+                        COALESCE(SUM(CASE WHEN vote_type='down' THEN 1 ELSE 0 END), 0) AS down_votes
+                    FROM public_reply_votes WHERE reply_id = :rep_id
+                """), {"rep_id": rep[0]}).fetchone()
+
+                user_reply_vote = db.session.execute(text("""
+                    SELECT vote_type FROM public_reply_votes
+                    WHERE reply_id = :rep_id AND user_id = :uid
+                """), {"rep_id": rep[0], "uid": user_id}).fetchone()
+
+                rep_up = int(reply_vote_counts[0]) if reply_vote_counts else 0
+                rep_down = int(reply_vote_counts[1]) if reply_vote_counts else 0
+
                 # Fetch reply attachments
                 att_rows = db.session.execute(text("""
                     SELECT id, file_url, file_name, file_size
@@ -246,8 +282,28 @@ def get_public_requests():
                     "created_at": rep[5].isoformat() if rep[5] else None,
                     "is_mentor": (rep[3] in ["mentor", "admin"]),
                     "is_accepted": bool(rep[6]),
+                    "up_votes": rep_up,
+                    "down_votes": rep_down,
+                    "vote_score": rep_up - rep_down,
+                    "user_vote": user_reply_vote[0] if user_reply_vote else None,
                     "attachments": [{"id": a[0], "file_url": a[1], "file_name": a[2], "file_size": a[3]} for a in att_rows]
                 })
+
+            # Fetch question vote counts and user's vote
+            q_vote_counts = db.session.execute(text("""
+                SELECT
+                    COALESCE(SUM(CASE WHEN vote_type='up' THEN 1 ELSE 0 END), 0) AS up_votes,
+                    COALESCE(SUM(CASE WHEN vote_type='down' THEN 1 ELSE 0 END), 0) AS down_votes
+                FROM public_request_votes WHERE request_id = :req_id
+            """), {"req_id": req_id}).fetchone()
+
+            user_q_vote = db.session.execute(text("""
+                SELECT vote_type FROM public_request_votes
+                WHERE request_id = :req_id AND user_id = :uid
+            """), {"req_id": req_id, "uid": user_id}).fetchone()
+
+            q_up = int(q_vote_counts[0]) if q_vote_counts else 0
+            q_down = int(q_vote_counts[1]) if q_vote_counts else 0
 
             # Fetch question attachments
             att_q_rows = db.session.execute(text("""
@@ -270,6 +326,10 @@ def get_public_requests():
                 "color_hex": r[10],
                 "replies": replies,
                 "has_user_replied": has_user_replied,
+                "up_votes": q_up,
+                "down_votes": q_down,
+                "vote_score": q_up - q_down,
+                "user_vote": user_q_vote[0] if user_q_vote else None,
                 "attachments": [{"id": a[0], "file_url": a[1], "file_name": a[2], "file_size": a[3]} for a in att_q_rows]
             })
 
@@ -805,3 +865,117 @@ def escalate_to_direct():
     except Exception as e:
         db.session.rollback()
         return error_response("ESCALATE_ERROR", str(e), status=500)
+
+
+# ── VOTING ENDPOINTS ────────────────────────────────────────
+
+# POST /api/community/public/<id>/vote
+# Vote on a public question (up/down). Re-voting same type removes the vote.
+@bp.route("/public/<int:request_id>/vote", methods=["POST"])
+@jwt_required()
+def vote_public_request(request_id):
+    ensure_community_tables()
+    user_id = int(get_jwt_identity())
+    data = request.get_json(silent=True) or {}
+    vote_type = data.get("vote_type")  # 'up' or 'down'
+
+    if vote_type not in ["up", "down"]:
+        return error_response("INVALID_VOTE", "vote_type must be 'up' or 'down'", status=400)
+
+    try:
+        # Check if question exists
+        q = db.session.execute(
+            text("SELECT id FROM public_requests WHERE id = :rid"),
+            {"rid": request_id}
+        ).fetchone()
+        if not q:
+            return error_response("NOT_FOUND", "Question not found", status=404)
+
+        # Check existing vote
+        existing = db.session.execute(text("""
+            SELECT id, vote_type FROM public_request_votes
+            WHERE request_id = :rid AND user_id = :uid
+        """), {"rid": request_id, "uid": user_id}).fetchone()
+
+        if existing:
+            if existing[1] == vote_type:
+                # Same vote — toggle off (remove)
+                db.session.execute(text("""
+                    DELETE FROM public_request_votes WHERE id = :vid
+                """), {"vid": existing[0]})
+                db.session.commit()
+                return success_response(message="Vote removed")
+            else:
+                # Different vote — switch
+                db.session.execute(text("""
+                    UPDATE public_request_votes SET vote_type = :vt WHERE id = :vid
+                """), {"vt": vote_type, "vid": existing[0]})
+                db.session.commit()
+                return success_response(message="Vote updated")
+        else:
+            # New vote
+            db.session.execute(text("""
+                INSERT INTO public_request_votes (request_id, user_id, vote_type, created_at)
+                VALUES (:rid, :uid, :vt, :now)
+            """), {"rid": request_id, "uid": user_id, "vt": vote_type, "now": datetime.utcnow()})
+            db.session.commit()
+            return success_response(message="Vote recorded", status=201)
+    except Exception as e:
+        db.session.rollback()
+        return error_response("VOTE_ERROR", str(e), status=500)
+
+
+# POST /api/community/public/<id>/reply/<reply_id>/vote
+# Vote on a public reply/answer (up/down). Re-voting same type removes the vote.
+@bp.route("/public/<int:request_id>/reply/<int:reply_id>/vote", methods=["POST"])
+@jwt_required()
+def vote_public_reply(request_id, reply_id):
+    ensure_community_tables()
+    user_id = int(get_jwt_identity())
+    data = request.get_json(silent=True) or {}
+    vote_type = data.get("vote_type")  # 'up' or 'down'
+
+    if vote_type not in ["up", "down"]:
+        return error_response("INVALID_VOTE", "vote_type must be 'up' or 'down'", status=400)
+
+    try:
+        # Check reply exists and belongs to the right question
+        rep = db.session.execute(
+            text("SELECT id FROM public_replies WHERE id = :repid AND request_id = :rid"),
+            {"repid": reply_id, "rid": request_id}
+        ).fetchone()
+        if not rep:
+            return error_response("NOT_FOUND", "Reply not found", status=404)
+
+        # Check existing vote
+        existing = db.session.execute(text("""
+            SELECT id, vote_type FROM public_reply_votes
+            WHERE reply_id = :repid AND user_id = :uid
+        """), {"repid": reply_id, "uid": user_id}).fetchone()
+
+        if existing:
+            if existing[1] == vote_type:
+                # Same vote — toggle off (remove)
+                db.session.execute(text("""
+                    DELETE FROM public_reply_votes WHERE id = :vid
+                """), {"vid": existing[0]})
+                db.session.commit()
+                return success_response(message="Vote removed")
+            else:
+                # Different vote — switch
+                db.session.execute(text("""
+                    UPDATE public_reply_votes SET vote_type = :vt WHERE id = :vid
+                """), {"vt": vote_type, "vid": existing[0]})
+                db.session.commit()
+                return success_response(message="Vote updated")
+        else:
+            # New vote
+            db.session.execute(text("""
+                INSERT INTO public_reply_votes (reply_id, user_id, vote_type, created_at)
+                VALUES (:repid, :uid, :vt, :now)
+            """), {"repid": reply_id, "uid": user_id, "vt": vote_type, "now": datetime.utcnow()})
+            db.session.commit()
+            return success_response(message="Vote recorded", status=201)
+    except Exception as e:
+        db.session.rollback()
+        return error_response("VOTE_REPLY_ERROR", str(e), status=500)

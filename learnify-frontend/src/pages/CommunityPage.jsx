@@ -3,7 +3,7 @@ import { useNavigate } from "react-router-dom"
 import { 
   Users, MessageSquare, Plus, Search, Filter, Paperclip, Send, 
   ArrowRight, ArrowLeft, CheckCircle2, Clock, FileText, Check, AlertCircle, Sparkles, X, Lock,
-  ChevronRight, SortAsc, SortDesc, CalendarDays, User
+  ChevronRight, SortAsc, SortDesc, CalendarDays, User, ThumbsUp, ThumbsDown
 } from "lucide-react"
 import Avatar from "../components/common/Avatar"
 import Badge from "../components/common/Badge"
@@ -11,7 +11,8 @@ import Button from "../components/common/Button"
 import Modal from "../components/common/Modal"
 import { 
   getCommunitySummary, getPublicRequests, createPublicRequest, createPublicReply, acceptPublicReply,
-  getDirectRequests, createDirectRequest, getDirectThread, sendDirectMessage, escalateToDirect
+  getDirectRequests, createDirectRequest, getDirectThread, sendDirectMessage, escalateToDirect,
+  votePublicRequest, votePublicReply
 } from "../api/communityApi"
 import { getSubjects, createSubject } from "../api/subjectsApi"
 import { getAvailableMentors } from "../api/helpRequestsApi"
@@ -242,7 +243,7 @@ function CommunityPage() {
   async function handleAcceptReply(requestId, replyId) {
     try {
       await acceptPublicReply(requestId, replyId)
-      fetchPublicRequests()
+      fetchPublicFeed()
       if (activePublicRequest && activePublicRequest.id === requestId) {
         setActivePublicRequest(prev => ({
           ...prev,
@@ -252,6 +253,91 @@ function CommunityPage() {
       }
     } catch (err) {
       alert(err.response?.data?.message || "Failed to mark reply as accepted.")
+    }
+  }
+
+  // ── Vote on a public question ────────────────────────────
+  async function handleVoteQuestion(requestId, voteType) {
+    // Optimistic UI update
+    setPublicRequests(prev => prev.map(q => {
+      if (q.id !== requestId) return q
+      const wasMyVote = q.user_vote === voteType
+      const prevUp = q.up_votes ?? 0
+      const prevDown = q.down_votes ?? 0
+      let newUp = prevUp, newDown = prevDown, newUserVote = null
+      if (wasMyVote) {
+        // Toggle off
+        if (voteType === "up") newUp = Math.max(0, prevUp - 1)
+        else newDown = Math.max(0, prevDown - 1)
+        newUserVote = null
+      } else {
+        // Switch or new vote
+        if (q.user_vote === "up") newUp = Math.max(0, prevUp - 1)
+        if (q.user_vote === "down") newDown = Math.max(0, prevDown - 1)
+        if (voteType === "up") newUp += 1
+        else newDown += 1
+        newUserVote = voteType
+      }
+      return { ...q, up_votes: newUp, down_votes: newDown, vote_score: newUp - newDown, user_vote: newUserVote }
+    }))
+    if (activePublicRequest && activePublicRequest.id === requestId) {
+      setActivePublicRequest(prev => {
+        if (!prev) return prev
+        const wasMyVote = prev.user_vote === voteType
+        const prevUp = prev.up_votes ?? 0
+        const prevDown = prev.down_votes ?? 0
+        let newUp = prevUp, newDown = prevDown, newUserVote = null
+        if (wasMyVote) {
+          if (voteType === "up") newUp = Math.max(0, prevUp - 1)
+          else newDown = Math.max(0, prevDown - 1)
+        } else {
+          if (prev.user_vote === "up") newUp = Math.max(0, prevUp - 1)
+          if (prev.user_vote === "down") newDown = Math.max(0, prevDown - 1)
+          if (voteType === "up") newUp += 1
+          else newDown += 1
+          newUserVote = voteType
+        }
+        return { ...prev, up_votes: newUp, down_votes: newDown, vote_score: newUp - newDown, user_vote: newUserVote }
+      })
+    }
+    try {
+      await votePublicRequest(requestId, voteType)
+    } catch (err) {
+      fetchPublicFeed() // Revert on failure
+    }
+  }
+
+  // ── Vote on a reply ──────────────────────────────────────
+  async function handleVoteReply(requestId, replyId, voteType) {
+    // Optimistic update on the active detail view
+    const updateReplies = (replies) => replies.map(rep => {
+      if (rep.id !== replyId) return rep
+      const wasMyVote = rep.user_vote === voteType
+      const prevUp = rep.up_votes ?? 0
+      const prevDown = rep.down_votes ?? 0
+      let newUp = prevUp, newDown = prevDown, newUserVote = null
+      if (wasMyVote) {
+        if (voteType === "up") newUp = Math.max(0, prevUp - 1)
+        else newDown = Math.max(0, prevDown - 1)
+      } else {
+        if (rep.user_vote === "up") newUp = Math.max(0, prevUp - 1)
+        if (rep.user_vote === "down") newDown = Math.max(0, prevDown - 1)
+        if (voteType === "up") newUp += 1
+        else newDown += 1
+        newUserVote = voteType
+      }
+      return { ...rep, up_votes: newUp, down_votes: newDown, vote_score: newUp - newDown, user_vote: newUserVote }
+    })
+    if (activePublicRequest && activePublicRequest.id === requestId) {
+      setActivePublicRequest(prev => prev ? { ...prev, replies: updateReplies(prev.replies) } : prev)
+    }
+    setPublicRequests(prev => prev.map(q =>
+      q.id === requestId ? { ...q, replies: updateReplies(q.replies || []) } : q
+    ))
+    try {
+      await votePublicReply(requestId, replyId, voteType)
+    } catch (err) {
+      fetchPublicFeed() // Revert on failure
     }
   }
 
@@ -839,7 +925,40 @@ function CommunityPage() {
               ) : (
                 <div className="space-y-3">
                   {activePublicRequest.replies.map(rep => (
-                    <div key={rep.id} className="bg-white border border-gray-100 p-4 rounded-2xl shadow-sm space-y-2">
+                    <div key={rep.id} className="bg-white border border-gray-100 p-4 rounded-2xl shadow-sm space-y-2 flex flex-row gap-3">
+                      {/* Vote Widget for Reply */}
+                      <div className="flex flex-col items-center gap-1 shrink-0 pt-0.5">
+                        <button
+                          onClick={() => handleVoteReply(activePublicRequest.id, rep.id, "up")}
+                          title="Upvote this answer"
+                          className={`flex flex-col items-center justify-center w-9 h-9 rounded-xl border text-[11px] font-bold transition-all cursor-pointer ${
+                            rep.user_vote === "up"
+                              ? "bg-emerald-50 border-emerald-400 text-emerald-700 shadow-sm"
+                              : "bg-gray-50 border-gray-200 text-gray-400 hover:border-emerald-300 hover:text-emerald-600 hover:bg-emerald-50"
+                          }`}
+                        >
+                          <ThumbsUp size={13} />
+                        </button>
+                        <span className={`font-heading text-sm font-bold ${
+                          (rep.vote_score ?? 0) > 0 ? "text-emerald-600" :
+                          (rep.vote_score ?? 0) < 0 ? "text-red-500" : "text-gray-500"
+                        }`}>
+                          {rep.vote_score ?? 0}
+                        </span>
+                        <button
+                          onClick={() => handleVoteReply(activePublicRequest.id, rep.id, "down")}
+                          title="Downvote this answer"
+                          className={`flex flex-col items-center justify-center w-9 h-9 rounded-xl border text-[11px] font-bold transition-all cursor-pointer ${
+                            rep.user_vote === "down"
+                              ? "bg-red-50 border-red-400 text-red-600 shadow-sm"
+                              : "bg-gray-50 border-gray-200 text-gray-400 hover:border-red-300 hover:text-red-500 hover:bg-red-50"
+                          }`}
+                        >
+                          <ThumbsDown size={13} />
+                        </button>
+                      </div>
+                      {/* Reply Content */}
+                      <div className="flex-1 min-w-0 space-y-2">
                       <div className="flex items-center justify-between">
                         <div className="flex items-center gap-2">
                           <Avatar name={rep.author_name} color={rep.is_mentor ? "primary" : "gray"} size="xs" />
@@ -882,12 +1001,12 @@ function CommunityPage() {
                         </div>
                       </div>
 
-                      <p className="font-body text-xs text-gray-700 whitespace-pre-wrap leading-relaxed pl-7">
+                      <p className="font-body text-xs text-gray-700 whitespace-pre-wrap leading-relaxed">
                         {rep.body}
                       </p>
 
                       {rep.attachments && rep.attachments.length > 0 && (
-                        <div className="flex flex-wrap gap-2 pl-7 pt-1">
+                        <div className="flex flex-wrap gap-2 pt-1">
                           {rep.attachments.map(att => (
                             <a
                               key={att.id}
@@ -902,6 +1021,7 @@ function CommunityPage() {
                           ))}
                         </div>
                       )}
+                      </div>{/* end Reply Content */}
                     </div>
                   ))}
                 </div>
@@ -1064,9 +1184,32 @@ function CommunityPage() {
                     
                     {/* Left Column Stats (Votes, Answers count, Status) */}
                     <div className="flex sm:flex-col items-center sm:items-end justify-start w-full sm:w-28 shrink-0 text-right gap-1.5 text-xs font-body border-b sm:border-b-0 border-gray-100 pb-2 sm:pb-0 pt-0.5">
-                      {/* Votes */}
-                      <div className="text-gray-500 font-medium text-xs">
-                        0 votes
+                      {/* Vote Widget for Question Card */}
+                      <div className="flex sm:flex-col items-center gap-1">
+                        <button
+                          onClick={(e) => { e.stopPropagation(); handleVoteQuestion(req.id, "up") }}
+                          title="Upvote this question"
+                          className={`flex items-center gap-1 px-2 py-0.5 rounded-lg border text-[10px] font-bold transition-all cursor-pointer ${
+                            req.user_vote === "up"
+                              ? "bg-emerald-50 border-emerald-300 text-emerald-700"
+                              : "bg-white border-gray-200 text-gray-400 hover:border-emerald-300 hover:text-emerald-600"
+                          }`}
+                        >
+                          <ThumbsUp size={11} />
+                          <span>{req.up_votes ?? 0}</span>
+                        </button>
+                        <button
+                          onClick={(e) => { e.stopPropagation(); handleVoteQuestion(req.id, "down") }}
+                          title="Downvote this question"
+                          className={`flex items-center gap-1 px-2 py-0.5 rounded-lg border text-[10px] font-bold transition-all cursor-pointer ${
+                            req.user_vote === "down"
+                              ? "bg-red-50 border-red-300 text-red-600"
+                              : "bg-white border-gray-200 text-gray-400 hover:border-red-300 hover:text-red-500"
+                          }`}
+                        >
+                          <ThumbsDown size={11} />
+                          <span>{req.down_votes ?? 0}</span>
+                        </button>
                       </div>
                       
                       {/* Answers Badge */}
