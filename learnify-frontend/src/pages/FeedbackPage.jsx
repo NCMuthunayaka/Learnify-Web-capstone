@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react"
-import { MessageSquare } from "lucide-react"
+import { MessageSquare, HeartHandshake, Sparkles, MessageSquareQuote } from "lucide-react"
 import FeedbackForm from "../components/feedback/FeedbackForm"
 import FeedbackCard from "../components/feedback/FeedbackCard"
 import CategoryFilter from "../components/feedback/CategoryFilter"
@@ -26,45 +26,69 @@ export default function FeedbackPage() {
     : feedbackList.filter(f => f.category === category)
 
   return (
-    <div className="space-y-6 max-w-4xl mx-auto pb-12 text-[#0A1931]">
+    <div className="space-y-6 max-w-5xl mx-auto pb-12 text-[#0A1931]">
 
-      {/* Header */}
-      <div>
-        <h1 className="font-heading text-2xl font-bold text-[#0A1931]">Feedback</h1>
-        <p className="font-body text-sm text-gray-400 mt-1">
-          Share your experience and view your past submissions
-        </p>
+      {/* ── Hero Banner ── */}
+      <div className="bg-gradient-to-r from-[#0A1931] via-[#1A3D63] to-[#2B547E] rounded-3xl p-6 sm:p-8 text-white shadow-md space-y-3">
+        <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+          <div>
+            <span className="bg-white/15 backdrop-blur-md text-white font-body text-xs font-bold px-3 py-1 rounded-full border border-white/20 inline-flex items-center gap-1.5 mb-2">
+              <Sparkles size={13} className="text-amber-400" />
+              Platform Improvements
+            </span>
+            <h1 className="font-heading text-2xl sm:text-3xl font-bold text-white tracking-wide">
+              Feedback & Suggestions
+            </h1>
+            <p className="font-body text-xs sm:text-sm text-blue-100/90 mt-1 max-w-xl leading-relaxed">
+              Help us shape the future of Learnify. Submit your experience, report issues, or suggest new features directly to our System Administrator.
+            </p>
+          </div>
+          <div className="hidden md:flex items-center justify-center w-16 h-16 rounded-2xl bg-white/10 border border-white/20 shrink-0">
+            <HeartHandshake size={32} className="text-blue-200" />
+          </div>
+        </div>
       </div>
 
-      {/* Submit form */}
+      {/* Submit Form Card */}
       <FeedbackForm onSuccess={handleNewFeedback} />
 
-      {/* Past submissions */}
-      <div className="flex items-center justify-between">
-        <h2 className="font-heading text-base font-bold text-[#0A1931]">
-          Your Submissions
-          <span className="ml-2 font-body text-xs font-semibold bg-[#EBF3F9] text-[#1A3D63]
-            px-2.5 py-0.5 rounded-full border border-[#D5E6F2]">
-            {filtered.length}
-          </span>
-        </h2>
-        <CategoryFilter value={category} onChange={setCategory} />
+      {/* Past Submissions Section */}
+      <div className="bg-white rounded-3xl border border-slate-200/80 shadow-md p-6 sm:p-8 space-y-6">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-4 border-b border-slate-100">
+          <div>
+            <h2 className="font-heading text-lg font-bold text-[#0A1931] flex items-center gap-2">
+              <MessageSquareQuote size={20} className="text-[#3b719f]" />
+              Your Previous Feedback
+              <span className="font-body text-xs font-bold bg-blue-50 text-[#3b719f] px-3 py-1 rounded-full border border-blue-100">
+                {filtered.length}
+              </span>
+            </h2>
+            <p className="font-body text-xs text-slate-500 mt-0.5">
+              Review all past feedback submissions and rating scores sent from your account.
+            </p>
+          </div>
+
+          <CategoryFilter value={category} onChange={setCategory} />
+        </div>
+
+        {loading ? (
+          <div className="text-center py-12">
+            <div className="w-8 h-8 border-3 border-[#3b719f] border-t-transparent rounded-full animate-spin mx-auto" />
+            <p className="font-body text-xs text-slate-400 mt-3 font-semibold">Loading your submissions...</p>
+          </div>
+        ) : filtered.length === 0 ? (
+          <div className="py-14 text-center bg-[#F8FAFC] rounded-2xl border border-slate-200/80 space-y-2">
+            <MessageSquare size={36} className="mx-auto text-slate-300 mb-1" />
+            <p className="font-heading text-sm font-bold text-[#0A1931]">No Feedback Submitted Yet</p>
+            <p className="font-body text-xs text-slate-400">Fill out the form above to send your first feedback review to the Admin!</p>
+          </div>
+        ) : (
+          <div className="space-y-4">
+            {filtered.map(fb => <FeedbackCard key={fb.id} feedback={fb} />)}
+          </div>
+        )}
       </div>
 
-      {loading ? (
-        <div className="text-center py-12">
-          <div className="w-6 h-6 border-2 border-[#4A7FA7] border-t-transparent rounded-full animate-spin mx-auto" />
-        </div>
-      ) : filtered.length === 0 ? (
-        <div className="py-16 text-center bg-white rounded-2xl border border-gray-100 shadow-sm">
-          <MessageSquare size={32} className="mx-auto text-gray-200 mb-3" />
-          <p className="font-body text-sm text-gray-400">No feedback yet. Be the first to share!</p>
-        </div>
-      ) : (
-        <div className="space-y-4">
-          {filtered.map(fb => <FeedbackCard key={fb.id} feedback={fb} />)}
-        </div>
-      )}
     </div>
   )
 }
