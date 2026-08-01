@@ -393,17 +393,6 @@ function CommunityPage() {
             )}
           </button>
         </div>
-
-        {mainTab === "direct" && (
-          <Button 
-            variant="secondary" 
-            size="sm" 
-            icon={Plus}
-            onClick={() => setShowNewDirectModal(true)}
-          >
-            New Direct Request
-          </Button>
-        )}
       </div>
 
       {/* ── VIEW 1: PUBLIC FORUM ── */}
