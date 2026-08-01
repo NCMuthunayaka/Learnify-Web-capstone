@@ -79,8 +79,8 @@ function HelpPage() {
       const mentorRes = await getAvailableMentors()
       const mentorList = mentorRes.data.mentors || []
       setMentors(mentorList)
-      if (mentorList.length > 0 && !selectedMentor) {
-        setSelectedMentor(mentorList[0].display)
+      if (!selectedMentor) {
+        setSelectedMentor("PUBLIC")
       }
 
       const subRes = await getSubjects()
@@ -239,90 +239,38 @@ function HelpPage() {
 
               <form onSubmit={handleSubmit} className="space-y-4">
                 
-                {/* Available Mentors & Peers */}
+                {/* Available Mentors or Public Forum */}
                 <div>
                   <label className="font-heading text-[10px] font-bold text-[#4A7FA7] uppercase tracking-wider block mb-1.5">
-                    Select Mentor or Peer Helper
+                    Select Target / Helper
                   </label>
                   <select
                     value={selectedMentor}
                     onChange={(e) => {
                       const val = e.target.value
                       setSelectedMentor(val)
-                      if (val.startsWith("Peer:")) {
-                        setRequestType("Peer")
+                      if (val === "PUBLIC") {
                         setDeliveryMode("public")
+                        setRequestType("Public")
                       } else {
-                        setRequestType("Mentor")
                         setDeliveryMode("direct")
+                        setRequestType("Mentor")
                       }
                     }}
                     className="w-full bg-[#f2f1ed] text-gray-800 font-body text-xs px-4 py-3 rounded-2xl border-none focus:outline-none focus:ring-1 focus:ring-[#3b719f]/30 transition-all cursor-pointer"
                   >
-                    <optgroup label="🎓 Academic Mentors">
+                    <option value="PUBLIC">🌐 Send to Public Forum (Open to All Mentors & Peers)</option>
+                    
+                    <optgroup label="🎓 Direct 1-on-1 Request to Academic Mentor">
                       {mentors.filter(m => !m.name.startsWith("Peer:")).length > 0 ? (
                         mentors.filter(m => !m.name.startsWith("Peer:")).map(m => (
                           <option key={m.id} value={m.display}>{m.display}</option>
                         ))
                       ) : (
-                        <option value="" disabled>No academic mentors online</option>
-                      )}
-                    </optgroup>
-                    <optgroup label="👥 Student Peer Helpers">
-                      {mentors.filter(m => m.name.startsWith("Peer:")).length > 0 ? (
-                        mentors.filter(m => m.name.startsWith("Peer:")).map(m => (
-                          <option key={m.id} value={m.display}>{m.display}</option>
-                        ))
-                      ) : (
-                        <option value="" disabled>No peer helpers online</option>
+                        <option value="" disabled>No academic mentors available</option>
                       )}
                     </optgroup>
                   </select>
-                </div>
-
-                {/* Delivery Mode / Target Selector */}
-                <div>
-                  <label className="font-heading text-[10px] font-bold text-[#4A7FA7] uppercase tracking-wider block mb-1.5">
-                    Request Delivery Mode
-                  </label>
-                  <div className="grid grid-cols-2 gap-3">
-                    <button
-                      type="button"
-                      onClick={() => setDeliveryMode("public")}
-                      className={`p-3 rounded-2xl border font-body text-xs text-left transition-all cursor-pointer flex items-center gap-2.5 ${
-                        deliveryMode === "public"
-                          ? "bg-blue-50 border-[#3b719f] text-[#0A1931] shadow-xs"
-                          : "bg-[#f2f1ed] border-transparent text-gray-600 hover:bg-gray-200"
-                      }`}
-                    >
-                      <Globe size={18} className={deliveryMode === "public" ? "text-[#3b719f]" : "text-gray-400"} />
-                      <div>
-                        <span className="block font-bold">🌐 Public Q&A Forum</span>
-                        <span className="block text-[10px] font-normal text-gray-500">Open to all mentors & peers</span>
-                      </div>
-                    </button>
-
-                    <button
-                      type="button"
-                      disabled={selectedMentor.startsWith("Peer:")}
-                      onClick={() => setDeliveryMode("direct")}
-                      className={`p-3 rounded-2xl border font-body text-xs text-left transition-all flex items-center gap-2.5 ${
-                        selectedMentor.startsWith("Peer:")
-                          ? "opacity-50 bg-[#f2f1ed] border-transparent text-gray-400 cursor-not-allowed"
-                          : deliveryMode === "direct"
-                            ? "bg-blue-50 border-[#3b719f] text-[#0A1931] shadow-xs cursor-pointer"
-                            : "bg-[#f2f1ed] border-transparent text-gray-600 hover:bg-gray-200 cursor-pointer"
-                      }`}
-                    >
-                      <Lock size={18} className={deliveryMode === "direct" ? "text-[#3b719f]" : "text-gray-400"} />
-                      <div>
-                        <span className="block font-bold">🔒 Direct 1-on-1 to Mentor</span>
-                        <span className="block text-[10px] font-normal text-gray-500">
-                          {selectedMentor.startsWith("Peer:") ? "Mentors only (Peers post to Public)" : "Private message to mentor"}
-                        </span>
-                      </div>
-                    </button>
-                  </div>
                 </div>
 
                 {/* Subject */}
