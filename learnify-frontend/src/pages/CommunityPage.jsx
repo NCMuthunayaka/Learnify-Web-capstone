@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef } from "react"
+import { useNavigate } from "react-router-dom"
 import { 
   Users, MessageSquare, Plus, Search, Filter, Paperclip, Send, 
   ArrowRight, ArrowLeft, CheckCircle2, Clock, FileText, Check, AlertCircle, Sparkles, X, Lock
@@ -37,6 +38,7 @@ function formatFileSize(bytes) {
 }
 
 function CommunityPage() {
+  const navigate = useNavigate()
   const currentRole = getRoleFromToken()
   const isMentor = currentRole === "mentor" || currentRole === "admin"
 
@@ -354,8 +356,8 @@ function CommunityPage() {
         <Button 
           variant="primary" 
           icon={Plus} 
-          onClick={() => setShowAskModal(true)}
-          className="bg-[#3b719f] hover:bg-[#2c587c] text-white px-6 py-3 rounded-2xl shadow-md border-none"
+          onClick={() => navigate("/help")}
+          className="bg-[#3b719f] hover:bg-[#2c587c] text-white px-6 py-3 rounded-2xl shadow-md border-none cursor-pointer"
         >
           Ask a Question
         </Button>
