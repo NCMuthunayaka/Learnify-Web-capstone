@@ -26,6 +26,7 @@ function HelpPage() {
   const [uploadingFile, setUploadingFile] = useState(false)
   const [showAllMentors, setShowAllMentors] = useState(false)
   const [showAllRequests, setShowAllRequests] = useState(false)
+  const [selectedDetailRequest, setSelectedDetailRequest] = useState(null)
   const fileInputRef = useRef(null)
 
   const handleAttachClick = () => {
@@ -495,7 +496,10 @@ function HelpPage() {
                 </div>
 
                 {/* View details action */}
-                <button className="font-body text-[10px] font-bold text-[#4A7FA7] hover:text-[#1A3D63] text-left mt-2 flex items-center gap-1 transition-colors border-none bg-transparent">
+                <button 
+                  onClick={() => setSelectedDetailRequest(req)}
+                  className="font-body text-[10px] font-bold text-[#4A7FA7] hover:text-[#1A3D63] text-left mt-2 flex items-center gap-1 transition-colors border-none bg-transparent cursor-pointer"
+                >
                   View Details
                   <ArrowRight size={12} />
                 </button>
@@ -579,7 +583,18 @@ function HelpPage() {
       {showAllRequests && (
         <AllRequestsModal 
           requests={requests} 
-          onClose={() => setShowAllRequests(false)} 
+          onClose={() => setShowAllRequests(false)}
+          onSelectDetail={(req) => {
+            setShowAllRequests(false)
+            setSelectedDetailRequest(req)
+          }}
+        />
+      )}
+
+      {selectedDetailRequest && (
+        <RequestDetailsModal
+          request={selectedDetailRequest}
+          onClose={() => setSelectedDetailRequest(null)}
         />
       )}
 
@@ -653,12 +668,13 @@ function AllMentorsModal({ mentors, onClose }) {
 }
 
 // ── All Requests Modal Component ───────────────────────────
-function AllRequestsModal({ requests, onClose }) {
+function AllRequestsModal({ requests, onClose, onSelectDetail }) {
   const [searchQuery, setSearchQuery] = useState("")
 
   const filtered = requests.filter(r => 
     r.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
-    r.desc.toLowerCase().includes(searchQuery.toLowerCase()) ||
+    (r.desc && r.desc.toLowerCase().includes(searchQuery.toLowerCase())) ||
+    (r.description && r.description.toLowerCase().includes(searchQuery.toLowerCase())) ||
     r.subject.toLowerCase().includes(searchQuery.toLowerCase())
   )
 
@@ -714,13 +730,13 @@ function AllRequestsModal({ requests, onClose }) {
                     <h4 className="font-heading text-xs font-bold text-[#0A1931] leading-tight">
                       {req.title}
                     </h4>
-                    <p className="font-body text-[11px] text-gray-500 leading-relaxed">
-                      {req.desc}
+                    <p className="font-body text-[11px] text-gray-500 leading-relaxed line-clamp-2">
+                      {req.desc || req.description}
                     </p>
                     {req.attachment_url && (
-                      <div className="pt-2">
+                      <div className="pt-1">
                         <a 
-                          href={req.attachment_url} 
+                          href={`${import.meta.env.VITE_BACKEND_URL || "http://localhost:5000"}${req.attachment_url}`} 
                           target="_blank" 
                           rel="noopener noreferrer" 
                           className="font-body text-[10px] text-[#4A7FA7] hover:underline flex items-center gap-1"
@@ -731,27 +747,32 @@ function AllRequestsModal({ requests, onClose }) {
                     )}
                   </div>
 
-                  {/* Helper Profile Footer */}
-                  {req.helperName && (
-                    <div className="pt-3 border-t border-gray-50 flex items-center justify-between text-xs">
-                      <div className="flex items-center gap-2">
-                        <Avatar 
-                          src={null} 
-                          name={req.helperName} 
-                          color={req.helperColor || "primary"} 
-                          size="xs" 
-                        />
-                        <div className="min-w-0">
-                          <p className="font-heading font-semibold text-gray-600 truncate max-w-[100px] leading-tight">
-                            {req.helperName}
-                          </p>
-                          <p className="font-body text-[9px] text-gray-400">
-                            {req.helperRole}
-                          </p>
-                        </div>
+                  {/* Helper Profile & View Details Footer */}
+                  <div className="pt-3 border-t border-gray-50 flex items-center justify-between text-xs">
+                    <div className="flex items-center gap-2">
+                      <Avatar 
+                        src={null} 
+                        name={req.helperName} 
+                        color={req.helperColor || "primary"} 
+                        size="xs" 
+                      />
+                      <div className="min-w-0">
+                        <p className="font-heading font-semibold text-gray-600 truncate max-w-[100px] leading-tight">
+                          {req.helperName}
+                        </p>
+                        <p className="font-body text-[9px] text-gray-400">
+                          {req.helperRole}
+                        </p>
                       </div>
                     </div>
-                  )}
+                    <button 
+                      onClick={() => onSelectDetail(req)}
+                      className="font-body text-[10px] font-bold text-[#4A7FA7] hover:text-[#1A3D63] flex items-center gap-1 transition-colors border-none bg-transparent cursor-pointer"
+                    >
+                      View Details
+                      <ArrowRight size={12} />
+                    </button>
+                  </div>
                 </div>
               ))}
             </div>
@@ -759,6 +780,141 @@ function AllRequestsModal({ requests, onClose }) {
         </div>
 
         <div className="pt-2 border-t border-gray-100 flex justify-end">
+          <Button variant="secondary" onClick={onClose}>Close</Button>
+        </div>
+      </div>
+    </Modal>
+  )
+}
+
+// ── Request Details Modal Component ───────────────────────
+function RequestDetailsModal({ request, onClose }) {
+  if (!request) return null
+
+  const backendUrl = import.meta.env.VITE_BACKEND_URL || "http://localhost:5000"
+
+  return (
+    <Modal isOpen={true} onClose={onClose} title="Request Details" size="md">
+      <div className="space-y-4">
+        {/* Header Badges */}
+        <div className="flex items-center justify-between border-b border-gray-100 pb-3">
+          <span className="px-3 py-1 bg-blue-50 text-[#1A3D63] border border-blue-100/50 rounded-full font-body text-xs font-bold">
+            {request.subject}
+          </span>
+          <div className="flex items-center gap-2">
+            <span className={`px-2.5 py-0.5 rounded-full font-body text-xs font-bold ${
+              request.priority === "High" ? "bg-red-50 text-red-600 border border-red-100" :
+              request.priority === "Low" ? "bg-gray-50 text-gray-600 border border-gray-100" :
+              "bg-amber-50 text-amber-600 border border-amber-100"
+            }`}>
+              Priority: {request.priority}
+            </span>
+            <span className={`px-2.5 py-0.5 rounded-full font-body text-xs font-bold flex items-center gap-1.5 ${
+              request.status === "Accepted" || request.status === "In progress" || request.status === "In Progress"
+                ? "bg-blue-50 text-blue-600 border border-blue-100"
+                : request.status === "Resolved"
+                  ? "bg-green-50 text-green-600 border border-green-100"
+                  : "bg-amber-50 text-amber-600 border border-amber-100"
+            }`}>
+              <span className={`w-1.5 h-1.5 rounded-full ${
+                request.status === "Accepted" || request.status === "In progress" || request.status === "In Progress"
+                  ? "bg-blue-500"
+                  : request.status === "Resolved"
+                    ? "bg-green-500"
+                    : "bg-amber-500"
+              }`} />
+              {request.status}
+            </span>
+          </div>
+        </div>
+
+        {/* Title & Description */}
+        <div className="space-y-2 bg-[#F6FAFD] p-4 rounded-xl border border-gray-100">
+          <h3 className="font-heading text-sm font-bold text-[#0A1931]">
+            {request.title}
+          </h3>
+          <p className="font-body text-xs text-gray-600 whitespace-pre-wrap leading-relaxed">
+            {request.desc || request.description}
+          </p>
+          {request.attachment_url && (
+            <div className="pt-2">
+              <a
+                href={`${backendUrl}${request.attachment_url}`}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="inline-flex items-center gap-1 font-body text-xs text-[#3b719f] hover:underline font-bold"
+              >
+                📎 View Attached File
+              </a>
+            </div>
+          )}
+        </div>
+
+        {/* Helper Info */}
+        <div className="flex items-center justify-between p-3.5 bg-white border border-gray-200 rounded-xl">
+          <div className="flex items-center gap-3">
+            <Avatar
+              src={null}
+              name={request.helperName}
+              color={request.helperColor || "primary"}
+              size="sm"
+            />
+            <div>
+              <p className="font-heading font-semibold text-xs text-[#0A1931]">
+                {request.helperName}
+              </p>
+              <p className="font-body text-[10px] text-gray-400">
+                {request.helperRole}
+              </p>
+            </div>
+          </div>
+          <span className="font-body text-xs text-gray-400">
+            {request.date}
+          </span>
+        </div>
+
+        {/* Replies / Responses Thread */}
+        <div className="space-y-2">
+          <h4 className="font-heading text-xs font-bold text-[#0A1931] uppercase tracking-wider">
+            Discussion & Responses
+          </h4>
+          {request.replies && request.replies.length > 0 ? (
+            <div className="space-y-2 max-h-[200px] overflow-y-auto pr-1">
+              {request.replies.map((r, i) => (
+                <div key={i} className="bg-[#F6FAFD] border-l-4 border-[#4A7FA7] p-3 rounded-r-xl space-y-1">
+                  <div className="flex items-center justify-between">
+                    <span className="font-heading text-[10px] font-bold text-[#1A3D63]">
+                      💬 {r.responder_name} ({r.responder_role || "Helper"})
+                    </span>
+                    <span className="font-body text-[9px] text-gray-400">
+                      {r.created_at ? new Date(r.created_at).toLocaleDateString() : ""}
+                    </span>
+                  </div>
+                  <p className="font-body text-xs text-gray-700 leading-relaxed">
+                    {r.content}
+                  </p>
+                </div>
+              ))}
+            </div>
+          ) : request.reply ? (
+            <div className="bg-[#F6FAFD] border-l-4 border-[#4A7FA7] p-3 rounded-r-xl space-y-1">
+              <h5 className="font-heading text-[10px] font-bold text-[#1A3D63] flex items-center gap-1 uppercase tracking-wider">
+                💬 Helper Reply
+              </h5>
+              <p className="font-body text-xs text-gray-700 leading-relaxed">
+                {request.reply}
+              </p>
+            </div>
+          ) : (
+            <div className="p-4 bg-amber-50 border border-amber-100 rounded-xl text-center">
+              <p className="font-body text-xs text-amber-700">
+                ⏳ Your request is currently pending. A mentor or peer helper will respond shortly.
+              </p>
+            </div>
+          )}
+        </div>
+
+        <div className="pt-3 border-t border-gray-100 flex justify-end">
           <Button variant="secondary" onClick={onClose}>Close</Button>
         </div>
       </div>
