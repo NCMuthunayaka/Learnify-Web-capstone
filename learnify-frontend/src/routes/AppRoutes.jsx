@@ -128,7 +128,7 @@ function AppRoutes() {
           } />
 
           <Route path="/resources" element={
-            <PrivateRoute roles={["student"]}>
+            <PrivateRoute roles={["student", "mentor", "admin"]}>
               <ResourcesPage />
             </PrivateRoute>
           } />

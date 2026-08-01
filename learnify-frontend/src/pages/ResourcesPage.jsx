@@ -14,6 +14,7 @@ import {
 import { getSubjects, createSubject } from "../api/subjectsApi"
 import { getStudentsList } from "../api/usersApi"
 import { shareResource } from "../api/resourcesApi"
+import MaterialPreviewModal from "../components/resources/MaterialPreviewModal"
 
 const typeOptions   = ["All Types", "PDF", "Video", "DOCX", "PPTX"]
 const sortOptions   = ["Newest First", "Oldest First", "A–Z", "Z–A"]
@@ -322,6 +323,7 @@ function ResourcesPage() {
   const [selectedSubject, setSelectedSubject] = useState(null)
   const [sortBy, setSortBy]                   = useState("Newest First")
   const [showUpload, setShowUpload]           = useState(false)
+  const [previewResource, setPreviewResource]  = useState(null)
   const [currentPage, setCurrentPage]         = useState(1)
   const itemsPerPage = 8
 
@@ -615,7 +617,14 @@ function ResourcesPage() {
                            resource.file_type_name?.toLowerCase() === "docx" ? "📝" : "📄"}
                         </div>
                         <div className="flex flex-col">
-                          <span className="font-body text-sm text-[#0A1931] font-medium">
+                          <span
+                            onClick={(e) => {
+                              e.preventDefault()
+                              e.stopPropagation()
+                              setPreviewResource(resource)
+                            }}
+                            className="font-body text-sm text-[#0A1931] font-medium hover:text-[#4A7FA7] cursor-pointer transition-colors"
+                          >
                             {resource.title}
                           </span>
                           {resource.is_shared_personally && (
@@ -669,14 +678,24 @@ function ResourcesPage() {
                       <div className="flex items-center gap-2">
                         <Tooltip text="Preview">
                           <button
-                            onClick={() => window.open(resource.file_url, "_blank")}
+                            type="button"
+                            onClick={(e) => {
+                              e.preventDefault()
+                              e.stopPropagation()
+                              setPreviewResource(resource)
+                            }}
                             className="p-1.5 text-gray-400 hover:text-[#1A3D63] transition-colors">
                             <Eye size={15} />
                           </button>
                         </Tooltip>
                         <Tooltip text="Download">
                           <button
-                            onClick={() => handleDownload(resource)}
+                            type="button"
+                            onClick={(e) => {
+                              e.preventDefault()
+                              e.stopPropagation()
+                              handleDownload(resource)
+                            }}
                             className="p-1.5 text-gray-400 hover:text-[#1A3D63] transition-colors">
                             <Download size={15} />
                           </button>
@@ -728,6 +747,14 @@ function ResourcesPage() {
         )}
 
       </div>
+
+      {/* Material Preview Modal */}
+      <MaterialPreviewModal
+        resource={previewResource}
+        isOpen={!!previewResource}
+        onClose={() => setPreviewResource(null)}
+        onDownload={handleDownload}
+      />
     </div>
   )
 }

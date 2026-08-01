@@ -16,6 +16,7 @@ import {
 } from "../../api/resourcesApi"
 import { getSubjects, createSubject } from "../../api/subjectsApi"
 import { getStudentsList } from "../../api/usersApi"
+import MaterialPreviewModal from "../../components/resources/MaterialPreviewModal"
 
 const fileTypeIdMap = { "PDF": 1, "DOCX": 2, "PPTX": 3, "Video": 4 }
 const sortOptions   = ["Newest First", "Oldest First", "A–Z", "Z–A"]
@@ -496,6 +497,7 @@ function MentorResourcesPage() {
   const [editResource, setEditResource] = useState(null)
   const [deleteTarget, setDeleteTarget] = useState(null)
   const [shareTarget, setShareTarget]   = useState(null)
+  const [previewResource, setPreviewResource] = useState(null)
   const [sortBy, setSortBy]           = useState("Newest First")
 
   // ── Fetch on load ──────────────────────────────────────
@@ -689,8 +691,14 @@ function MentorResourcesPage() {
                       <div className="flex items-center gap-2">
                         <div className="w-7 h-7 bg-gray-100 rounded
                           flex items-center justify-center">📄</div>
-                        <span className="font-body text-sm text-[#0A1931]
-                          font-medium">
+                        <span
+                          onClick={(e) => {
+                            e.preventDefault()
+                            e.stopPropagation()
+                            setPreviewResource(resource)
+                          }}
+                          className="font-body text-sm text-[#0A1931] font-medium hover:text-[#4A7FA7] cursor-pointer transition-colors"
+                        >
                           {resource.title}
                         </span>
                       </div>
@@ -741,7 +749,12 @@ function MentorResourcesPage() {
                       <div className="flex items-center gap-2">
                         <Tooltip text="Preview">
                           <button
-                            onClick={() => window.open(resource.file_url, "_blank")}
+                            type="button"
+                            onClick={(e) => {
+                              e.preventDefault()
+                              e.stopPropagation()
+                              setPreviewResource(resource)
+                            }}
                             className="p-1.5 text-gray-400
                               hover:text-[#1A3D63] transition-colors">
                             <Eye size={15} />
@@ -782,6 +795,16 @@ function MentorResourcesPage() {
         )}
 
       </div>
+
+      {/* Material Preview Modal */}
+      <MaterialPreviewModal
+        resource={previewResource}
+        isOpen={!!previewResource}
+        onClose={() => {
+          setPreviewResource(null)
+          fetchAll()
+        }}
+      />
     </div>
   )
 }
