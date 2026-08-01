@@ -1,8 +1,9 @@
 import { useState, useEffect, useRef } from "react"
+import { useNavigate } from "react-router-dom"
 import { 
   Paperclip, Send, Users, User, ArrowRight, ArrowLeft, CheckCircle2, 
   AlertCircle, Clock, Sparkles, GraduationCap, Search, MessageSquare, 
-  Filter, Check, FileText 
+  Filter, Check, FileText, Globe, Lock
 } from "lucide-react"
 import Avatar from "../components/common/Avatar"
 import Badge from "../components/common/Badge"
@@ -19,11 +20,14 @@ import {
 } from "../api/helpRequestsApi"
 import { getSubjects } from "../api/subjectsApi"
 import { uploadFile } from "../api/resourcesApi"
+import { createPublicRequest, createDirectRequest } from "../api/communityApi"
 
 function HelpPage() {
+  const navigate = useNavigate()
   const [requests, setRequests] = useState([])
   const [mentors, setMentors] = useState([])
   const [selectedMentor, setSelectedMentor] = useState("")
+  const [deliveryMode, setDeliveryMode] = useState("direct") // "direct" or "public"
   const [subject, setSubject] = useState("Mathematics")
   const [requestType, setRequestType] = useState("Mentor") // "Mentor" or "Peer"
   const [title, setTitle] = useState("")
@@ -112,6 +116,26 @@ function HelpPage() {
         attachmentUrl = uploadRes.data.file_url
       }
 
+      if (deliveryMode === "direct" && assignedToId) {
+        // Direct 1-on-1 Request to Mentor
+        await createDirectRequest({
+          recipient_id: assignedToId,
+          subject: title,
+          initial_message: description
+        })
+      } else {
+        // Public Forum Question
+        const matchedSub = subjects.find(s => s.name === subject)
+        const subId = matchedSub ? matchedSub.id : (subjects[0]?.id || 1)
+        await createPublicRequest({
+          title: title,
+          description: description,
+          subject_id: subId,
+          attachments: attachmentUrl ? [{ file_url: attachmentUrl, file_name: selectedFile?.name || "Attachment", file_size: selectedFile?.size || 0 }] : []
+        })
+      }
+
+      // Record in legacy help_requests table for backward compatibility
       await createHelpRequest({
         title: title,
         description: description,
@@ -120,16 +144,16 @@ function HelpPage() {
         request_type: requestType.toLowerCase(),
         assigned_to: assignedToId,
         attachment_url: attachmentUrl
-      })
+      }).catch(() => null)
 
       setTitle("")
       setDescription("")
       setSelectedFile(null)
       setSuccessMsg(true)
-      setTimeout(() => setSuccessMsg(false), 3000)
-
-      await loadData()
-      setActiveCategoryTab("sent")
+      setTimeout(() => {
+        setSuccessMsg(false)
+        navigate("/community")
+      }, 1500)
     } catch (err) {
       console.error("Failed to submit help request:", err)
     } finally {
@@ -209,7 +233,7 @@ function HelpPage() {
               {successMsg && (
                 <div className="mb-4 bg-green-50 border border-green-200 text-green-700 px-4 py-3 rounded-2xl font-body text-xs font-semibold flex items-center gap-2">
                   <CheckCircle2 size={16} />
-                  Your help request has been submitted successfully!
+                  Your request has been posted successfully! Redirecting to Community...
                 </div>
               )}
 
@@ -227,8 +251,10 @@ function HelpPage() {
                       setSelectedMentor(val)
                       if (val.startsWith("Peer:")) {
                         setRequestType("Peer")
+                        setDeliveryMode("public")
                       } else {
                         setRequestType("Mentor")
+                        setDeliveryMode("direct")
                       }
                     }}
                     className="w-full bg-[#f2f1ed] text-gray-800 font-body text-xs px-4 py-3 rounded-2xl border-none focus:outline-none focus:ring-1 focus:ring-[#3b719f]/30 transition-all cursor-pointer"
@@ -252,6 +278,51 @@ function HelpPage() {
                       )}
                     </optgroup>
                   </select>
+                </div>
+
+                {/* Delivery Mode / Target Selector */}
+                <div>
+                  <label className="font-heading text-[10px] font-bold text-[#4A7FA7] uppercase tracking-wider block mb-1.5">
+                    Request Delivery Mode
+                  </label>
+                  <div className="grid grid-cols-2 gap-3">
+                    <button
+                      type="button"
+                      onClick={() => setDeliveryMode("public")}
+                      className={`p-3 rounded-2xl border font-body text-xs text-left transition-all cursor-pointer flex items-center gap-2.5 ${
+                        deliveryMode === "public"
+                          ? "bg-blue-50 border-[#3b719f] text-[#0A1931] shadow-xs"
+                          : "bg-[#f2f1ed] border-transparent text-gray-600 hover:bg-gray-200"
+                      }`}
+                    >
+                      <Globe size={18} className={deliveryMode === "public" ? "text-[#3b719f]" : "text-gray-400"} />
+                      <div>
+                        <span className="block font-bold">🌐 Public Q&A Forum</span>
+                        <span className="block text-[10px] font-normal text-gray-500">Open to all mentors & peers</span>
+                      </div>
+                    </button>
+
+                    <button
+                      type="button"
+                      disabled={selectedMentor.startsWith("Peer:")}
+                      onClick={() => setDeliveryMode("direct")}
+                      className={`p-3 rounded-2xl border font-body text-xs text-left transition-all flex items-center gap-2.5 ${
+                        selectedMentor.startsWith("Peer:")
+                          ? "opacity-50 bg-[#f2f1ed] border-transparent text-gray-400 cursor-not-allowed"
+                          : deliveryMode === "direct"
+                            ? "bg-blue-50 border-[#3b719f] text-[#0A1931] shadow-xs cursor-pointer"
+                            : "bg-[#f2f1ed] border-transparent text-gray-600 hover:bg-gray-200 cursor-pointer"
+                      }`}
+                    >
+                      <Lock size={18} className={deliveryMode === "direct" ? "text-[#3b719f]" : "text-gray-400"} />
+                      <div>
+                        <span className="block font-bold">🔒 Direct 1-on-1 to Mentor</span>
+                        <span className="block text-[10px] font-normal text-gray-500">
+                          {selectedMentor.startsWith("Peer:") ? "Mentors only (Peers post to Public)" : "Private message to mentor"}
+                        </span>
+                      </div>
+                    </button>
+                  </div>
                 </div>
 
                 {/* Subject */}
