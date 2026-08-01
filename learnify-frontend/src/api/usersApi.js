@@ -29,3 +29,16 @@ export async function deleteAccount(password) {
     })
     return response.data
 }
+
+export async function getMentorEligibility() {
+    const response = await api.get("/users/mentor-eligibility")
+    return response.data
+}
+
+export async function applyForMentor(qualifications, certifications) {
+    const response = await api.post("/users/apply-mentor", {
+        qualifications,
+        certifications
+    })
+    return response.data
+}

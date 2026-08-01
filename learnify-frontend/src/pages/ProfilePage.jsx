@@ -1,10 +1,13 @@
 import { useState, useEffect } from "react"
-import { User, Mail, Phone, BookOpen, GraduationCap, Save, Trash2, AlertTriangle } from "lucide-react"
+import { 
+  User, Mail, Phone, BookOpen, GraduationCap, Save, Trash2, AlertTriangle,
+  Award, CheckCircle2, Clock, XCircle, Plus, Sparkles, ShieldCheck
+} from "lucide-react"
 import Button from "../components/common/Button"
 import LoadingSpinner from "../components/common/LoadingSpinner"
 import ErrorMessage from "../components/common/ErrorMessage"
 import Modal from "../components/common/Modal"
-import { getProfile, updateProfile, deleteAccount } from "../api/usersApi"
+import { getProfile, updateProfile, deleteAccount, getMentorEligibility, applyForMentor } from "../api/usersApi"
 import Avatar from "../components/common/Avatar"
 import profileImg from "../assets/icons/profile.png"
 
@@ -65,11 +68,34 @@ function ProfilePage() {
   const [saving, setSaving]       = useState(false)
   const [saved, setSaved]         = useState(false)
   const [error, setError]         = useState("")
-  const [fieldErrors, setFieldErrors] = useState({})
-  const [activeTab, setActiveTab] = useState("personal")
+  // ── Mentor Application States ────────────────────────────
+  const [eligibility, setEligibility]         = useState(null)
+  const [eligibilityLoading, setEligibilityLoading] = useState(false)
+  const [showApplyModal, setShowApplyModal]     = useState(false)
+  const [appQualifications, setAppQualifications] = useState("")
+  const [appCertifications, setAppCertifications] = useState("")
+  const [submittingApp, setSubmittingApp]       = useState(false)
+  const [appError, setAppError]                 = useState("")
+  const [appSuccess, setAppSuccess]             = useState("")
 
   // ── Check if anything changed ──────────────────────────
   const hasChanges = JSON.stringify(formData) !== JSON.stringify(originalData)
+
+  async function loadEligibility() {
+    try {
+      setEligibilityLoading(true)
+      const res = await getMentorEligibility()
+      setEligibility(res.data)
+      if (res.data?.application) {
+        setAppQualifications(res.data.application.qualifications || "")
+        setAppCertifications(res.data.application.certifications || "")
+      }
+    } catch (err) {
+      console.error("Failed to load mentor eligibility:", err)
+    } finally {
+      setEligibilityLoading(false)
+    }
+  }
 
   useEffect(() => {
     async function fetchProfile() {
@@ -96,6 +122,7 @@ function ProfilePage() {
 
         setFormData(data)
         setOriginalData(data)
+        loadEligibility()
 
       } catch (err) {
         setError("Failed to load profile. Please refresh the page.")
@@ -105,6 +132,31 @@ function ProfilePage() {
     }
     fetchProfile()
   }, [])
+
+  async function handleApplySubmit(e) {
+    if (e) e.preventDefault()
+    setAppError("")
+    setAppSuccess("")
+
+    if (!appQualifications.trim() || !appCertifications.trim()) {
+      setAppError("Please fill out both educational qualifications and certifications.")
+      return
+    }
+
+    try {
+      setSubmittingApp(true)
+      await applyForMentor(appQualifications.trim(), appCertifications.trim())
+      setAppSuccess("Your application to become a Mentor has been submitted to the Admin successfully!")
+      setShowApplyModal(false)
+      loadEligibility()
+    } catch (err) {
+      setAppError(
+        err.response?.data?.error?.message || "Failed to submit mentor application. Please try again."
+      )
+    } finally {
+      setSubmittingApp(false)
+    }
+  }
 
   function handleChange(e) {
     const { name, value } = e.target
@@ -252,20 +304,233 @@ function ProfilePage() {
 
       {/* Tabs */}
       <div className="flex gap-2">
-        {["personal", "academic"].map((tab) => (
+        {["personal", "academic", "mentor"].map((tab) => (
           <button
             key={tab}
             onClick={() => setActiveTab(tab)}
             className={`font-body text-sm font-medium px-5 py-2 rounded-lg
-              transition-colors duration-200 capitalize
+              transition-colors duration-200 capitalize cursor-pointer border-none
               ${activeTab === tab
                 ? "bg-[#1A3D63] text-white"
-                : "bg-white text-gray-400 hover:text-[#1A3D63] border border-gray-200"}`}
+                : "bg-white text-gray-500 hover:text-[#1A3D63] border border-gray-200"}`}
           >
-            {tab === "personal" ? "Personal Info" : "Academic Info"}
+            {tab === "personal"
+              ? "Personal Info"
+              : tab === "academic"
+              ? "Academic Info"
+              : "Mentor Application"}
           </button>
         ))}
       </div>
+
+      {/* ── Tab 3: Mentor Application ── */}
+      {activeTab === "mentor" && (
+        <div className="space-y-5">
+          {/* Status Message Banners */}
+          {appSuccess && (
+            <div className="bg-green-50 border border-green-200 text-green-700 p-4 rounded-2xl font-body text-xs font-semibold flex items-center justify-between">
+              <span>{appSuccess}</span>
+              <button onClick={() => setAppSuccess("")} className="bg-transparent border-none text-green-700 cursor-pointer font-bold">✕</button>
+            </div>
+          )}
+
+          {/* Interaction & Assistance Score Metrics */}
+          <div className="bg-white rounded-2xl p-6 shadow-sm border border-gray-100 space-y-4">
+            <div className="flex items-center justify-between">
+              <div>
+                <h3 className="font-heading text-base font-bold text-[#0A1931] flex items-center gap-2">
+                  <Award size={18} className="text-[#3b719f]" />
+                  Peer Assistance & Activity Requirements
+                </h3>
+                <p className="font-body text-xs text-gray-500 mt-1">
+                  To ensure quality mentorship, students must actively assist peers in the community before applying.
+                </p>
+              </div>
+            </div>
+
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 pt-2">
+              {/* Assistance Counter */}
+              <div className="bg-[#f8fafc] p-4 rounded-xl border border-gray-200/80 space-y-2">
+                <div className="flex items-center justify-between text-xs font-body text-gray-600">
+                  <span className="font-semibold">Peer Assistance / Responses</span>
+                  <span className="font-bold text-[#3b719f]">
+                    {eligibility?.current_assistance_count || 0} / {eligibility?.required_assistance_count || 3}
+                  </span>
+                </div>
+                <div className="w-full bg-gray-200 h-2 rounded-full overflow-hidden">
+                  <div
+                    className="bg-[#3b719f] h-full rounded-full transition-all"
+                    style={{
+                      width: `${Math.min(
+                        100,
+                        ((eligibility?.current_assistance_count || 0) / (eligibility?.required_assistance_count || 3)) * 100
+                      )}%`
+                    }}
+                  />
+                </div>
+                <p className="font-body text-[11px] text-gray-400">
+                  Public forum answers & direct peer assistance messages.
+                </p>
+              </div>
+
+              {/* Activity Points Counter */}
+              <div className="bg-[#f8fafc] p-4 rounded-xl border border-gray-200/80 space-y-2">
+                <div className="flex items-center justify-between text-xs font-body text-gray-600">
+                  <span className="font-semibold">Activity & Progress Points</span>
+                  <span className="font-bold text-amber-600">
+                    {eligibility?.current_points || 0} / {eligibility?.required_points || 30} pts
+                  </span>
+                </div>
+                <div className="w-full bg-gray-200 h-2 rounded-full overflow-hidden">
+                  <div
+                    className="bg-amber-500 h-full rounded-full transition-all"
+                    style={{
+                      width: `${Math.min(
+                        100,
+                        ((eligibility?.current_points || 0) / (eligibility?.required_points || 30)) * 100
+                      )}%`
+                    }}
+                  />
+                </div>
+                <p className="font-body text-[11px] text-gray-400">
+                  Earned through active platform participation & study goals.
+                </p>
+              </div>
+            </div>
+          </div>
+
+          {/* Eligibility Banner / Application Trigger */}
+          {eligibilityLoading ? (
+            <div className="text-center py-6 text-xs text-gray-400 font-body">Checking mentor eligibility...</div>
+          ) : !eligibility?.is_eligible ? (
+            /* NOT ELIGIBLE BANNER */
+            <div className="bg-amber-50 border border-amber-200 rounded-2xl p-6 space-y-3">
+              <div className="flex items-center gap-2 text-amber-900 font-heading text-sm font-bold">
+                <AlertTriangle size={20} className="text-amber-600 shrink-0" />
+                Not Eligible to Apply as a Mentor Right Now
+              </div>
+              <p className="font-body text-xs text-amber-800 leading-relaxed">
+                You have not reached the required peer assistance score yet. To qualify as a mentor, you need to actively interact and assist peers in the community (at least 3 peer responses or 30 activity points). Please assist more students and try again later!
+              </p>
+              <button
+                disabled
+                className="bg-gray-200 text-gray-500 font-body text-xs font-semibold px-5 py-2.5 rounded-xl cursor-not-allowed border-none"
+              >
+                Apply to Become a Mentor (Locked)
+              </button>
+            </div>
+          ) : eligibility?.application?.status === "pending" ? (
+            /* PENDING REVIEW BANNER */
+            <div className="bg-blue-50 border border-blue-200 rounded-2xl p-6 space-y-3">
+              <div className="flex items-center gap-2 text-blue-900 font-heading text-sm font-bold">
+                <Clock size={20} className="text-blue-600 shrink-0" />
+                Application Under Review by Admin
+              </div>
+              <p className="font-body text-xs text-blue-800 leading-relaxed">
+                Your application to become an official Mentor was submitted on{" "}
+                {eligibility.application.created_at ? new Date(eligibility.application.created_at).toLocaleDateString() : "recently"}{" "}
+                and is currently under review by the Administrator. You will receive a notification once your application is reviewed.
+              </p>
+              <div className="bg-white p-4 rounded-xl border border-blue-100 space-y-1 font-body text-xs">
+                <p className="font-semibold text-gray-700">Submitted Qualifications:</p>
+                <p className="text-gray-600">{eligibility.application.qualifications}</p>
+                <p className="font-semibold text-gray-700 pt-2">Submitted Certifications:</p>
+                <p className="text-gray-600">{eligibility.application.certifications}</p>
+              </div>
+            </div>
+          ) : eligibility?.application?.status === "approved" || eligibility?.user_role === "mentor" ? (
+            /* APPROVED BANNER */
+            <div className="bg-green-50 border border-green-200 rounded-2xl p-6 space-y-3">
+              <div className="flex items-center gap-2 text-green-900 font-heading text-sm font-bold">
+                <CheckCircle2 size={20} className="text-green-600 shrink-0" />
+                Congratulations! You are an Approved Mentor
+              </div>
+              <p className="font-body text-xs text-green-800 leading-relaxed">
+                Your mentor application has been approved by the Administrator. You now have full access to mentor tools, student request assignments, and mentor dashboard.
+              </p>
+            </div>
+          ) : (
+            /* QUALIFIED TO APPLY BANNER */
+            <div className="bg-emerald-50 border border-emerald-200 rounded-2xl p-6 space-y-4">
+              <div className="flex flex-wrap items-center justify-between gap-3">
+                <div className="flex items-center gap-2 text-emerald-900 font-heading text-sm font-bold">
+                  <ShieldCheck size={20} className="text-emerald-600 shrink-0" />
+                  You Are Qualified to Apply as a Mentor!
+                </div>
+                <Button
+                  variant="primary"
+                  size="sm"
+                  onClick={() => setShowApplyModal(true)}
+                >
+                  <Sparkles size={14} className="mr-1.5" />
+                  Apply to Become a Mentor
+                </Button>
+              </div>
+              <p className="font-body text-xs text-emerald-800 leading-relaxed">
+                You have successfully met the peer assistance requirement. Click the button above to open the application popup and submit your educational qualifications and certifications to the Admin.
+              </p>
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* ── MODAL: Mentor Application Form ── */}
+      {showApplyModal && (
+        <Modal isOpen={showApplyModal} onClose={() => setShowApplyModal(false)} title="Apply for Mentor Verification">
+          <form onSubmit={handleApplySubmit} className="space-y-4">
+            <p className="font-body text-xs text-gray-600">
+              Submit your academic qualifications and certifications below. Your application will be sent directly to the Admin for review.
+            </p>
+
+            {appError && (
+              <div className="bg-red-50 text-red-600 p-3 rounded-xl font-body text-xs font-semibold">
+                {appError}
+              </div>
+            )}
+
+            <div>
+              <label className="font-heading text-[10px] font-bold text-[#4A7FA7] uppercase tracking-wider block mb-1">
+                Educational Qualifications *
+              </label>
+              <textarea
+                rows={3}
+                value={appQualifications}
+                onChange={(e) => setAppQualifications(e.target.value)}
+                placeholder="e.g. B.Sc in Computer Science (Final Year), GPA 3.85 / 4.00"
+                required
+                className="w-full bg-[#f2f1ed] text-gray-800 font-body text-xs p-3 rounded-2xl border-none focus:outline-none focus:ring-1 focus:ring-[#3b719f] resize-none"
+              />
+            </div>
+
+            <div>
+              <label className="font-heading text-[10px] font-bold text-[#4A7FA7] uppercase tracking-wider block mb-1">
+                Certifications & Specializations *
+              </label>
+              <textarea
+                rows={3}
+                value={appCertifications}
+                onChange={(e) => setAppCertifications(e.target.value)}
+                placeholder="e.g. AWS Certified Cloud Practitioner, Python Specialist Certificate, 2 years peer tutoring"
+                required
+                className="w-full bg-[#f2f1ed] text-gray-800 font-body text-xs p-3 rounded-2xl border-none focus:outline-none focus:ring-1 focus:ring-[#3b719f] resize-none"
+              />
+            </div>
+
+            <div className="flex items-center justify-end gap-2 pt-2 border-t border-gray-100">
+              <button
+                type="button"
+                onClick={() => setShowApplyModal(false)}
+                className="font-body text-xs font-bold text-gray-500 hover:text-gray-800 bg-transparent border-none cursor-pointer"
+              >
+                Cancel
+              </button>
+              <Button variant="primary" size="sm" type="submit" disabled={submittingApp}>
+                {submittingApp ? "Submitting..." : "Submit Application to Admin"}
+              </Button>
+            </div>
+          </form>
+        </Modal>
+      )}
 
       {/* Personal Info */}
       {activeTab === "personal" && (

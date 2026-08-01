@@ -184,3 +184,202 @@ def delete_account():
     except Exception as e:
         db.session.rollback()
         return error_response("DELETE_ACCOUNT_ERROR", str(e), status=500)
+
+
+# ── GET /api/users/mentor-eligibility ─────────────────────
+# Returns eligibility status and application state for student applying to be mentor
+@bp.route("/mentor-eligibility", methods=["GET"])
+@jwt_required()
+def get_mentor_eligibility():
+    user_id = int(get_jwt_identity())
+    user = User.query.get(user_id)
+
+    if not user:
+        return error_response("NOT_FOUND", "User not found", status=404)
+
+    from sqlalchemy import text
+    from app.services.auth_service import ensure_mentor_applications_table
+    ensure_mentor_applications_table()
+
+    # Calculate peer assistance interactions
+    try:
+        public_replies_count = db.session.execute(
+            text("SELECT COUNT(*) FROM public_replies WHERE author_id = :uid"),
+            {"uid": user_id}
+        ).scalar() or 0
+    except Exception:
+        public_replies_count = 0
+
+    try:
+        direct_msgs_count = db.session.execute(
+            text("SELECT COUNT(*) FROM direct_messages WHERE sender_id = :uid"),
+            {"uid": user_id}
+        ).scalar() or 0
+    except Exception:
+        direct_msgs_count = 0
+
+    try:
+        help_resp_count = db.session.execute(
+            text("SELECT COUNT(*) FROM help_requests WHERE student_id = :uid OR assigned_to = :uid"),
+            {"uid": user_id}
+        ).scalar() or 0
+    except Exception:
+        help_resp_count = 0
+
+    assistance_count = public_replies_count + direct_msgs_count + help_resp_count
+
+    try:
+        total_points = db.session.execute(
+            text("SELECT total_points FROM student_profiles WHERE user_id = :uid"),
+            {"uid": user_id}
+        ).scalar() or 0
+    except Exception:
+        total_points = 0
+
+    # Eligibility threshold: assistance_count >= 3 OR total_points >= 30
+    REQUIRED_ASSISTANCE = 3
+    REQUIRED_POINTS = 30
+    is_eligible = (assistance_count >= REQUIRED_ASSISTANCE or total_points >= REQUIRED_POINTS)
+
+    # Fetch application state
+    application_data = None
+    try:
+        row = db.session.execute(
+            text("SELECT id, qualifications, certifications, status, created_at FROM mentor_applications WHERE user_id = :uid ORDER BY created_at DESC LIMIT 1"),
+            {"uid": user_id}
+        ).fetchone()
+
+        if row:
+            application_data = {
+                "id": row[0],
+                "qualifications": row[1],
+                "certifications": row[2],
+                "status": row[3],
+                "created_at": row[4].isoformat() if row[4] else None
+            }
+    except Exception as e:
+        print("Error fetching mentor_applications:", e)
+
+    return success_response(data={
+        "user_role": user.role,
+        "is_eligible": is_eligible,
+        "current_assistance_count": assistance_count,
+        "required_assistance_count": REQUIRED_ASSISTANCE,
+        "current_points": total_points,
+        "required_points": REQUIRED_POINTS,
+        "application": application_data
+    })
+
+
+# ── POST /api/users/apply-mentor ──────────────────────────
+# Allows qualified student to submit mentor application to admin
+@bp.route("/apply-mentor", methods=["POST"])
+@jwt_required()
+def apply_mentor():
+    user_id = int(get_jwt_identity())
+    user = User.query.get(user_id)
+
+    if not user:
+        return error_response("NOT_FOUND", "User not found", status=404)
+
+    if user.role == "mentor":
+        return error_response("ALREADY_MENTOR", "You are already a registered Mentor", status=400)
+
+    from sqlalchemy import text
+    from app.services.auth_service import ensure_mentor_applications_table
+    ensure_mentor_applications_table()
+
+    # Re-verify eligibility
+    try:
+        pub_cnt = db.session.execute(
+            text("SELECT COUNT(*) FROM public_replies WHERE author_id = :uid"),
+            {"uid": user_id}
+        ).scalar() or 0
+    except Exception:
+        pub_cnt = 0
+
+    try:
+        dir_cnt = db.session.execute(
+            text("SELECT COUNT(*) FROM direct_messages WHERE sender_id = :uid"),
+            {"uid": user_id}
+        ).scalar() or 0
+    except Exception:
+        dir_cnt = 0
+
+    assistance_count = pub_cnt + dir_cnt
+
+    try:
+        total_points = db.session.execute(
+            text("SELECT total_points FROM student_profiles WHERE user_id = :uid"),
+            {"uid": user_id}
+        ).scalar() or 0
+    except Exception:
+        total_points = 0
+
+    is_eligible = (assistance_count >= 3 or total_points >= 30)
+    if not is_eligible:
+        return error_response(
+            "NOT_ELIGIBLE",
+            "You are not eligible to apply as a mentor right now. Please assist more peers in the community (at least 3 peer responses or 30 activity points) and try again later.",
+            status=400
+        )
+
+    # Check for existing pending application
+    existing_pending = db.session.execute(
+        text("SELECT id FROM mentor_applications WHERE user_id = :uid AND status = 'pending'"),
+        {"uid": user_id}
+    ).fetchone()
+
+    if existing_pending:
+        return error_response("PENDING_EXISTS", "Your mentor application is already under review by Admin.", status=400)
+
+    data = request.get_json(silent=True) or {}
+    qualifications = (data.get("qualifications") or "").strip()
+    certifications = (data.get("certifications") or "").strip()
+
+    if not qualifications or not certifications:
+        return error_response("MISSING_FIELD", "Educational qualifications and certifications are required", status=400)
+
+    try:
+        # Check if previous application exists to update or insert new
+        existing_app = db.session.execute(
+            text("SELECT id FROM mentor_applications WHERE user_id = :uid"),
+            {"uid": user_id}
+        ).fetchone()
+
+        if existing_app:
+            db.session.execute(
+                text(
+                    "UPDATE mentor_applications "
+                    "SET qualifications = :qual, certifications = :cert, status = 'pending', created_at = CURRENT_TIMESTAMP "
+                    "WHERE user_id = :uid"
+                ),
+                {"qual": qualifications, "cert": certifications, "uid": user_id}
+            )
+        else:
+            db.session.execute(
+                text(
+                    "INSERT INTO mentor_applications (user_id, qualifications, certifications, status) "
+                    "VALUES (:uid, :qual, :cert, 'pending')"
+                ),
+                {"uid": user_id, "qual": qualifications, "cert": certifications}
+            )
+        db.session.commit()
+
+        # Send notification to student
+        try:
+            from app.services.notification_service import create_notification
+            create_notification(
+                user_id=user_id,
+                type_name="system",
+                title="Mentor Application Submitted",
+                body="Your application to become a Mentor has been submitted to Admin and is under review.",
+                action_url="/notifications"
+            )
+        except Exception:
+            pass
+
+        return success_response(message="Mentor application submitted successfully to Admin!", status=201)
+    except Exception as e:
+        db.session.rollback()
+        return error_response("APPLICATION_ERROR", str(e), status=500)
