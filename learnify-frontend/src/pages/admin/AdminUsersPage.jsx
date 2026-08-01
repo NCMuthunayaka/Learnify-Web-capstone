@@ -4,10 +4,10 @@ import {
   Users, Clock, UserCheck, Activity,
   Plus, SlidersHorizontal, Edit3, Trash2,
   ChevronLeft, ChevronRight, X, ArrowRight,
-  ShieldAlert
+  ShieldAlert, UserPlus, Shield
 } from "lucide-react"
 import {
-  getAllUsers, getAdminStats, updateUserStatus, deleteUser
+  getAllUsers, getAdminStats, updateUserStatus, deleteUser, createUser, updateUserDetails
 } from "../../api/adminApi"
 
 const ROLE_COLORS = {
@@ -35,87 +35,240 @@ function getInitials(name) {
   return name.split(" ").filter(Boolean).map(w => w[0]).join("").slice(0, 2).toUpperCase() || "?"
 }
 
-// ── Add User modal (UI only – registration via auth flow) ──
-function AddUserModal({ onClose }) {
-  const [form, setForm] = useState({ name: "", email: "", role: "student" })
+// ── Add User modal (Supports creating Students, Mentors, & Admins) ──
+function AddUserModal({ onClose, onSuccess }) {
+  const [form, setForm]       = useState({ name: "", email: "", password: "", role: "student" })
+  const [loading, setLoading] = useState(false)
+  const [error, setError]     = useState(null)
 
-  function handleSubmit(e) {
+  async function handleSubmit(e) {
     e.preventDefault()
-    onClose()
+    if (!form.name.trim() || !form.email.trim() || !form.password.trim()) {
+      setError("All fields are required")
+      return
+    }
+    setError(null)
+    setLoading(true)
+    try {
+      await createUser(form)
+      onSuccess?.()
+      onClose()
+    } catch (err) {
+      setError(err.response?.data?.message || "Failed to create user")
+    } finally {
+      setLoading(false)
+    }
   }
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm">
-      <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md mx-4 overflow-hidden">
-        <div className="flex items-center justify-between px-6 py-5 border-b border-gray-50">
-          <h3 className="font-heading text-base font-bold text-[#0A1931]">Add New User</h3>
-          <button onClick={onClose} className="text-gray-400 hover:text-gray-600 transition-colors">
-            <X size={18} />
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-xs p-4">
+      <div className="bg-white rounded-3xl shadow-2xl w-full max-w-md overflow-hidden border border-slate-100 animate-fade-in">
+        <div className="flex items-center justify-between px-6 py-5 bg-gradient-to-r from-[#0A1931] to-[#1A3D63] text-white">
+          <div className="flex items-center gap-2">
+            <UserPlus size={20} className="text-blue-300" />
+            <h3 className="font-heading text-base font-bold text-white">Create New User / Admin</h3>
+          </div>
+          <button onClick={onClose} className="text-blue-200 hover:text-white transition-colors bg-transparent border-none cursor-pointer">
+            <X size={20} />
           </button>
         </div>
 
-        <form onSubmit={handleSubmit} className="px-6 py-5 space-y-4">
+        <form onSubmit={handleSubmit} className="p-6 space-y-4">
+          {error && (
+            <p className="font-body text-xs text-red-500 font-bold bg-red-50 p-3 rounded-xl border border-red-100">
+              {error}
+            </p>
+          )}
+
           <div className="space-y-1.5">
-            <label className="font-body text-xs font-semibold text-gray-600 uppercase tracking-wide">
-              Full Name
-            </label>
+            <label className="font-body text-xs font-semibold text-slate-700">Full Name *</label>
             <input
               type="text"
               required
               value={form.name}
               onChange={e => setForm(f => ({ ...f, name: e.target.value }))}
-              placeholder="e.g. Dr. Sarah Jenkins"
-              className="w-full bg-gray-50 border border-gray-100 rounded-xl px-4 py-2.5 font-body
-                text-sm text-gray-700 focus:outline-none focus:border-[#4A7FA7] transition-colors"
+              placeholder="e.g. John Doe"
+              className="w-full bg-[#F8FAFC] border border-slate-200 rounded-xl px-4 py-2.5 font-body text-sm text-slate-800 focus:outline-none focus:border-[#3b719f] focus:bg-white transition-colors"
             />
           </div>
 
           <div className="space-y-1.5">
-            <label className="font-body text-xs font-semibold text-gray-600 uppercase tracking-wide">
-              Email Address
-            </label>
+            <label className="font-body text-xs font-semibold text-slate-700">Email Address *</label>
             <input
               type="email"
               required
               value={form.email}
               onChange={e => setForm(f => ({ ...f, email: e.target.value }))}
-              placeholder="user@university.edu"
-              className="w-full bg-gray-50 border border-gray-100 rounded-xl px-4 py-2.5 font-body
-                text-sm text-gray-700 focus:outline-none focus:border-[#4A7FA7] transition-colors"
+              placeholder="user@example.com"
+              className="w-full bg-[#F8FAFC] border border-slate-200 rounded-xl px-4 py-2.5 font-body text-sm text-slate-800 focus:outline-none focus:border-[#3b719f] focus:bg-white transition-colors"
             />
           </div>
 
           <div className="space-y-1.5">
-            <label className="font-body text-xs font-semibold text-gray-600 uppercase tracking-wide">
-              Role
-            </label>
+            <label className="font-body text-xs font-semibold text-slate-700">Password *</label>
+            <input
+              type="password"
+              required
+              value={form.password}
+              onChange={e => setForm(f => ({ ...f, password: e.target.value }))}
+              placeholder="••••••••"
+              className="w-full bg-[#F8FAFC] border border-slate-200 rounded-xl px-4 py-2.5 font-body text-sm text-slate-800 focus:outline-none focus:border-[#3b719f] focus:bg-white transition-colors"
+            />
+          </div>
+
+          <div className="space-y-1.5">
+            <label className="font-body text-xs font-semibold text-slate-700">Assign Role *</label>
             <select
               value={form.role}
               onChange={e => setForm(f => ({ ...f, role: e.target.value }))}
-              className="w-full bg-gray-50 border border-gray-100 rounded-xl px-4 py-2.5 font-body
-                text-sm text-gray-700 focus:outline-none focus:border-[#4A7FA7] transition-colors"
+              className="w-full bg-[#F8FAFC] border border-slate-200 rounded-xl px-4 py-2.5 font-body text-sm text-slate-800 focus:outline-none focus:border-[#3b719f] focus:bg-white transition-colors"
             >
-              <option value="student">Student</option>
-              <option value="mentor">Mentor</option>
-              <option value="admin">Admin</option>
+              <option value="student">Student Account</option>
+              <option value="mentor">Mentor Account</option>
+              <option value="admin">System Administrator 🛡️</option>
             </select>
           </div>
 
-          <div className="flex gap-3 pt-2">
+          <div className="flex gap-3 pt-3">
             <button
               type="button"
               onClick={onClose}
-              className="flex-1 border border-gray-200 text-gray-600 font-body text-sm font-semibold
-                py-2.5 rounded-xl hover:bg-gray-50 transition-colors"
+              className="flex-1 border border-slate-200 text-slate-600 font-body text-sm font-semibold py-2.5 rounded-xl hover:bg-slate-50 transition-colors bg-white cursor-pointer"
             >
               Cancel
             </button>
             <button
               type="submit"
-              className="flex-1 bg-[#0A1931] hover:bg-[#1A3D63] text-white font-body text-sm
-                font-semibold py-2.5 rounded-xl transition-colors shadow-sm"
+              disabled={loading}
+              className="flex-1 bg-[#0A1931] hover:bg-[#1A3D63] text-white font-body text-sm font-semibold py-2.5 rounded-xl transition-colors shadow-sm cursor-pointer border-none disabled:opacity-50"
             >
-              Add User
+              {loading ? "Creating..." : "Create User"}
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+  )
+}
+
+// ── Edit User Modal (Edit Role, Status, Details) ──
+function EditUserModal({ user, onClose, onSuccess }) {
+  const [form, setForm]       = useState({ name: user.name || "", email: user.email || "", role: user.role || "student", status: user.status || "active", password: "" })
+  const [loading, setLoading] = useState(false)
+  const [error, setError]     = useState(null)
+
+  async function handleSubmit(e) {
+    e.preventDefault()
+    setError(null)
+    setLoading(true)
+    try {
+      const payload = { ...form }
+      if (!payload.password.trim()) delete payload.password
+      await updateUserDetails(user.id, payload)
+      onSuccess?.()
+      onClose()
+    } catch (err) {
+      setError(err.response?.data?.message || "Failed to update user details")
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-xs p-4">
+      <div className="bg-white rounded-3xl shadow-2xl w-full max-w-md overflow-hidden border border-slate-100 animate-fade-in">
+        <div className="flex items-center justify-between px-6 py-5 bg-gradient-to-r from-[#0A1931] to-[#1A3D63] text-white">
+          <div className="flex items-center gap-2">
+            <Edit3 size={18} className="text-amber-400" />
+            <h3 className="font-heading text-base font-bold text-white">Edit User & Role Settings</h3>
+          </div>
+          <button onClick={onClose} className="text-blue-200 hover:text-white transition-colors bg-transparent border-none cursor-pointer">
+            <X size={20} />
+          </button>
+        </div>
+
+        <form onSubmit={handleSubmit} className="p-6 space-y-4">
+          {error && (
+            <p className="font-body text-xs text-red-500 font-bold bg-red-50 p-3 rounded-xl border border-red-100">
+              {error}
+            </p>
+          )}
+
+          <div className="space-y-1.5">
+            <label className="font-body text-xs font-semibold text-slate-700">Full Name</label>
+            <input
+              type="text"
+              required
+              value={form.name}
+              onChange={e => setForm(f => ({ ...f, name: e.target.value }))}
+              className="w-full bg-[#F8FAFC] border border-slate-200 rounded-xl px-4 py-2.5 font-body text-sm text-slate-800 focus:outline-none focus:border-[#3b719f] focus:bg-white transition-colors"
+            />
+          </div>
+
+          <div className="space-y-1.5">
+            <label className="font-body text-xs font-semibold text-slate-700">Email Address</label>
+            <input
+              type="email"
+              required
+              value={form.email}
+              onChange={e => setForm(f => ({ ...f, email: e.target.value }))}
+              className="w-full bg-[#F8FAFC] border border-slate-200 rounded-xl px-4 py-2.5 font-body text-sm text-slate-800 focus:outline-none focus:border-[#3b719f] focus:bg-white transition-colors"
+            />
+          </div>
+
+          <div className="grid grid-cols-2 gap-3">
+            <div className="space-y-1.5">
+              <label className="font-body text-xs font-semibold text-slate-700">User Role 🛡️</label>
+              <select
+                value={form.role}
+                onChange={e => setForm(f => ({ ...f, role: e.target.value }))}
+                className="w-full bg-[#F8FAFC] border border-slate-200 rounded-xl px-3 py-2.5 font-body text-sm text-slate-800 focus:outline-none focus:border-[#3b719f] focus:bg-white transition-colors"
+              >
+                <option value="student">Student</option>
+                <option value="mentor">Mentor</option>
+                <option value="admin">Admin 🛡️</option>
+              </select>
+            </div>
+
+            <div className="space-y-1.5">
+              <label className="font-body text-xs font-semibold text-slate-700">Account Status</label>
+              <select
+                value={form.status}
+                onChange={e => setForm(f => ({ ...f, status: e.target.value }))}
+                className="w-full bg-[#F8FAFC] border border-slate-200 rounded-xl px-3 py-2.5 font-body text-sm text-slate-800 focus:outline-none focus:border-[#3b719f] focus:bg-white transition-colors"
+              >
+                <option value="active">Active 🟢</option>
+                <option value="pending">Pending 🟡</option>
+                <option value="inactive">Inactive 🔴</option>
+              </select>
+            </div>
+          </div>
+
+          <div className="space-y-1.5 pt-1">
+            <label className="font-body text-xs font-semibold text-slate-700">Reset Password (Optional)</label>
+            <input
+              type="password"
+              value={form.password}
+              onChange={e => setForm(f => ({ ...f, password: e.target.value }))}
+              placeholder="Leave blank to keep unchanged"
+              className="w-full bg-[#F8FAFC] border border-slate-200 rounded-xl px-4 py-2.5 font-body text-sm text-slate-800 focus:outline-none focus:border-[#3b719f] focus:bg-white transition-colors"
+            />
+          </div>
+
+          <div className="flex gap-3 pt-3">
+            <button
+              type="button"
+              onClick={onClose}
+              className="flex-1 border border-slate-200 text-slate-600 font-body text-sm font-semibold py-2.5 rounded-xl hover:bg-slate-50 transition-colors bg-white cursor-pointer"
+            >
+              Cancel
+            </button>
+            <button
+              type="submit"
+              disabled={loading}
+              className="flex-1 bg-[#1A3D63] hover:bg-[#0A1931] text-white font-body text-sm font-semibold py-2.5 rounded-xl transition-colors shadow-sm cursor-pointer border-none disabled:opacity-50"
+            >
+              {loading ? "Saving..." : "Save Changes"}
             </button>
           </div>
         </form>
@@ -191,6 +344,7 @@ export default function AdminUsersPage() {
   const [totalPages,   setTotalPages]   = useState(1)
   const [loading,      setLoading]      = useState(true)
   const [showAdd,      setShowAdd]      = useState(false)
+  const [editingUser,  setEditingUser]  = useState(null)
   const [showFilter,   setShowFilter]   = useState(false)
   const [roleFilter,   setRoleFilter]   = useState("All")
   const [statusFilter, setStatusFilter] = useState("All")
@@ -411,17 +565,15 @@ export default function AdminUsersPage() {
                       <td className="px-6 py-4">
                         <div className="flex items-center gap-2">
                           <button
-                            onClick={() => handleStatusChange(u.id, u.status === "active" ? "inactive" : "active")}
-                            className="w-7 h-7 rounded-lg border border-gray-100 flex items-center justify-center
-                              text-gray-400 hover:text-[#4A7FA7] hover:border-[#4A7FA7] transition-colors"
-                            title={u.status === "active" ? "Deactivate" : "Activate"}
+                            onClick={() => setEditingUser(u)}
+                            className="w-7 h-7 rounded-lg border border-slate-200 flex items-center justify-center text-slate-500 hover:text-[#1A3D63] hover:border-[#1A3D63] transition-colors cursor-pointer"
+                            title="Edit User & Change Role"
                           >
                             <Edit3 size={13} />
                           </button>
                           <button
                             onClick={() => handleDelete(u.id)}
-                            className="w-7 h-7 rounded-lg border border-gray-100 flex items-center justify-center
-                              text-gray-400 hover:text-red-500 hover:border-red-200 transition-colors"
+                            className="w-7 h-7 rounded-lg border border-slate-200 flex items-center justify-center text-slate-500 hover:text-red-500 hover:border-red-200 transition-colors cursor-pointer"
                             title="Delete user"
                           >
                             <Trash2 size={13} />
@@ -475,15 +627,15 @@ export default function AdminUsersPage() {
           </div>
 
           <form onSubmit={handleGoToPage} className="flex items-center gap-2">
-            <span className="font-body text-xs text-gray-400 font-semibold">Go to page:</span>
+            <span className="font-body text-xs text-gray-400">Go to page:</span>
             <input
               type="number"
-              min="1"
+              min={1}
               max={totalPages}
               value={goToPage}
               onChange={e => setGoToPage(e.target.value)}
-              className="w-14 bg-gray-50 border border-gray-100 rounded-lg px-2 py-1.5 font-body
-                text-xs text-center text-gray-700 focus:outline-none focus:border-[#4A7FA7] transition-colors"
+              className="w-12 px-2 py-1 bg-gray-50 border border-gray-200 rounded-lg font-body text-xs
+                text-gray-700 text-center focus:outline-none focus:border-[#4A7FA7]"
             />
           </form>
         </div>
@@ -543,7 +695,8 @@ export default function AdminUsersPage() {
         </div>
       </div>
 
-      {showAdd && <AddUserModal onClose={() => setShowAdd(false)} />}
+      {showAdd && <AddUserModal onClose={() => setShowAdd(false)} onSuccess={fetchUsers} />}
+      {editingUser && <EditUserModal user={editingUser} onClose={() => setEditingUser(null)} onSuccess={fetchUsers} />}
 
     </div>
   )

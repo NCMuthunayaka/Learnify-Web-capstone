@@ -86,6 +86,102 @@ def get_users():
     })
 
 
+# ── POST /api/admin/users (Create Student, Mentor, or Admin) ──
+@bp.route("/users", methods=["POST"])
+@jwt_required()
+def create_user():
+    err = _require_admin()
+    if err:
+        return err
+
+    data = request.get_json() or {}
+    name     = (data.get("name") or "").strip()
+    email    = (data.get("email") or "").strip().lower()
+    password = (data.get("password") or "").strip()
+    role     = (data.get("role") or "student").strip().lower()
+
+    if not name or not email or not password:
+        return error_response("MISSING_FIELDS", "Name, email, and password are required", status=400)
+
+    if role not in ("student", "mentor", "admin"):
+        return error_response("INVALID_ROLE", "Role must be student, mentor, or admin", status=400)
+
+    existing = User.query.filter_by(email=email).first()
+    if existing:
+        return error_response("EMAIL_EXISTS", "A user with this email already exists", status=400)
+
+    from app.extensions import bcrypt
+    hashed = bcrypt.generate_password_hash(password).decode("utf-8")
+
+    user = User(
+        name=name,
+        email=email,
+        password_hash=hashed,
+        role=role,
+        status="active"
+    )
+    db.session.add(user)
+    db.session.commit()
+
+    if role == "student":
+        try:
+            db.session.execute(
+                text(
+                    "INSERT INTO student_profiles (user_id, available_hours_per_week, study_streak_days, total_points, semester_goal_pct) "
+                    "VALUES (:uid, 0, 0, 0, 0.0)"
+                ),
+                {"uid": user.id}
+            )
+            db.session.commit()
+        except Exception:
+            db.session.rollback()
+
+    return success_response(data=user.to_dict(), message="User created successfully", status=201)
+
+
+# ── PATCH /api/admin/users/<id> (Update Role, Status, Details) ──
+@bp.route("/users/<int:user_id>", methods=["PATCH"])
+@jwt_required()
+def update_user_details(user_id):
+    err = _require_admin()
+    if err:
+        return err
+
+    user = User.query.get(user_id)
+    if not user:
+        return error_response("NOT_FOUND", "User not found", status=404)
+
+    data = request.get_json() or {}
+
+    if "name" in data and data["name"].strip():
+        user.name = data["name"].strip()
+
+    if "email" in data and data["email"].strip():
+        email = data["email"].strip().lower()
+        if email != user.email:
+            existing = User.query.filter_by(email=email).first()
+            if existing:
+                return error_response("EMAIL_EXISTS", "Email is already taken by another user", status=400)
+            user.email = email
+
+    if "role" in data:
+        role = data["role"].strip().lower()
+        if role in ("student", "mentor", "admin"):
+            user.role = role
+
+    if "status" in data:
+        status = data["status"].strip().lower()
+        if status in ("active", "pending", "inactive"):
+            user.status = status
+
+    if "password" in data and data["password"].strip():
+        from app.extensions import bcrypt
+        user.password_hash = bcrypt.generate_password_hash(data["password"].strip()).decode("utf-8")
+
+    db.session.commit()
+    return success_response(data=user.to_dict(), message="User updated successfully")
+
+
 # ── PATCH /api/admin/users/<id>/status ───────────────────────
 @bp.route("/users/<int:user_id>/status", methods=["PATCH"])
 @jwt_required()

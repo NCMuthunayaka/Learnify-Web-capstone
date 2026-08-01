@@ -13,6 +13,16 @@ export async function getAllUsers(page = 1, role = null, status = null) {
     return response.data
 }
 
+export async function createUser(userData) {
+    const response = await api.post("/admin/users", userData)
+    return response.data
+}
+
+export async function updateUserDetails(userId, userData) {
+    const response = await api.patch(`/admin/users/${userId}`, userData)
+    return response.data
+}
+
 export async function updateUserStatus(userId, status) {
     const response = await api.patch(`/admin/users/${userId}/status`, { status })
     return response.data
