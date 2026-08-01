@@ -8,7 +8,7 @@ from datetime import datetime
 bp = Blueprint("help_requests", __name__)
 
 # ── GET /api/help_requests ─────────────────────────────────
-# Get all help requests created by the current student user
+# Get all help requests created by OR assigned to the current user
 @bp.route("", methods=["GET"])
 @jwt_required()
 def get_help_requests():
@@ -20,11 +20,12 @@ def get_help_requests():
                 "SELECT hr.id, hr.subject_id, s.name AS subject_name, "
                 "hr.topic_title, hr.description, hr.priority, hr.status, "
                 "hr.assigned_to, u.name AS helper_name, hr.created_at, "
-                "s.color_hex, hr.attachment_url "
+                "s.color_hex, hr.attachment_url, hr.student_id, su.name AS student_name "
                 "FROM help_requests hr "
                 "JOIN subjects s ON hr.subject_id = s.id "
+                "JOIN users su ON hr.student_id = su.id "
                 "LEFT JOIN users u ON hr.assigned_to = u.id "
-                "WHERE hr.student_id = :sid "
+                "WHERE hr.student_id = :sid OR hr.assigned_to = :sid "
                 "ORDER BY hr.created_at DESC"
             ),
             {"sid": user_id}
@@ -33,6 +34,10 @@ def get_help_requests():
         requests_list = []
         for row in rows:
             req_id = row[0]
+            student_id = row[12]
+            student_name = row[13]
+            assigned_to = row[7]
+            is_assigned_to_me = (assigned_to == user_id and student_id != user_id)
             
             # Fetch responses for this request
             resp_rows = db.session.execute(
@@ -56,6 +61,8 @@ def get_help_requests():
                 for r in resp_rows
             ]
 
+            display_helper_name = row[8] or ("You (Peer Helper)" if is_assigned_to_me else "Unassigned")
+
             requests_list.append({
                 "id": req_id,
                 "subject_id": row[1],
@@ -64,18 +71,21 @@ def get_help_requests():
                 "description": row[4],
                 "priority": row[5].capitalize() if row[5] else "Medium",
                 "status": row[6].capitalize() if row[6] else "Pending",
-                "assigned_to": row[7],
-                "helper_name": row[8] or "Unassigned",
+                "assigned_to": assigned_to,
+                "student_id": student_id,
+                "student_name": student_name,
+                "helper_name": display_helper_name,
+                "is_assigned_to_me": is_assigned_to_me,
                 "created_at": row[9].isoformat() if row[9] else None,
                 "color_hex": row[10],
                 "attachment_url": row[11],
                 "replies": replies,
-                # For compatibility with mock UI:
+                # For compatibility with frontend UI:
                 "subject": row[2],
                 "desc": row[4],
-                "helperName": row[8] or "Pending Assignment",
-                "helperRole": "Mentor" if row[8] else "Unassigned",
-                "helperInitials": "".join([part[0] for part in (row[8] or "Pending").split()]).upper()[:2],
+                "helperName": f"From: {student_name}" if is_assigned_to_me else display_helper_name,
+                "helperRole": "Assigned Request" if is_assigned_to_me else ("Mentor" if row[8] else "Unassigned"),
+                "helperInitials": "".join([part[0] for part in (student_name if is_assigned_to_me else (row[8] or "Pending")).split()]).upper()[:2],
                 "helperColor": "primary" if row[7] else "gray",
                 "date": row[9].strftime("%b %d, %Y") if row[9] else "",
                 "badgeColor": "success" if row[6] == "resolved" else ("blue" if row[6] == "in_progress" else "warning"),
@@ -134,13 +144,13 @@ def create_help_request():
 
         # Resolve assigned_to_id if sent as a string name or dict
         if isinstance(assigned_to_id, str) and assigned_to_id.strip():
-            # Check if name is sent and look up ID
-            mentor_row = db.session.execute(
-                text("SELECT id FROM users WHERE name = :name AND role = 'mentor' LIMIT 1"),
-                {"name": assigned_to_id.strip()}
+            raw_name = assigned_to_id.strip().replace("Peer: ", "")
+            user_row = db.session.execute(
+                text("SELECT id FROM users WHERE (name = :name OR name = :raw_name) AND status = 'active' LIMIT 1"),
+                {"name": assigned_to_id.strip(), "raw_name": raw_name}
             ).fetchone()
-            if mentor_row:
-                assigned_to_id = mentor_row[0]
+            if user_row:
+                assigned_to_id = user_row[0]
             else:
                 assigned_to_id = None
         elif assigned_to_id:
@@ -167,6 +177,23 @@ def create_help_request():
             }
         )
         db.session.commit()
+
+        # Send notification to assigned helper if specified
+        if assigned_to_id:
+            try:
+                from app.models.user import User
+                sender = User.query.get(user_id)
+                sender_name = sender.name if sender else "A student"
+                from app.services.notification_service import create_notification
+                create_notification(
+                    user_id=assigned_to_id,
+                    type_name="mentor_reply",
+                    title="New Help Request",
+                    body=f"{sender_name} sent you a help request: '{title}'",
+                    action_url="/help"
+                )
+            except Exception as notif_err:
+                print(f"Error creating notification: {notif_err}")
 
         return success_response(message="Help request submitted successfully", status=201)
     except Exception as e:
