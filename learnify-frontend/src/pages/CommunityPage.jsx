@@ -12,7 +12,7 @@ import {
   getCommunitySummary, getPublicRequests, createPublicRequest, createPublicReply,
   getDirectRequests, createDirectRequest, getDirectThread, sendDirectMessage, escalateToDirect
 } from "../api/communityApi"
-import { getSubjects } from "../api/subjectsApi"
+import { getSubjects, createSubject } from "../api/subjectsApi"
 import { getAvailableMentors } from "../api/helpRequestsApi"
 import { uploadFile } from "../api/resourcesApi"
 
@@ -71,6 +71,35 @@ function CommunityPage() {
   const [sendingDirectMsg, setSendingDirectMsg] = useState(false)
 
   // ── Modals & Creation Forms ────────────────────────────────
+  const [showAddSubjectModal, setShowAddSubjectModal] = useState(false)
+  const [newSubjectName, setNewSubjectName]           = useState("")
+  const [addingSubject, setAddingSubject]             = useState(false)
+
+  async function handleCreateNewSubject(e) {
+    if (e) e.preventDefault()
+    if (!newSubjectName.trim()) return
+    try {
+      setAddingSubject(true)
+      const res = await createSubject(newSubjectName.trim())
+      const createdSub = res.data
+      
+      const subRes = await getSubjects()
+      const updatedList = subRes.data || []
+      setSubjects(updatedList)
+
+      if (createdSub && createdSub.id) {
+        setAskSubjectId(createdSub.id.toString())
+        setSelectedSubjectFilter(createdSub.id.toString())
+      }
+      setNewSubjectName("")
+      setShowAddSubjectModal(false)
+    } catch (err) {
+      console.error("Failed to add subject:", err)
+    } finally {
+      setAddingSubject(false)
+    }
+  }
+
   const [showAskModal, setShowAskModal] = useState(false)
   const [askTitle, setAskTitle] = useState("")
   const [askDescription, setAskDescription] = useState("")
@@ -615,13 +644,20 @@ function CommunityPage() {
                 {/* Subject Dropdown Filter */}
                 <select
                   value={selectedSubjectFilter}
-                  onChange={(e) => setSelectedSubjectFilter(e.target.value)}
+                  onChange={(e) => {
+                    if (e.target.value === "__ADD_NEW__") {
+                      setShowAddSubjectModal(true)
+                    } else {
+                      setSelectedSubjectFilter(e.target.value)
+                    }
+                  }}
                   className="bg-[#f8fafc] text-gray-800 font-body text-xs px-3 py-2.5 rounded-xl border border-gray-200 focus:outline-none focus:border-[#3b719f] cursor-pointer"
                 >
                   <option value="">All Course Subjects</option>
                   {subjects.map(s => (
                     <option key={s.id} value={s.id}>{s.name}</option>
                   ))}
+                  <option value="__ADD_NEW__" className="font-bold text-[#3b719f]">➕ Add New Subject...</option>
                 </select>
               </div>
 
@@ -965,17 +1001,33 @@ function CommunityPage() {
             )}
 
             <div>
-              <label className="font-heading text-[10px] font-bold text-[#4A7FA7] uppercase tracking-wider block mb-1">
-                Course Subject
-              </label>
+              <div className="flex items-center justify-between mb-1">
+                <label className="font-heading text-[10px] font-bold text-[#4A7FA7] uppercase tracking-wider block">
+                  Course Subject
+                </label>
+                <button
+                  type="button"
+                  onClick={() => setShowAddSubjectModal(true)}
+                  className="font-body text-[11px] font-bold text-[#3b719f] hover:text-[#1A3D63] flex items-center gap-1 bg-transparent border-none cursor-pointer"
+                >
+                  <Plus size={12} /> Add New Subject
+                </button>
+              </div>
               <select
                 value={askSubjectId}
-                onChange={(e) => setAskSubjectId(e.target.value)}
-                className="w-full bg-[#f2f1ed] text-gray-800 font-body text-xs px-4 py-3 rounded-2xl border-none"
+                onChange={(e) => {
+                  if (e.target.value === "__ADD_NEW__") {
+                    setShowAddSubjectModal(true)
+                  } else {
+                    setAskSubjectId(e.target.value)
+                  }
+                }}
+                className="w-full bg-[#f2f1ed] text-gray-800 font-body text-xs px-4 py-3 rounded-2xl border-none cursor-pointer"
               >
                 {subjects.map(s => (
                   <option key={s.id} value={s.id}>{s.name}</option>
                 ))}
+                <option value="__ADD_NEW__" className="font-bold text-[#3b719f]">➕ Add New Subject...</option>
               </select>
             </div>
 
@@ -1109,6 +1161,39 @@ function CommunityPage() {
             <div className="flex justify-end pt-2 border-t border-gray-100">
               <Button variant="primary" size="sm" type="submit" disabled={submittingDirect}>
                 {submittingDirect ? "Starting..." : "Start Direct Request"}
+              </Button>
+            </div>
+          </form>
+        </Modal>
+      )}
+
+      {/* ── MODAL 3: ADD NEW COURSE SUBJECT MODAL ── */}
+      {showAddSubjectModal && (
+        <Modal isOpen={showAddSubjectModal} onClose={() => setShowAddSubjectModal(false)} title="Add New Course Subject">
+          <form onSubmit={handleCreateNewSubject} className="space-y-4">
+            <div>
+              <label className="font-heading text-[10px] font-bold text-[#4A7FA7] uppercase tracking-wider block mb-1.5">
+                Subject Name
+              </label>
+              <input
+                type="text"
+                value={newSubjectName}
+                onChange={(e) => setNewSubjectName(e.target.value)}
+                placeholder="e.g. Embedded Systems, Cloud Computing"
+                required
+                className="w-full bg-[#f2f1ed] text-gray-800 font-body text-xs px-4 py-3 rounded-2xl border-none focus:outline-none focus:ring-1 focus:ring-[#3b719f]"
+              />
+            </div>
+            <div className="flex items-center justify-end gap-2 pt-2 border-t border-gray-100">
+              <button
+                type="button"
+                onClick={() => setShowAddSubjectModal(false)}
+                className="font-body text-xs font-bold text-gray-500 hover:text-gray-800 bg-transparent border-none cursor-pointer"
+              >
+                Cancel
+              </button>
+              <Button variant="primary" size="sm" type="submit" disabled={addingSubject || !newSubjectName.trim()}>
+                {addingSubject ? "Adding..." : "Add Subject"}
               </Button>
             </div>
           </form>

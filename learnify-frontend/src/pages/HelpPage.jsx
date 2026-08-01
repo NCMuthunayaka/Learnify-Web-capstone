@@ -3,7 +3,7 @@ import { useNavigate } from "react-router-dom"
 import { 
   Paperclip, Send, Users, User, ArrowRight, ArrowLeft, CheckCircle2, 
   AlertCircle, Clock, Sparkles, GraduationCap, Search, MessageSquare, 
-  Filter, Check, FileText, Globe, Lock
+  Filter, Check, FileText, Globe, Lock, Plus
 } from "lucide-react"
 import Avatar from "../components/common/Avatar"
 import Badge from "../components/common/Badge"
@@ -18,7 +18,7 @@ import {
   sendHelpReply, 
   updateHelpStatus 
 } from "../api/helpRequestsApi"
-import { getSubjects } from "../api/subjectsApi"
+import { getSubjects, createSubject } from "../api/subjectsApi"
 import { uploadFile } from "../api/resourcesApi"
 import { createPublicRequest, createDirectRequest } from "../api/communityApi"
 
@@ -38,6 +38,36 @@ function HelpPage() {
   const [subjects, setSubjects] = useState([])
   const [selectedFile, setSelectedFile] = useState(null)
   const [uploadingFile, setUploadingFile] = useState(false)
+
+  // Add Subject Modal state
+  const [showAddSubjectModal, setShowAddSubjectModal] = useState(false)
+  const [newSubjectName, setNewSubjectName]           = useState("")
+  const [addingSubject, setAddingSubject]             = useState("")
+
+  async function handleCreateNewSubject(e) {
+    if (e) e.preventDefault()
+    if (!newSubjectName.trim()) return
+    try {
+      setAddingSubject(true)
+      const res = await createSubject(newSubjectName.trim())
+      const createdSub = res.data
+      
+      // Refresh subjects list
+      const subRes = await getSubjects()
+      const updatedList = subRes.data || []
+      setSubjects(updatedList)
+
+      if (createdSub && createdSub.name) {
+        setSubject(createdSub.name)
+      }
+      setNewSubjectName("")
+      setShowAddSubjectModal(false)
+    } catch (err) {
+      console.error("Failed to add subject:", err)
+    } finally {
+      setAddingSubject(false)
+    }
+  }
 
   // Categorization & Filter States
   const [activeCategoryTab, setActiveCategoryTab] = useState("sent") // "sent" or "received"
@@ -275,12 +305,27 @@ function HelpPage() {
 
                 {/* Subject */}
                 <div>
-                  <label className="font-heading text-[10px] font-bold text-[#4A7FA7] uppercase tracking-wider block mb-1.5">
-                    Subject
-                  </label>
+                  <div className="flex items-center justify-between mb-1.5">
+                    <label className="font-heading text-[10px] font-bold text-[#4A7FA7] uppercase tracking-wider">
+                      Subject
+                    </label>
+                    <button
+                      type="button"
+                      onClick={() => setShowAddSubjectModal(true)}
+                      className="font-body text-[11px] font-bold text-[#3b719f] hover:text-[#1A3D63] flex items-center gap-1 bg-transparent border-none cursor-pointer"
+                    >
+                      <Plus size={13} /> Add New Subject
+                    </button>
+                  </div>
                   <select
                     value={subject}
-                    onChange={(e) => setSubject(e.target.value)}
+                    onChange={(e) => {
+                      if (e.target.value === "__ADD_NEW__") {
+                        setShowAddSubjectModal(true)
+                      } else {
+                        setSubject(e.target.value)
+                      }
+                    }}
                     className="w-full bg-[#f2f1ed] text-gray-800 font-body text-xs px-4 py-3 rounded-2xl border-none focus:outline-none focus:ring-1 focus:ring-[#3b719f]/30 transition-all cursor-pointer"
                   >
                     {subjects.length > 0 ? (
@@ -292,6 +337,9 @@ function HelpPage() {
                     ) : (
                       <option>Loading subjects...</option>
                     )}
+                    <option value="__ADD_NEW__" className="font-bold text-[#3b719f]">
+                      ➕ Add New Subject...
+                    </option>
                   </select>
                 </div>
 
@@ -592,6 +640,39 @@ function HelpPage() {
         </div>
 
       </div>
+
+      {/* ── Modal: Add New Course Subject ── */}
+      {showAddSubjectModal && (
+        <Modal isOpen={showAddSubjectModal} onClose={() => setShowAddSubjectModal(false)} title="Add New Course Subject">
+          <form onSubmit={handleCreateNewSubject} className="space-y-4">
+            <div>
+              <label className="font-heading text-[10px] font-bold text-[#4A7FA7] uppercase tracking-wider block mb-1.5">
+                Subject Name
+              </label>
+              <input
+                type="text"
+                value={newSubjectName}
+                onChange={(e) => setNewSubjectName(e.target.value)}
+                placeholder="e.g. Embedded Systems, Software Architecture"
+                required
+                className="w-full bg-[#f2f1ed] text-gray-800 font-body text-xs px-4 py-3 rounded-2xl border-none focus:outline-none focus:ring-1 focus:ring-[#3b719f]"
+              />
+            </div>
+            <div className="flex items-center justify-end gap-2 pt-2 border-t border-gray-100">
+              <button
+                type="button"
+                onClick={() => setShowAddSubjectModal(false)}
+                className="font-body text-xs font-bold text-gray-500 hover:text-gray-800 bg-transparent border-none cursor-pointer"
+              >
+                Cancel
+              </button>
+              <Button variant="primary" size="sm" type="submit" disabled={addingSubject || !newSubjectName.trim()}>
+                {addingSubject ? "Adding..." : "Add Subject"}
+              </Button>
+            </div>
+          </form>
+        </Modal>
+      )}
 
     </div>
   )
