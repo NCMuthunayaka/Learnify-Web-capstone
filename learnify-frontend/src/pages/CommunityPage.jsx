@@ -666,32 +666,39 @@ function CommunityPage() {
             ) : (
               <div className="bg-white rounded-3xl p-6 shadow-sm border border-gray-100 divide-y divide-gray-100">
                 {publicRequests.map(req => (
-                  <div key={req.id} className="py-4 first:pt-0 last:pb-0 flex flex-col sm:flex-row items-start gap-4 md:gap-6 hover:bg-gray-50/50 p-3 rounded-2xl transition-colors">
+                  <div key={req.id} className="py-4 first:pt-0 last:pb-0 flex flex-col sm:flex-row items-start gap-4 md:gap-5 hover:bg-gray-50/60 p-3.5 rounded-2xl transition-colors">
                     
                     {/* Left Column Stats (Votes, Answers count, Status) */}
-                    <div className="flex sm:flex-col items-center sm:items-end justify-between w-full sm:w-28 shrink-0 text-right space-y-1 text-xs font-body border-b sm:border-b-0 border-gray-100 pb-2 sm:pb-0">
-                      <div className="text-gray-500 font-semibold text-xs">
+                    <div className="flex sm:flex-col items-center sm:items-end justify-start w-full sm:w-28 shrink-0 text-right gap-1.5 text-xs font-body border-b sm:border-b-0 border-gray-100 pb-2 sm:pb-0 pt-0.5">
+                      {/* Votes */}
+                      <div className="text-gray-500 font-medium text-xs">
                         0 votes
                       </div>
                       
-                      <div className={`px-2.5 py-1 rounded-md font-semibold text-xs transition-colors ${
+                      {/* Answers Badge */}
+                      <div className={`px-2.5 py-1 rounded-md font-semibold text-xs border transition-colors ${
                         req.replies && req.replies.length > 0
-                          ? "border border-green-600 text-green-700 bg-green-50 font-bold"
-                          : "text-gray-500"
+                          ? "border-green-600 text-green-700 bg-green-50 font-bold"
+                          : "border-gray-200 text-gray-500 bg-white"
                       }`}>
                         {req.replies ? req.replies.length : 0} {req.replies && req.replies.length === 1 ? "answer" : "answers"}
                       </div>
 
-                      <div className="text-gray-400 text-[11px] capitalize">
-                        {req.status === "answered" ? "Answered" : "Open"}
+                      {/* Status Badge */}
+                      <div className={`px-2 py-0.5 rounded-md font-bold text-[10px] uppercase tracking-wider ${
+                        req.status === "answered"
+                          ? "bg-green-100 text-green-800"
+                          : "bg-blue-50 text-[#3b719f] border border-blue-100/60"
+                      }`}>
+                        {req.status === "answered" ? "Resolved" : "Open"}
                       </div>
                     </div>
 
                     {/* Right Content Column */}
-                    <div className="flex-1 space-y-2 w-full">
+                    <div className="flex-1 min-w-0 space-y-2 w-full">
                       <h3 
                         onClick={() => setActivePublicRequest(req)}
-                        className="font-heading text-base font-semibold text-[#0074cc] hover:text-[#005999] cursor-pointer leading-snug transition-colors"
+                        className="font-heading text-base font-semibold text-[#0074cc] hover:text-[#005999] hover:underline cursor-pointer leading-snug transition-colors"
                       >
                         {req.title}
                       </h3>
@@ -703,7 +710,7 @@ function CommunityPage() {
                       {/* Bottom Bar: Tags & Author Info */}
                       <div className="flex flex-wrap items-center justify-between gap-3 pt-1">
                         <div className="flex items-center gap-2">
-                          <span className="px-2.5 py-1 bg-gray-100 border border-gray-200 text-gray-700 font-body text-[11px] font-semibold rounded-md">
+                          <span className="px-2.5 py-1 bg-[#f1f5f9] border border-gray-200 text-gray-700 font-body text-[11px] font-semibold rounded-md">
                             {req.subject_name}
                           </span>
                           {req.attachments && req.attachments.length > 0 && (
@@ -713,7 +720,7 @@ function CommunityPage() {
                           )}
                         </div>
 
-                        <div className="flex items-center gap-2 text-xs font-body">
+                        <div className="flex items-center gap-2 text-xs font-body bg-gray-50 px-2.5 py-1 rounded-xl border border-gray-100">
                           <Avatar name={req.requester_name} color="primary" size="xs" />
                           <span className="font-semibold text-[#0074cc]">
                             {req.requester_name}
