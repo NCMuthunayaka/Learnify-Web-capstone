@@ -955,8 +955,11 @@ export default function MentorDashboardPage() {
               {notifications.filter(n => n.unread).length} unread
             </span>
           </div>
-          <button className="font-body text-xs font-bold text-[#4A7FA7] hover:text-[#1A3D63] hover:underline flex items-center gap-1 transition-colors border-none bg-transparent">
-            Mark all read <ArrowRight size={13} />
+          <button
+            onClick={() => navigate("/notifications")}
+            className="font-body text-xs font-bold text-[#4A7FA7] hover:text-[#1A3D63] hover:underline flex items-center gap-1 transition-colors border-none bg-transparent cursor-pointer"
+          >
+            View all <ArrowRight size={13} />
           </button>
         </div>
 
