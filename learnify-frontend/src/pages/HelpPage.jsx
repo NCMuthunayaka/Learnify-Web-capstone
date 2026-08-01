@@ -148,12 +148,12 @@ function HelpPage() {
                     onChange={(e) => setSelectedMentor(e.target.value)}
                     className="w-full bg-[#f2f1ed] text-gray-800 font-body text-xs px-4 py-3 rounded-2xl border-none focus:outline-none focus:ring-1 focus:ring-[#3b719f]/30 transition-all cursor-pointer"
                   >
-                    {mentors.length > 0 ? (
-                      mentors.map(m => (
+                    {mentors.filter(m => requestType === "Peer" ? m.name.startsWith("Peer:") : !m.name.startsWith("Peer:")).length > 0 ? (
+                      mentors.filter(m => requestType === "Peer" ? m.name.startsWith("Peer:") : !m.name.startsWith("Peer:")).map(m => (
                         <option key={m.id} value={m.display}>{m.display}</option>
                       ))
                     ) : (
-                      <option>No mentors available</option>
+                      <option value="">{requestType === "Peer" ? "No peer helpers online" : "No mentors available"}</option>
                     )}
                   </select>
                 </div>

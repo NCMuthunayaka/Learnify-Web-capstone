@@ -187,7 +187,7 @@ def create_help_request():
                 from app.services.notification_service import create_notification
                 create_notification(
                     user_id=assigned_to_id,
-                    type_name="mentor_reply",
+                    type_name="system",
                     title="New Help Request",
                     body=f"{sender_name} sent you a help request: '{title}'",
                     action_url="/help"
