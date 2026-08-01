@@ -22,3 +22,10 @@ export async function getStudentsList() {
     const response = await api.get("/users/students")
     return response.data
 }
+
+export async function deleteAccount(password) {
+    const response = await api.delete("/users/account", {
+        data: { password }
+    })
+    return response.data
+}

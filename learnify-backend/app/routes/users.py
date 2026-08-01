@@ -143,3 +143,44 @@ def get_students_list():
     student_list = [{"id": s.id, "name": s.name} for s in students]
     
     return success_response(data=student_list)
+
+
+@bp.route("/account", methods=["DELETE"])
+@jwt_required()
+def delete_account():
+    from app.extensions import bcrypt
+    from sqlalchemy import text
+
+    user_id = int(get_jwt_identity())
+    user    = User.query.get(user_id)
+
+    if not user:
+        return error_response("NOT_FOUND", "User not found", status=404)
+
+    data     = request.get_json(silent=True) or {}
+    password = data.get("password")
+
+    # Verify password if user has a password hash set
+    if user.password_hash and password:
+        if not bcrypt.check_password_hash(user.password_hash, password):
+            return error_response("INVALID_PASSWORD", "Incorrect password", status=400)
+
+    try:
+        # Cascade clean up user data across tables
+        db.session.execute(text("DELETE FROM mentor_profiles WHERE user_id = :uid"), {"uid": user_id})
+        db.session.execute(text("DELETE FROM peer_helper_profiles WHERE user_id = :uid"), {"uid": user_id})
+        db.session.execute(text("DELETE FROM user_skills WHERE user_id = :uid"), {"uid": user_id})
+        db.session.execute(text("DELETE FROM notifications WHERE user_id = :uid"), {"uid": user_id})
+        db.session.execute(text("DELETE FROM public_replies WHERE author_id = :uid"), {"uid": user_id})
+        db.session.execute(text("DELETE FROM public_requests WHERE requester_id = :uid"), {"uid": user_id})
+        db.session.execute(text("DELETE FROM direct_messages WHERE sender_id = :uid"), {"uid": user_id})
+        db.session.execute(text("DELETE FROM direct_requests WHERE sender_id = :uid OR recipient_id = :uid"), {"uid": user_id})
+        db.session.execute(text("DELETE FROM help_requests WHERE student_id = :uid OR assigned_to = :uid"), {"uid": user_id})
+
+        db.session.delete(user)
+        db.session.commit()
+
+        return success_response(message="Account deleted successfully")
+    except Exception as e:
+        db.session.rollback()
+        return error_response("DELETE_ACCOUNT_ERROR", str(e), status=500)

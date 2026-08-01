@@ -1,9 +1,10 @@
 import { useState, useEffect } from "react"
-import { User, Mail, Phone, BookOpen, GraduationCap, Save } from "lucide-react"
+import { User, Mail, Phone, BookOpen, GraduationCap, Save, Trash2, AlertTriangle } from "lucide-react"
 import Button from "../components/common/Button"
 import LoadingSpinner from "../components/common/LoadingSpinner"
 import ErrorMessage from "../components/common/ErrorMessage"
-import { getProfile, updateProfile } from "../api/usersApi"
+import Modal from "../components/common/Modal"
+import { getProfile, updateProfile, deleteAccount } from "../api/usersApi"
 import Avatar from "../components/common/Avatar"
 import profileImg from "../assets/icons/profile.png"
 
@@ -167,6 +168,30 @@ function ProfilePage() {
       )
     } finally {
       setSaving(false)
+    }
+  }
+
+  // Delete Account Handler
+  const [showDeleteModal, setShowDeleteModal] = useState(false)
+  const [deletePassword, setDeletePassword]   = useState("")
+  const [deletingAccount, setDeletingAccount] = useState(false)
+  const [deleteError, setDeleteError]         = useState("")
+
+  async function handleConfirmDelete() {
+    try {
+      setDeletingAccount(true)
+      setDeleteError("")
+      await deleteAccount(deletePassword)
+      localStorage.removeItem("token")
+      localStorage.removeItem("user")
+      window.location.href = "/login"
+    } catch (err) {
+      setDeleteError(
+        err.response?.data?.error?.message ||
+        "Failed to delete account. Please check your password."
+      )
+    } finally {
+      setDeletingAccount(false)
     }
   }
 
@@ -390,7 +415,7 @@ function ProfilePage() {
               setFieldErrors({})
             }}
             className="font-body text-sm text-gray-400
-              hover:text-gray-600 transition-colors"
+              hover:text-gray-600 transition-colors cursor-pointer border-none bg-transparent"
           >
             Reset
           </button>
@@ -403,6 +428,77 @@ function ProfilePage() {
           </span>
         )}
       </div>
+
+      {/* ── Danger Zone: Delete Account ── */}
+      <div className="bg-red-50/60 rounded-2xl p-6 border border-red-100 space-y-3 mt-8">
+        <div className="flex items-center gap-2 text-red-700">
+          <Trash2 size={18} />
+          <h3 className="font-heading text-base font-bold">Danger Zone</h3>
+        </div>
+        <p className="font-body text-xs text-gray-600 leading-relaxed">
+          Permanently delete your Learnify account and remove all your data, messages, and study progress. This action cannot be undone.
+        </p>
+        <button
+          type="button"
+          onClick={() => { setShowDeleteModal(true); setDeleteError(""); setDeletePassword(""); }}
+          className="bg-red-600 hover:bg-red-700 text-white font-body text-xs font-bold px-4 py-2.5 rounded-xl transition-colors border-none cursor-pointer flex items-center gap-2"
+        >
+          <Trash2 size={14} />
+          Delete Account
+        </button>
+      </div>
+
+      {/* ── Delete Account Confirmation Modal ── */}
+      {showDeleteModal && (
+        <Modal isOpen={showDeleteModal} onClose={() => setShowDeleteModal(false)} title="Delete Your Account">
+          <div className="space-y-4">
+            <div className="p-4 bg-red-50 rounded-2xl border border-red-100 space-y-2">
+              <div className="flex items-center gap-2 text-red-800 font-heading text-sm font-bold">
+                <AlertTriangle size={18} />
+                Warning: Permanent Action
+              </div>
+              <p className="font-body text-xs text-red-700 leading-relaxed">
+                Deleting your account will permanently wipe your profile, study progress, messages, and help requests.
+              </p>
+            </div>
+
+            <div>
+              <label className="font-heading text-[10px] font-bold text-gray-500 uppercase tracking-wider block mb-1">
+                Enter Your Password to Confirm
+              </label>
+              <input
+                type="password"
+                value={deletePassword}
+                onChange={(e) => setDeletePassword(e.target.value)}
+                placeholder="Enter current password"
+                className="w-full bg-[#f2f1ed] text-gray-800 font-body text-xs px-4 py-3 rounded-2xl border-none focus:outline-none focus:ring-1 focus:ring-red-400"
+              />
+            </div>
+
+            {deleteError && (
+              <p className="font-body text-xs text-red-600 font-bold">{deleteError}</p>
+            )}
+
+            <div className="flex items-center justify-end gap-3 pt-2 border-t border-gray-100">
+              <button
+                type="button"
+                onClick={() => setShowDeleteModal(false)}
+                className="font-body text-xs font-bold text-gray-500 hover:text-gray-800 bg-transparent border-none cursor-pointer"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                disabled={deletingAccount}
+                onClick={handleConfirmDelete}
+                className="bg-red-600 hover:bg-red-700 text-white font-body text-xs font-bold px-5 py-2.5 rounded-full transition-colors border-none cursor-pointer disabled:opacity-50"
+              >
+                {deletingAccount ? "Deleting..." : "Permanently Delete"}
+              </button>
+            </div>
+          </div>
+        </Modal>
+      )}
 
     </div>
   )
