@@ -321,7 +321,7 @@ def get_dashboard_stats():
             
         # No fallback mock reviews - let frontend handle empty state
 
-        rating_val = float(profile_row[4]) if profile_row[4] else 4.8
+        rating_val = float(profile_row[4]) if profile_row[4] is not None else 5.0
         total_assigned = db.session.execute(
             text("SELECT COUNT(*) FROM help_requests WHERE assigned_to = :uid"),
             {"uid": user_id}
