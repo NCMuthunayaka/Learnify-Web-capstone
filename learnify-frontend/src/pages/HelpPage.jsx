@@ -1,12 +1,22 @@
 import { useState, useEffect, useRef } from "react"
-import { Paperclip, Send, Users, User, ArrowRight, CheckCircle2, AlertCircle, Clock, Sparkles, GraduationCap, Search } from "lucide-react"
+import { 
+  Paperclip, Send, Users, User, ArrowRight, ArrowLeft, CheckCircle2, 
+  AlertCircle, Clock, Sparkles, GraduationCap, Search, MessageSquare, 
+  Filter, Check, FileText 
+} from "lucide-react"
 import Avatar from "../components/common/Avatar"
 import Badge from "../components/common/Badge"
 import Button from "../components/common/Button"
 import Modal from "../components/common/Modal"
 import helpImg from "../assets/images/help.png"
 import profileImg from "../assets/icons/profile.png"
-import { getHelpRequests, createHelpRequest, getAvailableMentors } from "../api/helpRequestsApi"
+import { 
+  getHelpRequests, 
+  createHelpRequest, 
+  getAvailableMentors, 
+  sendHelpReply, 
+  updateHelpStatus 
+} from "../api/helpRequestsApi"
 import { getSubjects } from "../api/subjectsApi"
 import { uploadFile } from "../api/resourcesApi"
 
@@ -24,9 +34,15 @@ function HelpPage() {
   const [subjects, setSubjects] = useState([])
   const [selectedFile, setSelectedFile] = useState(null)
   const [uploadingFile, setUploadingFile] = useState(false)
-  const [showAllMentors, setShowAllMentors] = useState(false)
-  const [showAllRequests, setShowAllRequests] = useState(false)
-  const [selectedDetailRequest, setSelectedDetailRequest] = useState(null)
+
+  // Categorization & Filter States
+  const [activeCategoryTab, setActiveCategoryTab] = useState("sent") // "sent" or "received"
+  const [statusFilter, setStatusFilter] = useState("All") // "All", "Unseen", "In Progress", "Resolved"
+  const [activeDiscussionRequest, setActiveDiscussionRequest] = useState(null)
+  const [replyContent, setReplyContent] = useState("")
+  const [sendingReply, setSendingReply] = useState(false)
+  const [actionLoading, setActionLoading] = useState(false)
+
   const fileInputRef = useRef(null)
 
   const handleAttachClick = () => {
@@ -41,40 +57,46 @@ function HelpPage() {
   }
 
   // Load help requests, available mentors, and subjects on mount
-  useEffect(() => {
-    async function loadData() {
-      try {
-        setLoading(true)
-        const reqRes = await getHelpRequests()
-        setRequests(reqRes.data.requests)
+  const loadData = async () => {
+    try {
+      setLoading(true)
+      const reqRes = await getHelpRequests()
+      const reqList = reqRes.data.requests || []
+      setRequests(reqList)
 
-        const mentorRes = await getAvailableMentors()
-        const mentorList = mentorRes.data.mentors
-        setMentors(mentorList)
-        if (mentorList.length > 0) {
-          setSelectedMentor(mentorList[0].display)
+      // If viewing discussion, update active item from fresh list
+      if (activeDiscussionRequest) {
+        const updatedItem = reqList.find(r => r.id === activeDiscussionRequest.id)
+        if (updatedItem) {
+          setActiveDiscussionRequest(updatedItem)
         }
-
-        const subRes = await getSubjects()
-        const subjectList = subRes.data || []
-        setSubjects(subjectList)
-        if (subjectList.length > 0) {
-          setSubject(subjectList[0].name)
-        }
-      } catch (err) {
-        console.error("Failed to load help page data:", err)
-      } finally {
-        setLoading(false)
       }
+
+      const mentorRes = await getAvailableMentors()
+      const mentorList = mentorRes.data.mentors || []
+      setMentors(mentorList)
+      if (mentorList.length > 0 && !selectedMentor) {
+        setSelectedMentor(mentorList[0].display)
+      }
+
+      const subRes = await getSubjects()
+      const subjectList = subRes.data || []
+      setSubjects(subjectList)
+      if (subjectList.length > 0 && !subject) {
+        setSubject(subjectList[0].name)
+      }
+    } catch (err) {
+      console.error("Failed to load help page data:", err)
+    } finally {
+      setLoading(false)
     }
+  }
+
+  useEffect(() => {
     loadData()
   }, [])
 
-  // Calculations for summary metrics
-  const totalRequests = requests.length
-  const resolvedRequests = requests.filter(r => r.status === "Resolved").length
-  const inProgressRequests = totalRequests - resolvedRequests
-
+  // Submit new help request
   async function handleSubmit(e) {
     e.preventDefault()
     if (!title.trim() || !description.trim()) return
@@ -106,9 +128,8 @@ function HelpPage() {
       setSuccessMsg(true)
       setTimeout(() => setSuccessMsg(false), 3000)
 
-      // Refresh list
-      const reqRes = await getHelpRequests()
-      setRequests(reqRes.data.requests)
+      await loadData()
+      setActiveCategoryTab("sent")
     } catch (err) {
       console.error("Failed to submit help request:", err)
     } finally {
@@ -116,10 +137,64 @@ function HelpPage() {
     }
   }
 
+  // Send Reply in Discussion View
+  async function handleSendReply() {
+    if (!replyContent.trim() || !activeDiscussionRequest) return
+    try {
+      setSendingReply(true)
+      await sendHelpReply(activeDiscussionRequest.id, replyContent.trim())
+      setReplyContent("")
+      await loadData()
+    } catch (err) {
+      console.error("Failed to send reply:", err)
+    } finally {
+      setSendingReply(false)
+    }
+  }
+
+  // Update Request Status (Accept / Resolve)
+  async function handleStatusUpdate(newStatus) {
+    if (!activeDiscussionRequest) return
+    try {
+      setActionLoading(true)
+      await updateHelpStatus(activeDiscussionRequest.id, newStatus)
+      await loadData()
+    } catch (err) {
+      console.error("Failed to update status:", err)
+    } finally {
+      setActionLoading(false)
+    }
+  }
+
+  // Calculations & Categorizations
+  const sentRequests = requests.filter(r => !r.is_assigned_to_me)
+  const receivedRequests = requests.filter(r => r.is_assigned_to_me)
+
+  const currentCategoryList = activeCategoryTab === "sent" ? sentRequests : receivedRequests
+
+  // Apply Status Filter
+  const filteredCategoryList = currentCategoryList.filter(req => {
+    if (statusFilter === "Unseen") return req.status === "Pending"
+    if (statusFilter === "In Progress") return req.status === "Accepted" || req.status === "In progress" || req.status === "In Progress"
+    if (statusFilter === "Resolved") return req.status === "Resolved"
+    return true
+  })
+
+  // Sort: Newest on top, older ones at bottom
+  const sortedRequests = [...filteredCategoryList].sort((a, b) => {
+    const dateA = a.created_at ? new Date(a.created_at) : new Date(0)
+    const dateB = b.created_at ? new Date(b.created_at) : new Date(0)
+    return dateB - dateA
+  })
+
+  const totalRequests = requests.length
+  const resolvedRequests = requests.filter(r => r.status === "Resolved").length
+  const inProgressRequests = totalRequests - resolvedRequests
+
   return (
     <div className="space-y-6 max-w-7xl mx-auto">
       
-      {/* ── Top Row: Form & Help Graphic Card in Single Card Wrapper ── */}
+      {/* ── Top Row: Form & Help Graphic ── */}
       <div className="bg-white rounded-3xl p-6 md:p-8 shadow-sm border border-gray-100">
         <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 items-stretch">
           
@@ -128,20 +203,22 @@ function HelpPage() {
             <div>
               <div className="flex items-center gap-2 mb-4">
                 <span className="text-lg">📩</span>
-                <h3 className="font-heading text-sm font-semibold text-[#0A1931]">Send a Help Request</h3>
+                <h2 className="font-heading text-lg font-bold text-[#0A1931]">Ask for Help</h2>
               </div>
 
-              <form onSubmit={handleSubmit} className="w-full space-y-5">
-                {successMsg && (
-                  <div className="p-3 bg-green-50 text-green-700 rounded-xl font-body text-xs font-semibold border border-green-200">
-                    ✓ Request submitted successfully!
-                  </div>
-                )}
+              {successMsg && (
+                <div className="mb-4 bg-green-50 border border-green-200 text-green-700 px-4 py-3 rounded-2xl font-body text-xs font-semibold flex items-center gap-2">
+                  <CheckCircle2 size={16} />
+                  Your help request has been submitted successfully!
+                </div>
+              )}
 
-                {/* Select Mentor */}
+              <form onSubmit={handleSubmit} className="space-y-4">
+                
+                {/* Available Mentors & Peers */}
                 <div>
                   <label className="font-heading text-[10px] font-bold text-[#4A7FA7] uppercase tracking-wider block mb-1.5">
-                    Select Mentor
+                    Select Mentor or Peer Helper
                   </label>
                   <select
                     value={selectedMentor}
@@ -189,7 +266,7 @@ function HelpPage() {
                     <button
                       type="button"
                       onClick={() => setRequestType("Mentor")}
-                      className={`flex items-center gap-1.5 px-4 py-2 rounded-full font-body text-xs font-semibold transition-all border-none ${
+                      className={`flex items-center gap-1.5 px-4 py-2 rounded-full font-body text-xs font-semibold transition-all border-none cursor-pointer ${
                         requestType === "Mentor"
                           ? "bg-[#3b719f] text-white"
                           : "bg-[#e2edf7] text-[#3b719f] hover:bg-[#d4e3f0]"
@@ -201,7 +278,7 @@ function HelpPage() {
                     <button
                       type="button"
                       onClick={() => setRequestType("Peer")}
-                      className={`flex items-center gap-1.5 px-4 py-2 rounded-full font-body text-xs font-semibold transition-all border-none ${
+                      className={`flex items-center gap-1.5 px-4 py-2 rounded-full font-body text-xs font-semibold transition-all border-none cursor-pointer ${
                         requestType === "Peer"
                           ? "bg-[#3b719f] text-white"
                           : "bg-[#e2edf7] text-[#3b719f] hover:bg-[#d4e3f0]"
@@ -236,282 +313,387 @@ function HelpPage() {
                   <textarea
                     value={description}
                     onChange={(e) => setDescription(e.target.value)}
-                    placeholder="Describe the problem in detail — include the chapter, what you've tried, and where you're stuck..."
+                    placeholder="Describe the problem in detail..."
                     required
-                    rows={4}
-                    className="w-full bg-[#f2f1ed] text-gray-800 placeholder-gray-400 font-body text-xs px-4 py-3 rounded-2xl border-none focus:outline-none focus:ring-1 focus:ring-[#3b719f]/30 transition-all resize-none pr-12"
+                    rows={3}
+                    className="w-full bg-[#f2f1ed] text-gray-800 placeholder-gray-400 font-body text-xs px-4 py-3 rounded-2xl border-none focus:outline-none focus:ring-1 focus:ring-[#3b719f]/30 transition-all resize-none"
                   />
-                </div>
 
-                {/* Priority Selector */}
-                <div>
-                  <label className="font-heading text-[10px] font-bold text-[#4A7FA7] uppercase tracking-wider block mb-1.5">
-                    Priority
-                  </label>
-                  <div className="flex gap-2">
-                    {[
-                      { 
-                        name: "Low", 
-                        selectedClass: "bg-[#0da65f] text-white border-[#0da65f]",
-                        unselectedClass: "bg-[#eaf7f1] text-[#0da65f] border-[#c6eedb]",
-                        dotClass: "bg-[#0da65f]"
-                      },
-                      { 
-                        name: "Medium", 
-                        selectedClass: "bg-[#c87010] text-white border-[#c87010]",
-                        unselectedClass: "bg-[#faf1e6] text-[#c87010] border-[#f3ddc2]",
-                        dotClass: "bg-[#c87010]"
-                      },
-                      { 
-                        name: "High", 
-                        selectedClass: "bg-[#d62828] text-white border-[#d62828]",
-                        unselectedClass: "bg-[#fdebed] text-[#d62828] border-[#f9c5c8]",
-                        dotClass: "bg-[#d62828]"
-                      }
-                    ].map((item) => {
-                      const isSelected = priority === item.name
-                      const btnStyle = isSelected ? item.selectedClass : item.unselectedClass
-                      return (
-                        <button
-                          key={item.name}
-                          type="button"
-                          onClick={() => setPriority(item.name)}
-                          className={`flex items-center gap-1.5 px-4 py-2 rounded-full font-body text-xs font-semibold transition-all border ${btnStyle}`}
-                        >
-                          <span className={`w-1.5 h-1.5 rounded-full ${isSelected ? "bg-white" : item.dotClass}`} />
-                          {item.name}
-                        </button>
-                      )
-                    })}
-                  </div>
-                </div>
+                  {/* Hidden File Input */}
+                  <input
+                    type="file"
+                    ref={fileInputRef}
+                    onChange={handleFileChange}
+                    className="hidden"
+                    accept=".pdf,.docx,.pptx,.mp4,image/*"
+                  />
 
-                {/* Actions Panel */}
-                <div className="w-full flex items-center justify-between pt-4">
-                  <div className="flex items-center gap-3">
+                  {/* Form Bottom Actions */}
+                  <div className="flex items-center justify-between mt-3 pt-2 border-t border-gray-100">
                     <button
                       type="button"
                       onClick={handleAttachClick}
-                      className="flex items-center gap-1.5 px-5 py-2.5 border border-[#3b719f] text-[#3b719f] bg-white hover:bg-[#e2edf7]/30 rounded-2xl font-body text-xs font-bold transition-all cursor-pointer"
+                      className="font-body text-xs text-[#3b719f] hover:text-[#1A3D63] flex items-center gap-1.5 transition-colors bg-transparent border-none cursor-pointer"
                     >
                       <Paperclip size={14} />
-                      Attach File
+                      {selectedFile ? selectedFile.name : "Attach File"}
                     </button>
-                    {selectedFile && (
-                      <span className="font-body text-xs text-gray-500 flex items-center gap-1">
-                        📎 {selectedFile.name}
-                        <button
-                          type="button"
-                          onClick={() => setSelectedFile(null)}
-                          className="text-red-500 hover:text-red-700 font-bold ml-1 border-none bg-transparent cursor-pointer"
-                        >
-                          ×
-                        </button>
-                      </span>
-                    )}
-                    <input
-                      type="file"
-                      ref={fileInputRef}
-                      onChange={handleFileChange}
-                      className="hidden"
-                    />
+
+                    <button
+                      type="submit"
+                      disabled={uploadingFile}
+                      className="font-body text-xs font-semibold bg-[#3b719f] text-white px-5 py-2.5 rounded-full hover:bg-[#1A3D63] transition-colors flex items-center gap-1.5 border-none cursor-pointer disabled:opacity-50"
+                    >
+                      <Send size={13} />
+                      {uploadingFile ? "Uploading..." : "Submit Request"}
+                    </button>
                   </div>
-                  <button
-                    type="submit"
-                    disabled={uploadingFile}
-                    className="flex items-center gap-1.5 px-6 py-2.5 bg-[#3b719f] hover:bg-[#2e597c] disabled:bg-gray-400 text-white rounded-2xl font-body text-xs font-bold transition-all shadow-sm border-none cursor-pointer"
-                  >
-                    {uploadingFile ? "Uploading..." : "Submit Request →"}
-                  </button>
                 </div>
 
               </form>
             </div>
           </div>
 
-          {/* Right Illustration Column (5/12 width) */}
-          <div className="lg:col-span-5 flex">
-            <img 
-              src={helpImg} 
-              alt="Need Help?" 
-              className="w-full h-full object-cover rounded-3xl"
+          {/* Right Graphic Banner (5/12 width) */}
+          <div className="lg:col-span-5 hidden lg:flex flex-col items-center justify-center bg-[#EAF0F6] rounded-2xl p-6 text-center border border-[#B3CFE5]/30 relative overflow-hidden">
+            <img
+              src={helpImg}
+              alt="Peer & Mentor Assistance"
+              className="w-48 h-48 object-contain mb-4"
             />
+            <h3 className="font-heading text-base font-bold text-[#1A3D63] mb-1.5">
+              Get Guidance Fast
+            </h3>
+            <p className="font-body text-xs text-[#4A6880] max-w-xs leading-relaxed">
+              Connect with verified mentors and active student peers to clear your doubts and stay on track with your coursework.
+            </p>
           </div>
 
         </div>
       </div>
 
-      {/* ── Row 2: Available Mentors & Peers ── */}
-      <div className="bg-white rounded-2xl p-5 shadow-sm border border-gray-100">
-        <div className="flex items-center justify-between border-b border-gray-50 pb-3 mb-4">
-          <div className="flex items-center gap-2">
-            <Users size={16} className="text-[#4A7FA7]" />
-            <h3 className="font-heading text-sm font-semibold text-[#0A1931]">Available Mentors & Peers</h3>
-          </div>
-          {mentors.length > 0 && (
-            <button 
-              onClick={() => setShowAllMentors(true)}
-              className="font-body text-xs font-semibold text-[#4A7FA7] hover:text-[#1A3D63] flex items-center gap-1 transition-colors border-none bg-transparent"
+      {/* ── DEDICATED DISCUSSION / REPLY WORKSPACE (REPLACES POPUP MODAL) ── */}
+      {activeDiscussionRequest ? (
+        <div className="bg-white rounded-3xl p-6 shadow-sm border border-gray-100 space-y-6">
+          
+          {/* Header Bar */}
+          <div className="flex flex-wrap items-center justify-between gap-4 border-b border-gray-100 pb-4">
+            <button
+              onClick={() => setActiveDiscussionRequest(null)}
+              className="font-body text-xs font-bold text-[#4A7FA7] hover:text-[#1A3D63] flex items-center gap-1.5 bg-transparent border-none cursor-pointer"
             >
-              View All
-              <ArrowRight size={14} />
+              <ArrowLeft size={16} />
+              Back to Request List
             </button>
-          )}
-        </div>
 
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-          {mentors.slice(0, 3).map((helper, idx) => (
-            <div key={idx} className="flex items-center justify-between p-3.5 bg-[#F6FAFD] rounded-2xl border border-gray-50">
-              <div className="flex items-center gap-3">
-                <Avatar 
-                  src={helper.name === "Peer: Nayana" ? profileImg : null} 
-                  name={helper.name} 
-                  color="primary" 
+            <div className="flex items-center gap-3">
+              {/* Accept Request Button for Helper */}
+              {activeDiscussionRequest.is_assigned_to_me && activeDiscussionRequest.status === "Pending" && (
+                <Button 
+                  variant="primary" 
                   size="sm" 
-                />
-                <div>
-                  <h4 className="font-heading text-xs font-bold text-[#0A1931]">{helper.name}</h4>
-                  <p className="font-body text-[10px] text-gray-400 mt-0.5">{helper.time}</p>
-                </div>
-              </div>
-              <span 
-                className={`w-2 h-2 rounded-full mr-1 ${
-                  helper.status === "Busy"
-                    ? "bg-amber-500"
-                    : helper.status === "Away"
-                      ? "bg-red-500"
-                      : "bg-green-500 animate-pulse"
-                }`} 
-                title={helper.status || "Online"} 
-              />
+                  disabled={actionLoading}
+                  onClick={() => handleStatusUpdate("in_progress")}
+                >
+                  <Check size={14} className="mr-1" />
+                  Accept Request
+                </Button>
+              )}
+
+              {/* Resolve Button */}
+              {activeDiscussionRequest.status !== "Resolved" && (
+                <Button 
+                  variant="secondary" 
+                  size="sm"
+                  disabled={actionLoading}
+                  onClick={() => handleStatusUpdate("resolved")}
+                >
+                  <CheckCircle2 size={14} className="mr-1 text-green-600" />
+                  Mark as Resolved
+                </Button>
+              )}
             </div>
-          ))}
-        </div>
-      </div>
+          </div>
 
-      {/* ── Row 3: My Previous Requests ── */}
-      <div className="space-y-4">
-        <div className="flex items-center justify-between">
-          <h3 className="font-heading text-sm font-bold text-[#0A1931]">My Previous Requests</h3>
-          {requests.length > 0 && (
-            <button 
-              onClick={() => setShowAllRequests(true)}
-              className="font-body text-xs font-semibold text-[#4A7FA7] hover:text-[#1A3D63] flex items-center gap-1 transition-colors border-none bg-transparent"
-            >
-              View All
-              <ArrowRight size={14} />
-            </button>
-          )}
-        </div>
+          {/* Request Header Banner */}
+          <div className="bg-[#F6FAFD] p-5 rounded-2xl border border-gray-100 space-y-3">
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              <span className="px-3 py-1 bg-blue-50 text-[#1A3D63] border border-blue-100 rounded-full font-body text-xs font-bold">
+                {activeDiscussionRequest.subject}
+              </span>
+              <div className="flex items-center gap-2">
+                <span className={`px-2.5 py-0.5 rounded-full font-body text-xs font-bold ${
+                  activeDiscussionRequest.priority === "High" ? "bg-red-50 text-red-600 border border-red-100" :
+                  activeDiscussionRequest.priority === "Low" ? "bg-gray-50 text-gray-600 border border-gray-100" :
+                  "bg-amber-50 text-amber-600 border border-amber-100"
+                }`}>
+                  Priority: {activeDiscussionRequest.priority}
+                </span>
+                <span className={`px-2.5 py-0.5 rounded-full font-body text-xs font-bold flex items-center gap-1.5 ${
+                  activeDiscussionRequest.status === "Accepted" || activeDiscussionRequest.status === "In progress" || activeDiscussionRequest.status === "In Progress"
+                    ? "bg-blue-50 text-blue-600 border border-blue-100"
+                    : activeDiscussionRequest.status === "Resolved"
+                      ? "bg-green-50 text-green-600 border border-green-100"
+                      : "bg-amber-50 text-amber-600 border border-amber-100"
+                }`}>
+                  {activeDiscussionRequest.status}
+                </span>
+              </div>
+            </div>
 
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-5">
-          {loading ? (
-            <div className="col-span-3 text-center py-8 text-gray-400 text-xs">Loading requests...</div>
-          ) : requests.length === 0 ? (
-            <div className="col-span-3 text-center py-8 text-gray-400 text-xs">No previous requests found.</div>
-          ) : (
-            requests.slice(0, 3).map((req) => (
-              <div key={req.id} className="bg-white rounded-2xl p-5 shadow-sm border border-gray-100 flex flex-col justify-between space-y-4">
-                
-                {/* Card Header badges */}
-                <div className="flex items-center justify-between">
-                  <span className="px-2.5 py-0.5 bg-blue-50 text-[#1A3D63] border border-blue-100/50 rounded-full font-body text-[10px] font-bold">
-                    {req.subject}
-                  </span>
-                  
-                  {/* Status Badge */}
-                  <span className={`px-2 py-0.5 rounded-full font-body text-[10px] font-bold flex items-center gap-1.5 ${
-                    req.status === "Accepted" || req.status === "In progress" || req.status === "In Progress"
-                      ? "bg-blue-50 text-blue-600 border border-blue-100"
-                      : req.status === "Resolved"
-                        ? "bg-green-50 text-green-600 border border-green-100"
-                        : "bg-amber-50 text-amber-600 border border-amber-100"
-                  }`}>
-                    <span className={`w-1.5 h-1.5 rounded-full ${
-                      req.status === "Accepted" || req.status === "In progress" || req.status === "In Progress"
-                        ? "bg-blue-500"
-                        : req.status === "Resolved"
-                          ? "bg-green-500"
-                          : "bg-amber-500"
-                    }`} />
-                    {req.status}
-                  </span>
-                </div>
+            <h3 className="font-heading text-base font-bold text-[#0A1931]">
+              {activeDiscussionRequest.title}
+            </h3>
+            <p className="font-body text-xs text-gray-600 whitespace-pre-wrap leading-relaxed">
+              {activeDiscussionRequest.desc || activeDiscussionRequest.description}
+            </p>
 
-                {/* Title & Description */}
-                <div className="space-y-1">
-                  <h4 className="font-heading text-xs font-bold text-[#0A1931] leading-tight">
-                    {req.title}
-                  </h4>
-                  <p className="font-body text-[11px] text-gray-500 leading-relaxed">
-                    {req.desc}
-                  </p>
-                  {req.attachment_url && (
-                    <div className="pt-1">
-                      <a
-                        href={`${import.meta.env.VITE_BACKEND_URL || "http://localhost:5000"}${req.attachment_url}`}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="inline-flex items-center gap-1 font-body text-[10px] text-[#3b719f] hover:underline font-bold"
-                      >
-                        📎 View Attachment
-                      </a>
+            {activeDiscussionRequest.attachment_url && (
+              <div className="pt-2">
+                <a
+                  href={`${import.meta.env.VITE_BACKEND_URL || "http://localhost:5000"}${activeDiscussionRequest.attachment_url}`}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="inline-flex items-center gap-1 font-body text-xs text-[#3b719f] hover:underline font-bold"
+                >
+                  📎 Attached File / Document
+                </a>
+              </div>
+            )}
+          </div>
+
+          {/* Discussion Thread */}
+          <div className="space-y-3">
+            <h4 className="font-heading text-xs font-bold text-[#0A1931] uppercase tracking-wider flex items-center gap-2">
+              <MessageSquare size={14} />
+              Discussion Thread & Peer Replies
+            </h4>
+
+            {activeDiscussionRequest.replies && activeDiscussionRequest.replies.length > 0 ? (
+              <div className="space-y-3 max-h-96 overflow-y-auto pr-1">
+                {activeDiscussionRequest.replies.map((r, i) => (
+                  <div key={i} className="bg-[#F6FAFD] border-l-4 border-[#4A7FA7] p-4 rounded-r-2xl space-y-1.5">
+                    <div className="flex items-center justify-between">
+                      <span className="font-heading text-xs font-bold text-[#1A3D63]">
+                        💬 {r.responder_name} <span className="font-normal text-gray-400">({r.responder_role || "User"})</span>
+                      </span>
+                      <span className="font-body text-[10px] text-gray-400">
+                        {r.created_at ? new Date(r.created_at).toLocaleString() : ""}
+                      </span>
                     </div>
-                  )}
-                </div>
-
-                {/* Mentor Reply block */}
-                {req.reply && (
-                  <div className="bg-[#F6FAFD] border-l-4 border-[#4A7FA7] p-3 rounded-r-xl space-y-1">
-                    <h5 className="font-heading text-[9px] font-bold text-[#1A3D63] flex items-center gap-1 uppercase tracking-wider">
-                      💬 Mentor Reply
-                    </h5>
-                    <p className="font-body text-[10px] text-gray-600 leading-relaxed">
-                      {req.reply}
+                    <p className="font-body text-xs text-gray-700 leading-relaxed whitespace-pre-wrap">
+                      {r.content}
                     </p>
                   </div>
-                )}
+                ))}
+              </div>
+            ) : (
+              <div className="p-4 bg-amber-50 border border-amber-100 rounded-2xl text-center">
+                <p className="font-body text-xs text-amber-700">
+                  ⏳ No discussion messages yet. Type your reply below to start chatting!
+                </p>
+              </div>
+            )}
+          </div>
 
-                {/* Helper Profile Footer */}
-                <div className="pt-3 border-t border-gray-50 flex items-center justify-between text-xs">
-                  <div className="flex items-center gap-2">
-                    <Avatar 
-                      src={req.helperName === "Peer: Nayana" ? profileImg : null} 
-                      name={req.helperName} 
-                      color={req.helperColor} 
-                      size="xs" 
-                    />
-                    <div className="min-w-0">
-                      <p className="font-heading font-semibold text-gray-600 truncate max-w-[100px] leading-tight">
-                        {req.helperName}
-                      </p>
-                      <p className="font-body text-[9px] text-gray-400">
-                        {req.helperRole}
+          {/* Interactive Reply Input Form */}
+          <div className="bg-gray-50 p-4 rounded-2xl border border-gray-200 space-y-3">
+            <label className="font-heading text-xs font-bold text-[#1A3D63] block">
+              Send Your Reply
+            </label>
+            <textarea
+              rows={3}
+              value={replyContent}
+              onChange={(e) => setReplyContent(e.target.value)}
+              placeholder="Type your explanation or response here..."
+              className="w-full bg-white border border-gray-200 rounded-xl p-3 font-body text-xs text-gray-800 focus:outline-none focus:border-[#4A7FA7] resize-none"
+            />
+            <div className="flex justify-end">
+              <Button 
+                variant="primary" 
+                size="sm" 
+                disabled={sendingReply || !replyContent.trim()}
+                onClick={handleSendReply}
+              >
+                <Send size={13} className="mr-1.5" />
+                {sendingReply ? "Sending..." : "Send Reply"}
+              </Button>
+            </div>
+          </div>
+
+        </div>
+      ) : (
+        /* ── ROW 3: CATEGORIZED HELP REQUESTS SECTION ── */
+        <div className="space-y-4">
+          
+          {/* Main Category Tabs: Sent vs Received */}
+          <div className="flex flex-wrap items-center justify-between gap-4 border-b border-gray-200 pb-3">
+            <div className="flex items-center gap-2">
+              <button
+                onClick={() => { setActiveCategoryTab("sent"); setStatusFilter("All"); }}
+                className={`font-heading text-xs font-bold px-4 py-2.5 rounded-full transition-all border-none cursor-pointer flex items-center gap-2 ${
+                  activeCategoryTab === "sent"
+                    ? "bg-[#0A1931] text-white shadow-sm"
+                    : "bg-gray-100 text-gray-600 hover:bg-gray-200"
+                }`}
+              >
+                📤 Sent Requests
+                <span className="px-2 py-0.5 rounded-full text-[10px] bg-white/20">
+                  {sentRequests.length}
+                </span>
+              </button>
+
+              <button
+                onClick={() => { setActiveCategoryTab("received"); setStatusFilter("All"); }}
+                className={`font-heading text-xs font-bold px-4 py-2.5 rounded-full transition-all border-none cursor-pointer flex items-center gap-2 ${
+                  activeCategoryTab === "received"
+                    ? "bg-[#0A1931] text-white shadow-sm"
+                    : "bg-gray-100 text-gray-600 hover:bg-gray-200"
+                }`}
+              >
+                📥 Received Requests (Peer Helper)
+                <span className="px-2 py-0.5 rounded-full text-[10px] bg-white/20">
+                  {receivedRequests.length}
+                </span>
+              </button>
+            </div>
+
+            {/* Sub-Filters: All, Unseen/Pending, In Progress, Resolved */}
+            <div className="flex items-center gap-1.5 bg-gray-50 p-1 rounded-2xl border border-gray-200">
+              <span className="text-[10px] text-gray-400 font-bold px-2 uppercase tracking-wider flex items-center gap-1">
+                <Filter size={11} /> Filter:
+              </span>
+              {["All", "Unseen", "In Progress", "Resolved"].map(tab => (
+                <button
+                  key={tab}
+                  onClick={() => setStatusFilter(tab)}
+                  className={`font-body text-[11px] font-semibold px-3 py-1 rounded-xl transition-colors border-none cursor-pointer ${
+                    statusFilter === tab
+                      ? "bg-[#3b719f] text-white"
+                      : "text-gray-500 hover:text-gray-900"
+                  }`}
+                >
+                  {tab === "Unseen" ? "Unseen / Pending" : tab}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          {/* Cards Grid: Ordered Newest at top to Older at bottom */}
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-5">
+            {loading ? (
+              <div className="col-span-3 text-center py-12 text-gray-400 text-xs">Loading help requests...</div>
+            ) : sortedRequests.length === 0 ? (
+              <div className="col-span-3 text-center py-12 bg-white rounded-3xl border border-gray-100 space-y-2">
+                <FileText size={32} className="text-gray-300 mx-auto" />
+                <p className="font-heading text-sm font-semibold text-gray-500">
+                  No {statusFilter !== "All" ? statusFilter.toLowerCase() : ""} requests found in {activeCategoryTab === "sent" ? "Sent Requests" : "Received Requests"}.
+                </p>
+              </div>
+            ) : (
+              sortedRequests.map((req) => (
+                <div key={req.id} className="bg-white rounded-2xl p-5 shadow-sm border border-gray-100 flex flex-col justify-between space-y-4 hover:shadow-md transition-shadow">
+                  
+                  {/* Card Header badges */}
+                  <div className="flex items-center justify-between">
+                    <span className="px-2.5 py-0.5 bg-blue-50 text-[#1A3D63] border border-blue-100/50 rounded-full font-body text-[10px] font-bold">
+                      {req.subject}
+                    </span>
+                    
+                    {/* Status Badge */}
+                    <span className={`px-2 py-0.5 rounded-full font-body text-[10px] font-bold flex items-center gap-1.5 ${
+                      req.status === "Accepted" || req.status === "In progress" || req.status === "In Progress"
+                        ? "bg-blue-50 text-blue-600 border border-blue-100"
+                        : req.status === "Resolved"
+                          ? "bg-green-50 text-green-600 border border-green-100"
+                          : "bg-amber-50 text-amber-600 border border-amber-100"
+                    }`}>
+                      <span className={`w-1.5 h-1.5 rounded-full ${
+                        req.status === "Accepted" || req.status === "In progress" || req.status === "In Progress"
+                          ? "bg-blue-500"
+                          : req.status === "Resolved"
+                            ? "bg-green-500"
+                            : "bg-amber-500"
+                      }`} />
+                      {req.status}
+                    </span>
+                  </div>
+
+                  {/* Title & Description */}
+                  <div className="space-y-1">
+                    <h4 className="font-heading text-xs font-bold text-[#0A1931] leading-tight">
+                      {req.title}
+                    </h4>
+                    <p className="font-body text-[11px] text-gray-500 leading-relaxed line-clamp-2">
+                      {req.desc || req.description}
+                    </p>
+                    {req.attachment_url && (
+                      <div className="pt-1">
+                        <a
+                          href={`${import.meta.env.VITE_BACKEND_URL || "http://localhost:5000"}${req.attachment_url}`}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="inline-flex items-center gap-1 font-body text-[10px] text-[#3b719f] hover:underline font-bold"
+                        >
+                          📎 Attached File
+                        </a>
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Mentor/Peer Reply snippet */}
+                  {req.reply && (
+                    <div className="bg-[#F6FAFD] border-l-4 border-[#4A7FA7] p-2.5 rounded-r-xl space-y-1">
+                      <h5 className="font-heading text-[9px] font-bold text-[#1A3D63] flex items-center gap-1 uppercase tracking-wider">
+                        💬 Latest Response
+                      </h5>
+                      <p className="font-body text-[10px] text-gray-600 leading-relaxed line-clamp-2">
+                        {req.reply}
                       </p>
                     </div>
+                  )}
+
+                  {/* Helper Profile Footer */}
+                  <div className="pt-3 border-t border-gray-50 flex items-center justify-between text-xs">
+                    <div className="flex items-center gap-2">
+                      <Avatar 
+                        src={null} 
+                        name={req.is_assigned_to_me ? req.student_name : req.helperName} 
+                        color={req.helperColor || "primary"} 
+                        size="xs" 
+                      />
+                      <div className="min-w-0">
+                        <p className="font-heading font-semibold text-gray-600 truncate max-w-[110px] leading-tight">
+                          {req.is_assigned_to_me ? req.student_name : req.helperName}
+                        </p>
+                        <p className="font-body text-[9px] text-gray-400">
+                          {req.is_assigned_to_me ? "Student Requester" : req.helperRole}
+                        </p>
+                      </div>
+                    </div>
+                    <span className="font-body text-[10px] text-gray-300">
+                      {req.date}
+                    </span>
                   </div>
-                  <span className="font-body text-[10px] text-gray-300">
-                    {req.date}
-                  </span>
+
+                  {/* Open Discussion Panel action */}
+                  <button 
+                    onClick={() => setActiveDiscussionRequest(req)}
+                    className="font-body text-[10px] font-bold text-[#4A7FA7] hover:text-[#1A3D63] text-left mt-2 flex items-center gap-1 transition-colors border-none bg-transparent cursor-pointer"
+                  >
+                    Open Discussion & Reply
+                    <ArrowRight size={12} />
+                  </button>
+
                 </div>
-
-                {/* View details action */}
-                <button 
-                  onClick={() => setSelectedDetailRequest(req)}
-                  className="font-body text-[10px] font-bold text-[#4A7FA7] hover:text-[#1A3D63] text-left mt-2 flex items-center gap-1 transition-colors border-none bg-transparent cursor-pointer"
-                >
-                  View Details
-                  <ArrowRight size={12} />
-                </button>
-
-              </div>
-            ))
-          )}
+              ))
+            )}
+          </div>
         </div>
-      </div>
+      )}
 
       {/* ── Row 4: Summary & Tips Cards ── */}
-      <div className="grid grid-cols-1 lg:grid-cols-5 gap-6">
+      <div className="grid grid-cols-1 lg:grid-cols-5 gap-6 pt-4">
         
         {/* Request Summary Widget (2/5 width) */}
         <div className="lg:col-span-2 bg-white rounded-2xl p-5 shadow-sm border border-gray-100 flex flex-col justify-between">
@@ -562,363 +744,18 @@ function HelpPage() {
             </li>
             <li className="flex gap-2.5 items-start">
               <span className="w-4 h-4 rounded-full bg-[#1A3D63] text-white flex items-center justify-center text-[9px] font-bold mt-0.5 flex-shrink-0">✓</span>
-              <span>Mention which module the problem is from so mentors can prepare the right resources for you.</span>
+              <span>Mention which module the problem is from so helpers can prepare the right resources for you.</span>
             </li>
             <li className="flex gap-2.5 items-start">
               <span className="w-4 h-4 rounded-full bg-[#1A3D63] text-white flex items-center justify-center text-[9px] font-bold mt-0.5 flex-shrink-0">✓</span>
-              <span>Set the correct priority level so mentors can respond faster to urgent exam-related queries.</span>
+              <span>Set the correct priority level so helpers can respond faster to urgent exam-related queries.</span>
             </li>
           </ul>
         </div>
 
       </div>
 
-      {showAllMentors && (
-        <AllMentorsModal 
-          mentors={mentors} 
-          onClose={() => setShowAllMentors(false)} 
-        />
-      )}
-
-      {showAllRequests && (
-        <AllRequestsModal 
-          requests={requests} 
-          onClose={() => setShowAllRequests(false)}
-          onSelectDetail={(req) => {
-            setShowAllRequests(false)
-            setSelectedDetailRequest(req)
-          }}
-        />
-      )}
-
-      {selectedDetailRequest && (
-        <RequestDetailsModal
-          request={selectedDetailRequest}
-          onClose={() => setSelectedDetailRequest(null)}
-        />
-      )}
-
     </div>
-  )
-}
-
-// ── All Mentors Modal Component ────────────────────────────
-function AllMentorsModal({ mentors, onClose }) {
-  const [searchQuery, setSearchQuery] = useState("")
-  
-  const filtered = mentors.filter(m => 
-    m.name.toLowerCase().includes(searchQuery.toLowerCase()) || 
-    m.specialty.toLowerCase().includes(searchQuery.toLowerCase())
-  )
-
-  return (
-    <Modal isOpen={true} onClose={onClose} title="All Available Mentors & Peers" size="md">
-      <div className="space-y-4">
-        {/* Search Input */}
-        <div className="relative">
-          <Search size={15} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-300" />
-          <input 
-            type="text"
-            placeholder="Search available helpers by name or specialty..."
-            value={searchQuery}
-            onChange={(e) => setSearchQuery(e.target.value)}
-            className="w-full pl-9 pr-3 py-2.5 border border-gray-200 rounded-lg font-body text-sm text-gray-600 focus:outline-none focus:border-[#4A7FA7]"
-          />
-        </div>
-
-        <div className="max-h-[350px] overflow-y-auto space-y-2.5 pr-1">
-          {filtered.length === 0 ? (
-            <div className="text-center py-8 text-gray-400 text-xs">No helpers found matching your search.</div>
-          ) : (
-            filtered.map((helper, idx) => (
-              <div key={idx} className="flex items-center justify-between p-3.5 bg-[#F6FAFD] rounded-2xl border border-gray-50">
-                <div className="flex items-center gap-3">
-                  <Avatar 
-                    src={helper.name === "Peer: Nayana" ? profileImg : null} 
-                    name={helper.name} 
-                    color="primary" 
-                    size="sm" 
-                  />
-                  <div>
-                    <h4 className="font-heading text-xs font-bold text-[#0A1931]">{helper.name}</h4>
-                    <p className="font-body text-[10px] text-gray-400 mt-0.5">{helper.time}</p>
-                  </div>
-                </div>
-                <span 
-                  className={`w-2 h-2 rounded-full mr-1 ${
-                    helper.status === "Busy"
-                      ? "bg-amber-500"
-                      : helper.status === "Away"
-                        ? "bg-red-500"
-                        : "bg-green-500 animate-pulse"
-                  }`} 
-                  title={helper.status || "Online"} 
-                />
-              </div>
-            ))
-          )}
-        </div>
-
-        <div className="pt-2 border-t border-gray-100 flex justify-end">
-          <Button variant="secondary" onClick={onClose}>Close</Button>
-        </div>
-      </div>
-    </Modal>
-  )
-}
-
-// ── All Requests Modal Component ───────────────────────────
-function AllRequestsModal({ requests, onClose, onSelectDetail }) {
-  const [searchQuery, setSearchQuery] = useState("")
-
-  const filtered = requests.filter(r => 
-    r.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
-    (r.desc && r.desc.toLowerCase().includes(searchQuery.toLowerCase())) ||
-    (r.description && r.description.toLowerCase().includes(searchQuery.toLowerCase())) ||
-    r.subject.toLowerCase().includes(searchQuery.toLowerCase())
-  )
-
-  return (
-    <Modal isOpen={true} onClose={onClose} title="My Previous Requests" size="lg">
-      <div className="space-y-4">
-        {/* Search Input */}
-        <div className="relative">
-          <Search size={15} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-300" />
-          <input 
-            type="text"
-            placeholder="Search previous requests by title, subject, or description..."
-            value={searchQuery}
-            onChange={(e) => setSearchQuery(e.target.value)}
-            className="w-full pl-9 pr-3 py-2.5 border border-gray-200 rounded-lg font-body text-sm text-gray-600 focus:outline-none focus:border-[#4A7FA7]"
-          />
-        </div>
-
-        <div className="max-h-[400px] overflow-y-auto space-y-4 pr-1">
-          {filtered.length === 0 ? (
-            <div className="text-center py-8 text-gray-400 text-xs">No previous requests found matching your search.</div>
-          ) : (
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              {filtered.map((req) => (
-                <div key={req.id} className="bg-white rounded-2xl p-5 shadow-sm border border-gray-100 flex flex-col justify-between space-y-4">
-                  {/* Card Header badges */}
-                  <div className="flex items-center justify-between">
-                    <span className="px-2.5 py-0.5 bg-blue-50 text-[#1A3D63] border border-blue-100/50 rounded-full font-body text-[10px] font-bold">
-                      {req.subject}
-                    </span>
-                    
-                    {/* Status Badge */}
-                    <span className={`px-2 py-0.5 rounded-full font-body text-[10px] font-bold flex items-center gap-1.5 ${
-                      req.status === "Accepted" || req.status === "In progress" || req.status === "In Progress"
-                        ? "bg-blue-50 text-blue-600 border border-blue-100"
-                        : req.status === "Resolved"
-                          ? "bg-green-50 text-green-600 border border-green-100"
-                          : "bg-amber-50 text-amber-600 border border-amber-100"
-                    }`}>
-                      <span className={`w-1.5 h-1.5 rounded-full ${
-                        req.status === "Accepted" || req.status === "In progress" || req.status === "In Progress"
-                          ? "bg-blue-500"
-                          : req.status === "Resolved"
-                            ? "bg-green-500"
-                            : "bg-amber-500"
-                      }`} />
-                      {req.status}
-                    </span>
-                  </div>
-
-                  {/* Title & Description */}
-                  <div className="space-y-1">
-                    <h4 className="font-heading text-xs font-bold text-[#0A1931] leading-tight">
-                      {req.title}
-                    </h4>
-                    <p className="font-body text-[11px] text-gray-500 leading-relaxed line-clamp-2">
-                      {req.desc || req.description}
-                    </p>
-                    {req.attachment_url && (
-                      <div className="pt-1">
-                        <a 
-                          href={`${import.meta.env.VITE_BACKEND_URL || "http://localhost:5000"}${req.attachment_url}`} 
-                          target="_blank" 
-                          rel="noopener noreferrer" 
-                          className="font-body text-[10px] text-[#4A7FA7] hover:underline flex items-center gap-1"
-                        >
-                          📎 View Attachment
-                        </a>
-                      </div>
-                    )}
-                  </div>
-
-                  {/* Helper Profile & View Details Footer */}
-                  <div className="pt-3 border-t border-gray-50 flex items-center justify-between text-xs">
-                    <div className="flex items-center gap-2">
-                      <Avatar 
-                        src={null} 
-                        name={req.helperName} 
-                        color={req.helperColor || "primary"} 
-                        size="xs" 
-                      />
-                      <div className="min-w-0">
-                        <p className="font-heading font-semibold text-gray-600 truncate max-w-[100px] leading-tight">
-                          {req.helperName}
-                        </p>
-                        <p className="font-body text-[9px] text-gray-400">
-                          {req.helperRole}
-                        </p>
-                      </div>
-                    </div>
-                    <button 
-                      onClick={() => onSelectDetail(req)}
-                      className="font-body text-[10px] font-bold text-[#4A7FA7] hover:text-[#1A3D63] flex items-center gap-1 transition-colors border-none bg-transparent cursor-pointer"
-                    >
-                      View Details
-                      <ArrowRight size={12} />
-                    </button>
-                  </div>
-                </div>
-              ))}
-            </div>
-          )}
-        </div>
-
-        <div className="pt-2 border-t border-gray-100 flex justify-end">
-          <Button variant="secondary" onClick={onClose}>Close</Button>
-        </div>
-      </div>
-    </Modal>
-  )
-}
-
-// ── Request Details Modal Component ───────────────────────
-function RequestDetailsModal({ request, onClose }) {
-  if (!request) return null
-
-  const backendUrl = import.meta.env.VITE_BACKEND_URL || "http://localhost:5000"
-
-  return (
-    <Modal isOpen={true} onClose={onClose} title="Request Details" size="md">
-      <div className="space-y-4">
-        {/* Header Badges */}
-        <div className="flex items-center justify-between border-b border-gray-100 pb-3">
-          <span className="px-3 py-1 bg-blue-50 text-[#1A3D63] border border-blue-100/50 rounded-full font-body text-xs font-bold">
-            {request.subject}
-          </span>
-          <div className="flex items-center gap-2">
-            <span className={`px-2.5 py-0.5 rounded-full font-body text-xs font-bold ${
-              request.priority === "High" ? "bg-red-50 text-red-600 border border-red-100" :
-              request.priority === "Low" ? "bg-gray-50 text-gray-600 border border-gray-100" :
-              "bg-amber-50 text-amber-600 border border-amber-100"
-            }`}>
-              Priority: {request.priority}
-            </span>
-            <span className={`px-2.5 py-0.5 rounded-full font-body text-xs font-bold flex items-center gap-1.5 ${
-              request.status === "Accepted" || request.status === "In progress" || request.status === "In Progress"
-                ? "bg-blue-50 text-blue-600 border border-blue-100"
-                : request.status === "Resolved"
-                  ? "bg-green-50 text-green-600 border border-green-100"
-                  : "bg-amber-50 text-amber-600 border border-amber-100"
-            }`}>
-              <span className={`w-1.5 h-1.5 rounded-full ${
-                request.status === "Accepted" || request.status === "In progress" || request.status === "In Progress"
-                  ? "bg-blue-500"
-                  : request.status === "Resolved"
-                    ? "bg-green-500"
-                    : "bg-amber-500"
-              }`} />
-              {request.status}
-            </span>
-          </div>
-        </div>
-
-        {/* Title & Description */}
-        <div className="space-y-2 bg-[#F6FAFD] p-4 rounded-xl border border-gray-100">
-          <h3 className="font-heading text-sm font-bold text-[#0A1931]">
-            {request.title}
-          </h3>
-          <p className="font-body text-xs text-gray-600 whitespace-pre-wrap leading-relaxed">
-            {request.desc || request.description}
-          </p>
-          {request.attachment_url && (
-            <div className="pt-2">
-              <a
-                href={`${backendUrl}${request.attachment_url}`}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="inline-flex items-center gap-1 font-body text-xs text-[#3b719f] hover:underline font-bold"
-              >
-                📎 View Attached File
-              </a>
-            </div>
-          )}
-        </div>
-
-        {/* Helper Info */}
-        <div className="flex items-center justify-between p-3.5 bg-white border border-gray-200 rounded-xl">
-          <div className="flex items-center gap-3">
-            <Avatar
-              src={null}
-              name={request.helperName}
-              color={request.helperColor || "primary"}
-              size="sm"
-            />
-            <div>
-              <p className="font-heading font-semibold text-xs text-[#0A1931]">
-                {request.helperName}
-              </p>
-              <p className="font-body text-[10px] text-gray-400">
-                {request.helperRole}
-              </p>
-            </div>
-          </div>
-          <span className="font-body text-xs text-gray-400">
-            {request.date}
-          </span>
-        </div>
-
-        {/* Replies / Responses Thread */}
-        <div className="space-y-2">
-          <h4 className="font-heading text-xs font-bold text-[#0A1931] uppercase tracking-wider">
-            Discussion & Responses
-          </h4>
-          {request.replies && request.replies.length > 0 ? (
-            <div className="space-y-2 max-h-[200px] overflow-y-auto pr-1">
-              {request.replies.map((r, i) => (
-                <div key={i} className="bg-[#F6FAFD] border-l-4 border-[#4A7FA7] p-3 rounded-r-xl space-y-1">
-                  <div className="flex items-center justify-between">
-                    <span className="font-heading text-[10px] font-bold text-[#1A3D63]">
-                      💬 {r.responder_name} ({r.responder_role || "Helper"})
-                    </span>
-                    <span className="font-body text-[9px] text-gray-400">
-                      {r.created_at ? new Date(r.created_at).toLocaleDateString() : ""}
-                    </span>
-                  </div>
-                  <p className="font-body text-xs text-gray-700 leading-relaxed">
-                    {r.content}
-                  </p>
-                </div>
-              ))}
-            </div>
-          ) : request.reply ? (
-            <div className="bg-[#F6FAFD] border-l-4 border-[#4A7FA7] p-3 rounded-r-xl space-y-1">
-              <h5 className="font-heading text-[10px] font-bold text-[#1A3D63] flex items-center gap-1 uppercase tracking-wider">
-                💬 Helper Reply
-              </h5>
-              <p className="font-body text-xs text-gray-700 leading-relaxed">
-                {request.reply}
-              </p>
-            </div>
-          ) : (
-            <div className="p-4 bg-amber-50 border border-amber-100 rounded-xl text-center">
-              <p className="font-body text-xs text-amber-700">
-                ⏳ Your request is currently pending. A mentor or peer helper will respond shortly.
-              </p>
-            </div>
-          )}
-        </div>
-
-        <div className="pt-3 border-t border-gray-100 flex justify-end">
-          <Button variant="secondary" onClick={onClose}>Close</Button>
-        </div>
-      </div>
-    </Modal>
   )
 }
 

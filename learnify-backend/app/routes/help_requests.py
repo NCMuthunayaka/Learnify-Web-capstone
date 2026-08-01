@@ -299,3 +299,111 @@ def get_available_mentors():
         return success_response(data={"mentors": helpers})
     except Exception as e:
         return error_response("FETCH_MENTORS_ERROR", str(e), status=500)
+
+
+# ── POST /api/help_requests/<id>/reply ──────────────────────
+# Submit a response reply to a help request
+@bp.route("/<int:request_id>/reply", methods=["POST"])
+@jwt_required()
+def add_help_reply(request_id):
+    user_id = int(get_jwt_identity())
+    data = request.get_json(silent=True) or {}
+    content = data.get("content", "").strip()
+
+    if not content:
+        return error_response("MISSING_FIELD", "Reply content is required", status=400)
+
+    try:
+        req_row = db.session.execute(
+            text("SELECT id, student_id, assigned_to, topic_title FROM help_requests WHERE id = :rid"),
+            {"rid": request_id}
+        ).fetchone()
+
+        if not req_row:
+            return error_response("NOT_FOUND", "Help request not found", status=404)
+
+        student_id, assigned_to, topic_title = req_row[1], req_row[2], req_row[3]
+
+        # Allow student creator or assigned helper to reply
+        if user_id != student_id and user_id != assigned_to:
+            return error_response("FORBIDDEN", "Permission denied", status=403)
+
+        # Insert response
+        db.session.execute(
+            text(
+                "INSERT INTO help_responses (request_id, responder_id, content, created_at) "
+                "VALUES (:rid, :uid, :content, :created)"
+            ),
+            {"rid": request_id, "uid": user_id, "content": content, "created": datetime.utcnow()}
+        )
+        
+        # Update request status to in_progress if pending
+        db.session.execute(
+            text("UPDATE help_requests SET status = 'in_progress' WHERE id = :rid AND status = 'pending'"),
+            {"rid": request_id}
+        )
+        db.session.commit()
+
+        # Send notification to recipient
+        recipient_id = student_id if user_id == assigned_to else assigned_to
+        if recipient_id:
+            try:
+                from app.models.user import User
+                sender = User.query.get(user_id)
+                sender_name = sender.name if sender else "User"
+                from app.services.notification_service import create_notification
+                create_notification(
+                    user_id=recipient_id,
+                    type_name="system",
+                    title="New Reply on Help Request",
+                    body=f"{sender_name} replied to '{topic_title}': '{content[:50]}...'",
+                    action_url="/help"
+                )
+            except Exception as notif_err:
+                print(f"Error creating notification: {notif_err}")
+
+        return success_response(message="Reply added successfully", status=201)
+    except Exception as e:
+        db.session.rollback()
+        return error_response("REPLY_ERROR", str(e), status=500)
+
+
+# ── PATCH /api/help_requests/<id>/status ────────────────────
+# Update help request status (in_progress, resolved, pending)
+@bp.route("/<int:request_id>/status", methods=["PATCH"])
+@jwt_required()
+def update_help_status(request_id):
+    user_id = int(get_jwt_identity())
+    data = request.get_json(silent=True) or {}
+    new_status = data.get("status", "").lower()
+
+    if new_status not in ["pending", "in_progress", "accepted", "resolved"]:
+        return error_response("INVALID_STATUS", "Invalid status value", status=400)
+
+    try:
+        req_row = db.session.execute(
+            text("SELECT id, student_id, assigned_to FROM help_requests WHERE id = :rid"),
+            {"rid": request_id}
+        ).fetchone()
+
+        if not req_row:
+            return error_response("NOT_FOUND", "Help request not found", status=404)
+
+        student_id, assigned_to = req_row[1], req_row[2]
+
+        if user_id != student_id and user_id != assigned_to:
+            return error_response("FORBIDDEN", "Permission denied", status=403)
+
+        # Normalize status string
+        db_status = "resolved" if new_status == "resolved" else ("in_progress" if new_status in ["in_progress", "accepted"] else "pending")
+
+        db.session.execute(
+            text("UPDATE help_requests SET status = :st WHERE id = :rid"),
+            {"st": db_status, "rid": request_id}
+        )
+        db.session.commit()
+
+        return success_response(message=f"Request status updated to {new_status}")
+    except Exception as e:
+        db.session.rollback()
+        return error_response("UPDATE_STATUS_ERROR", str(e), status=500)
