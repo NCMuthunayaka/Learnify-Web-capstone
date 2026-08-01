@@ -39,13 +39,13 @@ export default function MentorDashboardPage() {
   const [loading, setLoading] = useState(true)
   const [profile, setProfile] = useState({
     title: "Academic Mentor",
-    institution: "WhisperHive",
-    years_experience: 5,
-    rating: 4.8,
-    total_students_helped: 142,
-    avg_response_time_min: 18,
-    bio: "PhD in Applied Mathematics. Specializing in making complex topics digestible.",
-    subject: "Mathematics"
+    institution: "Learnify",
+    years_experience: 0,
+    rating: 5.0,
+    total_students_helped: 0,
+    avg_response_time_min: 0,
+    bio: "",
+    subject: "General Mentorship"
   })
   const [stats, setStats] = useState({
     open_requests: 0,
@@ -353,7 +353,7 @@ export default function MentorDashboardPage() {
             </div>
 
             <p className="font-body text-xs text-gray-600 leading-relaxed italic">
-              "{profile.bio || 'PhD in Applied Mathematics from MIT. Specialty in Calculus and Algebra. Dedicated to building concepts.'}"
+              "{profile.bio || 'Welcome! Update your bio in profile settings to share your expertise with students.'}"
             </p>
 
             <div className="flex flex-wrap gap-2">

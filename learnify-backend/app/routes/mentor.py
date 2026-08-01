@@ -57,7 +57,7 @@ def ensure_mentor_profile(user_id: int):
             db.session.execute(
                 text(
                     "INSERT INTO mentor_profiles (user_id, title, institution, years_experience, rating, total_students_helped, avg_response_time_min, accept_urgent, email_notifications, auto_accept_returning, total_points, response_streak_days) "
-                    "VALUES (:uid, 'Academic Mentor', 'Learnify', 5, 4.8, 142, 18, 1, 1, 0, 0, 0)"
+                    "VALUES (:uid, 'Academic Mentor', 'Learnify', 0, 5.0, 0, 0, 1, 1, 0, 0, 0)"
                 ),
                 {"uid": user_id}
             )
