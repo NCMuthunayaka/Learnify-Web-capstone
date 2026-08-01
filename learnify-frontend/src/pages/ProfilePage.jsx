@@ -20,13 +20,12 @@ function InputField({ label, icon: Icon, type = "text", value,
   onChange, name, disabled, error, placeholder }) {
   return (
     <div>
-      <label className="font-body text-xs text-gray-500 mb-1.5 block">
+      <label className="font-body text-xs font-semibold text-slate-600 mb-1.5 block">
         {label}
       </label>
       <div className="relative">
         {Icon && (
-          <Icon size={15} className="absolute left-3 top-1/2
-            -translate-y-1/2 text-gray-300" />
+          <Icon size={16} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400" />
         )}
         <input
           type={type}
@@ -35,19 +34,19 @@ function InputField({ label, icon: Icon, type = "text", value,
           onChange={onChange}
           disabled={disabled}
           placeholder={placeholder}
-          className={`w-full ${Icon ? "pl-9" : "pl-3"} pr-3 py-2.5
-            border rounded-lg font-body text-sm text-gray-700
-            focus:outline-none transition-colors
+          className={`w-full ${Icon ? "pl-10" : "pl-3.5"} pr-3.5 py-2.5
+            border rounded-xl font-body text-sm text-slate-800 shadow-xs
+            focus:outline-none transition-all duration-200
             ${error
-              ? "border-red-300 focus:border-red-400"
-              : "border-gray-200 focus:border-[#4A7FA7]"}
+              ? "border-red-300 bg-red-50/50 focus:border-red-400 focus:bg-white focus:ring-2 focus:ring-red-200"
+              : "border-slate-200 bg-[#F8FAFC] focus:bg-white focus:border-[#3b719f] focus:ring-2 focus:ring-[#3b719f]/15"}
             ${disabled
-              ? "bg-gray-50 text-gray-400 cursor-not-allowed"
-              : "bg-white"}`}
+              ? "bg-slate-100 text-slate-400 cursor-not-allowed border-slate-200/60"
+              : ""}`}
         />
       </div>
       {error && (
-        <p className="font-body text-[10px] text-red-400 mt-1">{error}</p>
+        <p className="font-body text-[10px] text-red-500 font-semibold mt-1">{error}</p>
       )}
     </div>
   )
@@ -279,42 +278,48 @@ function ProfilePage() {
     <div className="max-w-5xl mx-auto space-y-6 pb-12">
 
       {/* ── Main Unified Profile Container Card ── */}
-      <div className="bg-white rounded-3xl p-6 sm:p-8 shadow-sm border border-gray-100 space-y-6">
+      <div className="bg-white rounded-3xl p-6 sm:p-8 shadow-md border border-slate-200/80 space-y-6">
 
-        {/* ── Profile Header Bar ── */}
-        <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 pb-6 border-b border-gray-100">
-          <div className="flex items-center gap-4">
-            <Avatar
-              src={profileImg}
-              name={fullName}
-              size="lg"
-            />
-            <div>
-              <h2 className="font-heading text-xl sm:text-2xl font-bold text-[#0A1931]">
-                {fullName || "—"}
-              </h2>
-              <p className="font-body text-xs text-gray-500 mt-0.5 font-medium">
-                {formData.educationLevel === "school"
-                  ? `${formData.schoolName || "School Student"} · ${formData.gradeLevel}`
-                  : formData.educationLevel === "other"
-                  ? `${formData.schoolName || "Independent Learner"} · ${formData.streamFocus}`
-                  : `${formData.university || "University Student"} · ${formData.year}`}
-              </p>
-              <p className="font-body text-xs text-[#3b719f] mt-0.5">
-                {formData.email}
-              </p>
+        {/* ── Profile Header Bar (Hero Gradient Container) ── */}
+        <div className="bg-gradient-to-r from-[#0A1931] via-[#1A3D63] to-[#2B547E] rounded-3xl p-6 sm:p-7 text-white shadow-sm">
+          <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-5">
+            <div className="flex items-center gap-4">
+              <div className="ring-4 ring-white/20 rounded-full shadow-md">
+                <Avatar
+                  src={profileImg}
+                  name={fullName}
+                  size="lg"
+                />
+              </div>
+              <div>
+                <h2 className="font-heading text-xl sm:text-2xl font-bold text-white tracking-wide">
+                  {fullName || "—"}
+                </h2>
+                <p className="font-body text-xs text-blue-200 mt-1 font-medium flex items-center gap-1.5">
+                  <GraduationCap size={14} className="text-blue-300 shrink-0" />
+                  {formData.educationLevel === "school"
+                    ? `${formData.schoolName || "School Student"} · ${formData.gradeLevel}`
+                    : formData.educationLevel === "other"
+                    ? `${formData.schoolName || "Independent Learner"} · ${formData.streamFocus}`
+                    : `${formData.university || "University Student"} · ${formData.year}`}
+                </p>
+                <p className="font-body text-xs text-blue-100/80 mt-0.5 flex items-center gap-1.5">
+                  <Mail size={13} className="text-blue-300 shrink-0" />
+                  {formData.email}
+                </p>
+              </div>
             </div>
+            <span className="bg-white/15 backdrop-blur-md text-white font-body text-xs font-bold px-4 py-1.5 rounded-full border border-white/25 capitalize shadow-xs">
+              {formData.role || "Student"}
+            </span>
           </div>
-          <span className="bg-blue-50 text-[#3b719f] font-body text-xs font-bold px-3.5 py-1.5 rounded-full border border-blue-100 capitalize">
-            {formData.role || "Student"}
-          </span>
         </div>
 
         {/* Unsaved changes warning */}
         {hasChanges && !saving && (
-          <div className="bg-yellow-50 border border-yellow-200 rounded-xl px-4 py-3 flex items-center gap-2">
+          <div className="bg-yellow-50 border border-yellow-200/90 rounded-2xl px-4 py-3 flex items-center gap-2">
             <span className="text-yellow-500 text-sm">⚠️</span>
-            <p className="font-body text-xs text-yellow-700 font-medium">
+            <p className="font-body text-xs text-yellow-800 font-semibold">
               You have unsaved changes
             </p>
           </div>
@@ -325,16 +330,16 @@ function ProfilePage() {
           <ErrorMessage message={error} onDismiss={() => setError("")} />
         )}
 
-        {/* Navigation Tabs */}
-        <div className="flex flex-wrap gap-2 border-b border-gray-100 pb-4">
+        {/* Navigation Tabs Bar */}
+        <div className="bg-[#F1F5F9] p-1.5 rounded-2xl border border-slate-200/80 flex flex-wrap gap-1.5">
           {["personal", "academic", "mentor"].map((tab) => (
             <button
               key={tab}
               onClick={() => setActiveTab(tab)}
-              className={`font-body text-xs sm:text-sm font-semibold px-5 py-2.5 rounded-xl transition-all capitalize cursor-pointer border-none ${
+              className={`font-body text-xs sm:text-sm font-bold px-5 py-2.5 rounded-xl transition-all capitalize cursor-pointer border-none ${
                 activeTab === tab
-                  ? "bg-[#1A3D63] text-white shadow-xs"
-                  : "bg-gray-100 text-gray-600 hover:bg-gray-200"
+                  ? "bg-[#1A3D63] text-white shadow-sm"
+                  : "text-slate-600 hover:text-[#0A1931] hover:bg-white/60"
               }`}
             >
               {tab === "personal"
@@ -557,9 +562,8 @@ function ProfilePage() {
 
       {/* Personal Info */}
       {activeTab === "personal" && (
-        <div className="bg-white rounded-2xl p-6 shadow-sm border border-gray-100">
-          <h3 className="font-heading text-base font-semibold
-            text-[#0A1931] mb-5">
+        <div className="bg-[#F8FAFC] rounded-2xl p-6 border border-slate-200/80 space-y-5">
+          <h3 className="font-heading text-base font-bold text-[#0A1931]">
             Personal Information
           </h3>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -601,13 +605,12 @@ function ProfilePage() {
           {/* Bio with character count */}
           <div className="mt-4">
             <div className="flex items-center justify-between mb-1.5">
-              <label className="font-body text-xs text-gray-500">
+              <label className="font-body text-xs font-semibold text-slate-600">
                 Bio
               </label>
-              <span className={`font-body text-[10px]
-                ${(formData.bio?.length || 0) > MAX_BIO
-                  ? "text-red-400"
-                  : "text-gray-300"}`}>
+              <span className={`font-body text-[10px] ${
+                (formData.bio?.length || 0) > MAX_BIO ? "text-red-500 font-bold" : "text-slate-400"
+              }`}>
                 {formData.bio?.length || 0}/{MAX_BIO}
               </span>
             </div>
@@ -618,15 +621,14 @@ function ProfilePage() {
               rows={3}
               maxLength={MAX_BIO + 10}
               placeholder="Tell us a bit about yourself..."
-              className={`w-full px-3 py-2.5 border rounded-lg
-                font-body text-sm text-gray-700 focus:outline-none
-                resize-none transition-colors
-                ${fieldErrors.bio
-                  ? "border-red-300"
-                  : "border-gray-200 focus:border-[#4A7FA7]"}`}
+              className={`w-full px-3.5 py-2.5 border rounded-xl shadow-xs font-body text-sm text-slate-800 focus:outline-none resize-none transition-all duration-200 ${
+                fieldErrors.bio
+                  ? "border-red-300 bg-red-50/50 focus:border-red-400 focus:bg-white focus:ring-2 focus:ring-red-200"
+                  : "border-slate-200 bg-[#F8FAFC] focus:bg-white focus:border-[#3b719f] focus:ring-2 focus:ring-[#3b719f]/15"
+              }`}
             />
             {fieldErrors.bio && (
-              <p className="font-body text-[10px] text-red-400 mt-1">
+              <p className="font-body text-[10px] text-red-500 font-semibold mt-1">
                 {fieldErrors.bio}
               </p>
             )}
@@ -636,19 +638,19 @@ function ProfilePage() {
 
       {/* Academic Info */}
       {activeTab === "academic" && (
-        <div className="bg-white rounded-2xl p-6 shadow-sm border border-gray-100 space-y-6">
+        <div className="bg-[#F8FAFC] rounded-2xl p-6 border border-slate-200/80 space-y-6">
           <div>
-            <h3 className="font-heading text-base font-semibold text-[#0A1931] mb-1">
+            <h3 className="font-heading text-base font-bold text-[#0A1931] mb-1">
               Academic Information
             </h3>
-            <p className="font-body text-xs text-gray-500">
+            <p className="font-body text-xs text-slate-500">
               Select your education level to customize your academic profile fields.
             </p>
           </div>
 
           {/* Education Level Type Selector Cards */}
           <div>
-            <label className="font-heading text-[10px] font-bold text-[#4A7FA7] uppercase tracking-wider block mb-2">
+            <label className="font-heading text-[10px] font-bold text-[#3b719f] uppercase tracking-wider block mb-2">
               Education Category
             </label>
             <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
@@ -663,13 +665,13 @@ function ProfilePage() {
                   onClick={() => setFormData(prev => ({ ...prev, educationLevel: opt.id }))}
                   className={`p-3.5 rounded-xl border text-left transition-all cursor-pointer ${
                     formData.educationLevel === opt.id
-                      ? "border-[#3b719f] bg-blue-50/50 shadow-xs"
-                      : "border-gray-200 bg-white hover:border-gray-300"
+                      ? "border-[#3b719f] bg-blue-50/90 ring-2 ring-[#3b719f]/20 shadow-xs"
+                      : "border-slate-200 bg-white hover:border-slate-300"
                   }`}
                 >
                   <div className="text-xl mb-1">{opt.icon}</div>
                   <div className="font-heading text-xs font-bold text-[#0A1931]">{opt.label}</div>
-                  <div className="font-body text-[10px] text-gray-400 mt-0.5">{opt.desc}</div>
+                  <div className="font-body text-[10px] text-slate-500 mt-0.5">{opt.desc}</div>
                 </button>
               ))}
             </div>
@@ -677,7 +679,7 @@ function ProfilePage() {
 
           {/* ── Fields for School Students ── */}
           {formData.educationLevel === "school" && (
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 pt-2 border-t border-gray-100">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 pt-2 border-t border-slate-200/60">
               <InputField
                 label="School Name *"
                 icon={BookOpen}
@@ -687,14 +689,14 @@ function ProfilePage() {
                 placeholder="e.g. Royal College, Colombo"
               />
               <div>
-                <label className="font-body text-xs text-gray-500 mb-1.5 block">
+                <label className="font-body text-xs font-semibold text-slate-600 mb-1.5 block">
                   Grade / Class Level *
                 </label>
                 <select
                   name="gradeLevel"
                   value={formData.gradeLevel}
                   onChange={handleChange}
-                  className="w-full px-3 py-2.5 border border-gray-200 rounded-lg font-body text-sm text-gray-700 focus:outline-none focus:border-[#4A7FA7] cursor-pointer"
+                  className="w-full px-3.5 py-2.5 border border-slate-200 rounded-xl bg-[#F8FAFC] focus:bg-white font-body text-sm text-slate-800 focus:outline-none focus:border-[#3b719f] focus:ring-2 focus:ring-[#3b719f]/15 cursor-pointer transition-all shadow-xs"
                 >
                   {gradeOptions.map(g => (
                     <option key={g} value={g}>{g}</option>
@@ -702,14 +704,14 @@ function ProfilePage() {
                 </select>
               </div>
               <div className="md:col-span-2">
-                <label className="font-body text-xs text-gray-500 mb-1.5 block">
+                <label className="font-body text-xs font-semibold text-slate-600 mb-1.5 block">
                   Stream / Subject Focus
                 </label>
                 <select
                   name="streamFocus"
                   value={formData.streamFocus}
                   onChange={handleChange}
-                  className="w-full px-3 py-2.5 border border-gray-200 rounded-lg font-body text-sm text-gray-700 focus:outline-none focus:border-[#4A7FA7] cursor-pointer"
+                  className="w-full px-3.5 py-2.5 border border-slate-200 rounded-xl bg-[#F8FAFC] focus:bg-white font-body text-sm text-slate-800 focus:outline-none focus:border-[#3b719f] focus:ring-2 focus:ring-[#3b719f]/15 cursor-pointer transition-all shadow-xs"
                 >
                   {streamOptions.map(s => (
                     <option key={s} value={s}>{s}</option>
@@ -721,7 +723,7 @@ function ProfilePage() {
 
           {/* ── Fields for University Students ── */}
           {formData.educationLevel === "university" && (
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 pt-2 border-t border-gray-100">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 pt-2 border-t border-slate-200/60">
               <InputField
                 label="University Name *"
                 icon={BookOpen}
@@ -739,14 +741,14 @@ function ProfilePage() {
                 placeholder="e.g. Faculty of Computing / Software Engineering"
               />
               <div>
-                <label className="font-body text-xs text-gray-500 mb-1.5 block">
+                <label className="font-body text-xs font-semibold text-slate-600 mb-1.5 block">
                   Year of Study *
                 </label>
                 <select
                   name="year"
                   value={formData.year}
                   onChange={handleChange}
-                  className="w-full px-3 py-2.5 border border-gray-200 rounded-lg font-body text-sm text-gray-700 focus:outline-none focus:border-[#4A7FA7] cursor-pointer"
+                  className="w-full px-3.5 py-2.5 border border-slate-200 rounded-xl bg-[#F8FAFC] focus:bg-white font-body text-sm text-slate-800 focus:outline-none focus:border-[#3b719f] focus:ring-2 focus:ring-[#3b719f]/15 cursor-pointer transition-all shadow-xs"
                 >
                   {yearOptions.map(y => (
                     <option key={y} value={y}>{y}</option>
@@ -766,7 +768,7 @@ function ProfilePage() {
 
           {/* ── Fields for Other / Independent Learners ── */}
           {formData.educationLevel === "other" && (
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 pt-2 border-t border-gray-100">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 pt-2 border-t border-slate-200/60">
               <InputField
                 label="Institution / Organization"
                 icon={BookOpen}
