@@ -11,7 +11,7 @@ import {
   uploadFile,
   trackDownload,
 } from "../api/resourcesApi"
-import { getSubjects } from "../api/subjectsApi"
+import { getSubjects, createSubject } from "../api/subjectsApi"
 import { getStudentsList } from "../api/usersApi"
 import { shareResource } from "../api/resourcesApi"
 
@@ -39,6 +39,7 @@ function TypeBadge({ type }) {
 function UploadModal({ onClose, onUploadSuccess, subjects }) {
   const [title, setTitle]               = useState("")
   const [subjectId, setSubjectId]       = useState("")
+  const [customSubject, setCustomSubject] = useState("")
   const [selectedFile, setSelectedFile] = useState(null)
   const [uploading, setUploading]       = useState(false)
   const [progress, setProgress]         = useState("")
@@ -82,6 +83,10 @@ function UploadModal({ onClose, onUploadSuccess, subjects }) {
 
     if (!title.trim()) { setError("Please enter a title"); return }
     if (!subjectId)    { setError("Please select a subject"); return }
+    if (subjectId === "NEW_CUSTOM_SUBJECT" && !customSubject.trim()) {
+      setError("Please type the new subject name")
+      return
+    }
     if (!selectedFile) { setError("Please select a file"); return }
     if (!isPublic && !selectedStudent) {
       setError("Please select a student to share this private resource with.")
@@ -91,6 +96,13 @@ function UploadModal({ onClose, onUploadSuccess, subjects }) {
     try {
       setUploading(true)
 
+      let finalSubjectId = subjectId
+      if (subjectId === "NEW_CUSTOM_SUBJECT") {
+        setProgress("Creating new subject...")
+        const newSubRes = await createSubject(customSubject.trim())
+        finalSubjectId = newSubRes.data.id
+      }
+
       // Step 1 — upload file
       setProgress("Uploading file...")
       const step1 = await uploadFile(selectedFile)
@@ -99,7 +111,7 @@ function UploadModal({ onClose, onUploadSuccess, subjects }) {
       setProgress("Saving resource...")
       await uploadResource({
         title:        title,
-        subject_id:   parseInt(subjectId),
+        subject_id:   parseInt(finalSubjectId),
         file_type_id: step1.data.file_type_id,
         file_url:     step1.data.file_url,
         file_size_mb: step1.data.file_size_mb,
@@ -160,7 +172,18 @@ function UploadModal({ onClose, onUploadSuccess, subjects }) {
             {subjects.map(s => (
               <option key={s.id} value={s.id}>{s.name}</option>
             ))}
+            <option value="NEW_CUSTOM_SUBJECT">➕ Add New Subject...</option>
           </select>
+
+          {subjectId === "NEW_CUSTOM_SUBJECT" && (
+            <input
+              type="text"
+              placeholder="Type new subject name (e.g. Artificial Intelligence)"
+              value={customSubject}
+              onChange={(e) => setCustomSubject(e.target.value)}
+              className="w-full mt-2 border border-gray-200 rounded-lg px-3 py-2.5 font-body text-xs text-gray-700 focus:outline-none focus:border-[#4A7FA7] bg-blue-50/40"
+            />
+          )}
         </div>
 
         {/* Visibility toggle & target student share */}
