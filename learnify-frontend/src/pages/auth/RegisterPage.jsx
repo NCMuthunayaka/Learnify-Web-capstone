@@ -250,7 +250,8 @@ function RegisterPage() {
       )
       const { user, access_token, refresh_token } = response.data
       login(user, access_token, refresh_token)
-      navigate("/dashboard")
+      const targetRoute = user?.role === "mentor" ? "/mentor/dashboard" : user?.role === "admin" ? "/admin/dashboard" : "/dashboard"
+      navigate(targetRoute, { replace: true })
     } catch (err) {
       setApiError(
         err.response?.data?.error?.message || "Registration failed. Please try again."
@@ -281,7 +282,8 @@ function RegisterPage() {
           setShowRoleSelect(true)
         } else {
           login(user, access_token, refresh_token)
-          navigate("/dashboard")
+          const targetRoute = user?.role === "mentor" ? "/mentor/dashboard" : user?.role === "admin" ? "/admin/dashboard" : "/dashboard"
+          navigate(targetRoute, { replace: true })
         }
       } catch (err) {
         setApiError(
@@ -317,7 +319,8 @@ function RegisterPage() {
       await api.patch("/users/profile", { name: fullName, role: selectedRole })
       const updatedUser = { ...googleUserData.user, name: fullName, role: selectedRole }
       login(updatedUser, googleUserData.access_token, googleUserData.refresh_token)
-      navigate("/dashboard")
+      const targetRoute = selectedRole === "mentor" ? "/mentor/dashboard" : selectedRole === "admin" ? "/admin/dashboard" : "/dashboard"
+      navigate(targetRoute, { replace: true })
     } catch (err) {
       setApiError("Failed to save profile. Please try again.")
     } finally {
