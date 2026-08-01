@@ -276,70 +276,75 @@ function ProfilePage() {
   const fullName = `${formData.firstName} ${formData.lastName}`.trim() || "Student"
 
   return (
-    <div className="max-w-3xl space-y-5">
+    <div className="max-w-5xl mx-auto space-y-6 pb-12">
 
-      {/* Header Card */}
-      <div className="bg-white rounded-2xl p-6 shadow-sm border border-gray-100">
-        <div className="flex items-center gap-5">
-          <Avatar
-            src={profileImg}
-            name={fullName}
-            size="lg"
-          />
-          <div className="flex-1">
-            <h2 className="font-heading text-xl font-bold text-[#0A1931]">
-              {fullName || "—"}
-            </h2>
-            <p className="font-body text-sm text-gray-400 mt-0.5">
-              {formData.studentId || "No student ID"} · {formData.year}
-            </p>
-            <p className="font-body text-xs text-[#4A7FA7] mt-1">
-              {formData.university || "No university set"}
-            </p>
+      {/* ── Main Unified Profile Container Card ── */}
+      <div className="bg-white rounded-3xl p-6 sm:p-8 shadow-sm border border-gray-100 space-y-6">
+
+        {/* ── Profile Header Bar ── */}
+        <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 pb-6 border-b border-gray-100">
+          <div className="flex items-center gap-4">
+            <Avatar
+              src={profileImg}
+              name={fullName}
+              size="lg"
+            />
+            <div>
+              <h2 className="font-heading text-xl sm:text-2xl font-bold text-[#0A1931]">
+                {fullName || "—"}
+              </h2>
+              <p className="font-body text-xs text-gray-500 mt-0.5 font-medium">
+                {formData.educationLevel === "school"
+                  ? `${formData.schoolName || "School Student"} · ${formData.gradeLevel}`
+                  : formData.educationLevel === "other"
+                  ? `${formData.schoolName || "Independent Learner"} · ${formData.streamFocus}`
+                  : `${formData.university || "University Student"} · ${formData.year}`}
+              </p>
+              <p className="font-body text-xs text-[#3b719f] mt-0.5">
+                {formData.email}
+              </p>
+            </div>
           </div>
-          <span className="bg-blue-50 text-blue-600 font-body text-xs
-            font-semibold px-3 py-1.5 rounded-full border border-blue-100">
-            Student
+          <span className="bg-blue-50 text-[#3b719f] font-body text-xs font-bold px-3.5 py-1.5 rounded-full border border-blue-100 capitalize">
+            {formData.role || "Student"}
           </span>
         </div>
-      </div>
 
-      {/* Unsaved changes warning */}
-      {hasChanges && !saving && (
-        <div className="bg-yellow-50 border border-yellow-200 rounded-xl
-          px-4 py-3 flex items-center gap-2">
-          <span className="text-yellow-500 text-sm">⚠️</span>
-          <p className="font-body text-xs text-yellow-700 font-medium">
-            You have unsaved changes
-          </p>
+        {/* Unsaved changes warning */}
+        {hasChanges && !saving && (
+          <div className="bg-yellow-50 border border-yellow-200 rounded-xl px-4 py-3 flex items-center gap-2">
+            <span className="text-yellow-500 text-sm">⚠️</span>
+            <p className="font-body text-xs text-yellow-700 font-medium">
+              You have unsaved changes
+            </p>
+          </div>
+        )}
+
+        {/* Error */}
+        {error && (
+          <ErrorMessage message={error} onDismiss={() => setError("")} />
+        )}
+
+        {/* Navigation Tabs */}
+        <div className="flex flex-wrap gap-2 border-b border-gray-100 pb-4">
+          {["personal", "academic", "mentor"].map((tab) => (
+            <button
+              key={tab}
+              onClick={() => setActiveTab(tab)}
+              className={`font-body text-xs sm:text-sm font-semibold px-5 py-2.5 rounded-xl transition-all capitalize cursor-pointer border-none ${
+                activeTab === tab
+                  ? "bg-[#1A3D63] text-white shadow-xs"
+                  : "bg-gray-100 text-gray-600 hover:bg-gray-200"
+              }`}
+            >
+              {tab === "personal"
+                ? "Personal Info"
+                : tab === "academic"
+                ? "Academic Info"
+                : "Mentor Application"}
+            </button>
+          ))}
         </div>
-      )}
-
-      {/* Error */}
-      {error && (
-        <ErrorMessage message={error} onDismiss={() => setError("")} />
-      )}
-
-      {/* Tabs */}
-      <div className="flex gap-2">
-        {["personal", "academic", "mentor"].map((tab) => (
-          <button
-            key={tab}
-            onClick={() => setActiveTab(tab)}
-            className={`font-body text-sm font-medium px-5 py-2 rounded-lg
-              transition-colors duration-200 capitalize cursor-pointer border-none
-              ${activeTab === tab
-                ? "bg-[#1A3D63] text-white"
-                : "bg-white text-gray-500 hover:text-[#1A3D63] border border-gray-200"}`}
-          >
-            {tab === "personal"
-              ? "Personal Info"
-              : tab === "academic"
-              ? "Academic Info"
-              : "Mentor Application"}
-          </button>
-        ))}
-      </div>
 
       {/* ── Tab 3: Mentor Application ── */}
       {activeTab === "mentor" && (
@@ -780,44 +785,45 @@ function ProfilePage() {
               />
             </div>
           )}
-        </div>
-      )}
+        {/* Save Button */}
+        {activeTab !== "mentor" && (
+          <div className="flex items-center justify-between pt-6 border-t border-gray-100">
+            <div className="flex items-center gap-3">
+              <Button
+                variant="primary"
+                icon={Save}
+                onClick={handleSave}
+                disabled={saving || !hasChanges}
+              >
+                {saving ? "Saving..." : "Save Changes"}
+              </Button>
 
-      {/* Save Button */}
-      <div className="flex items-center gap-3">
-        <Button
-          variant="primary"
-          icon={Save}
-          onClick={handleSave}
-          disabled={saving || !hasChanges}
-        >
-          {saving ? "Saving..." : "Save Changes"}
-        </Button>
+              {/* Reset button — only show if unsaved changes */}
+              {hasChanges && !saving && (
+                <button
+                  onClick={() => {
+                    setFormData({ ...originalData })
+                    setFieldErrors({})
+                  }}
+                  className="font-body text-xs text-gray-400 hover:text-gray-600 transition-colors cursor-pointer border-none bg-transparent"
+                >
+                  Reset
+                </button>
+              )}
+            </div>
 
-        {/* Reset button — only show if unsaved changes */}
-        {hasChanges && !saving && (
-          <button
-            onClick={() => {
-              setFormData({ ...originalData })
-              setFieldErrors({})
-            }}
-            className="font-body text-sm text-gray-400
-              hover:text-gray-600 transition-colors cursor-pointer border-none bg-transparent"
-          >
-            Reset
-          </button>
+            {saved && (
+              <span className="font-body text-xs text-green-600 font-bold flex items-center gap-1">
+                ✓ Changes saved successfully!
+              </span>
+            )}
+          </div>
         )}
 
-        {saved && (
-          <span className="font-body text-sm text-green-500 font-medium
-            flex items-center gap-1">
-            ✓ Changes saved successfully!
-          </span>
-        )}
       </div>
 
       {/* ── Danger Zone: Delete Account ── */}
-      <div className="bg-red-50/60 rounded-2xl p-6 border border-red-100 space-y-3 mt-8">
+      <div className="bg-red-50/60 rounded-3xl p-6 border border-red-100 space-y-3">
         <div className="flex items-center gap-2 text-red-700">
           <Trash2 size={18} />
           <h3 className="font-heading text-base font-bold">Danger Zone</h3>
