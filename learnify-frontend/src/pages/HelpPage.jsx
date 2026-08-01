@@ -579,23 +579,23 @@ function HelpPage() {
               </div>
             ) : (
               sortedRequests.map((req) => (
-                <div key={req.id} className="bg-white rounded-2xl p-5 shadow-sm border border-gray-100 flex flex-col justify-between space-y-4 hover:shadow-md transition-shadow">
+                <div key={req.id} className="bg-white rounded-3xl p-5 shadow-sm border border-gray-100 flex flex-col justify-between space-y-4 hover:shadow-md transition-shadow">
                   
-                  {/* Card Header badges */}
+                  {/* Top Row: Subject (Left) & Status (Right) */}
                   <div className="flex items-center justify-between">
-                    <span className="px-2.5 py-0.5 bg-blue-50 text-[#1A3D63] border border-blue-100/50 rounded-full font-body text-[10px] font-bold">
+                    <span className="px-3 py-1 bg-blue-50 text-[#3b719f] rounded-full font-body text-xs font-semibold">
                       {req.subject}
                     </span>
                     
-                    {/* Status Badge */}
-                    <span className={`px-2 py-0.5 rounded-full font-body text-[10px] font-bold flex items-center gap-1.5 ${
+                    {/* Status Pill */}
+                    <span className={`px-3 py-1 rounded-full font-body text-xs font-semibold flex items-center gap-1.5 ${
                       req.status?.toLowerCase().includes("progress") || req.status?.toLowerCase() === "accepted"
                         ? "bg-blue-50 text-blue-600 border border-blue-100"
                         : req.status?.toLowerCase() === "resolved"
                           ? "bg-green-50 text-green-600 border border-green-100"
                           : "bg-amber-50 text-amber-600 border border-amber-100"
                     }`}>
-                      <span className={`w-1.5 h-1.5 rounded-full ${
+                      <span className={`w-2 h-2 rounded-full ${
                         req.status?.toLowerCase().includes("progress") || req.status?.toLowerCase() === "accepted"
                           ? "bg-blue-500"
                           : req.status?.toLowerCase() === "resolved"
@@ -608,10 +608,10 @@ function HelpPage() {
 
                   {/* Title & Description */}
                   <div className="space-y-1">
-                    <h4 className="font-heading text-xs font-bold text-[#0A1931] leading-tight">
+                    <h3 className="font-heading text-sm font-bold text-[#0A1931] leading-tight">
                       {req.title}
-                    </h4>
-                    <p className="font-body text-[11px] text-gray-500 leading-relaxed line-clamp-2">
+                    </h3>
+                    <p className="font-body text-xs text-gray-500 leading-relaxed line-clamp-2">
                       {req.desc || req.description}
                     </p>
                     {req.attachment_url && (
@@ -620,7 +620,7 @@ function HelpPage() {
                           href={`${import.meta.env.VITE_BACKEND_URL || "http://localhost:5000"}${req.attachment_url}`}
                           target="_blank"
                           rel="noopener noreferrer"
-                          className="inline-flex items-center gap-1 font-body text-[10px] text-[#3b719f] hover:underline font-bold"
+                          className="inline-flex items-center gap-1 font-body text-xs text-[#3b719f] hover:underline font-bold"
                         >
                           📎 Attached File
                         </a>
@@ -628,21 +628,22 @@ function HelpPage() {
                     )}
                   </div>
 
-                  {/* Mentor/Peer Reply snippet */}
+                  {/* Latest Response Callout Box */}
                   {req.reply && (
-                    <div className="bg-[#F6FAFD] border-l-4 border-[#4A7FA7] p-2.5 rounded-r-xl space-y-1">
-                      <h5 className="font-heading text-[9px] font-bold text-[#1A3D63] flex items-center gap-1 uppercase tracking-wider">
-                        💬 Latest Response
-                      </h5>
-                      <p className="font-body text-[10px] text-gray-600 leading-relaxed line-clamp-2">
+                    <div className="bg-[#f8fafc] border-l-4 border-[#3b719f] p-3 rounded-r-2xl space-y-1">
+                      <div className="flex items-center gap-1.5 text-[10px] font-bold text-[#1A3D63] tracking-wider uppercase font-heading">
+                        <MessageSquare size={12} className="text-[#3b719f]" />
+                        LATEST RESPONSE
+                      </div>
+                      <p className="font-body text-xs text-gray-600 leading-relaxed line-clamp-2">
                         {req.reply}
                       </p>
                     </div>
                   )}
 
                   {/* Helper Profile Footer */}
-                  <div className="pt-3 border-t border-gray-50 flex items-center justify-between text-xs">
-                    <div className="flex items-center gap-2">
+                  <div className="pt-3 border-t border-gray-100 flex items-center justify-between">
+                    <div className="flex items-center gap-2.5">
                       <Avatar 
                         src={null} 
                         name={req.is_assigned_to_me ? req.student_name : req.helperName} 
@@ -650,26 +651,26 @@ function HelpPage() {
                         size="xs" 
                       />
                       <div className="min-w-0">
-                        <p className="font-heading font-semibold text-gray-600 truncate max-w-[110px] leading-tight">
+                        <h4 className="font-heading text-xs font-bold text-[#0A1931] truncate max-w-[120px] leading-tight">
                           {req.is_assigned_to_me ? req.student_name : req.helperName}
-                        </p>
-                        <p className="font-body text-[9px] text-gray-400">
+                        </h4>
+                        <p className="font-body text-[10px] text-gray-400 capitalize">
                           {req.is_assigned_to_me ? "Student Requester" : req.helperRole}
                         </p>
                       </div>
                     </div>
-                    <span className="font-body text-[10px] text-gray-300">
+                    <span className="font-body text-xs text-gray-400">
                       {req.date}
                     </span>
                   </div>
 
-                  {/* Open Discussion Panel action */}
+                  {/* Action Link */}
                   <button 
                     onClick={() => setActiveDiscussionRequest(req)}
-                    className="font-body text-[10px] font-bold text-[#4A7FA7] hover:text-[#1A3D63] text-left mt-2 flex items-center gap-1 transition-colors border-none bg-transparent cursor-pointer"
+                    className="font-body text-xs font-bold text-[#3b719f] hover:text-[#1A3D63] text-left pt-1 flex items-center gap-1.5 transition-colors border-none bg-transparent cursor-pointer"
                   >
                     Open Discussion & Reply
-                    <ArrowRight size={12} />
+                    <ArrowRight size={14} />
                   </button>
 
                 </div>

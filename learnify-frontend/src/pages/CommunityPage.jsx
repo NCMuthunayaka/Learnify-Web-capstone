@@ -679,45 +679,73 @@ function CommunityPage() {
             ) : (
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
                 {publicRequests.map(req => (
-                  <div key={req.id} className="bg-white rounded-2xl p-5 shadow-sm border border-gray-100 flex flex-col justify-between space-y-4 hover:shadow-md transition-shadow">
+                  <div key={req.id} className="bg-white rounded-3xl p-5 shadow-sm border border-gray-100 flex flex-col justify-between space-y-4 hover:shadow-md transition-shadow">
+                    
+                    {/* Top Row: Subject Tag (Left) & Status Pill (Right) */}
                     <div className="flex items-center justify-between">
-                      <span className="px-2.5 py-0.5 bg-blue-50 text-[#1A3D63] border border-blue-100/50 rounded-full font-body text-[10px] font-bold">
+                      <span className="px-3 py-1 bg-blue-50 text-[#3b719f] rounded-full font-body text-xs font-semibold">
                         {req.subject_name}
                       </span>
-                      <span className={`px-2 py-0.5 rounded-full font-body text-[10px] font-bold ${
-                        req.status === "answered" ? "bg-green-50 text-green-600 border border-green-100" : "bg-amber-50 text-amber-600 border border-amber-100"
+                      <span className={`px-3 py-1 rounded-full font-body text-xs font-semibold flex items-center gap-1.5 ${
+                        req.status === "answered"
+                          ? "bg-green-50 text-green-600 border border-green-100"
+                          : "bg-blue-50 text-blue-600 border border-blue-100"
                       }`}>
+                        <span className={`w-2 h-2 rounded-full ${
+                          req.status === "answered" ? "bg-green-500" : "bg-[#3b719f]"
+                        }`} />
                         {req.status === "answered" ? "Answered" : "Open"}
                       </span>
                     </div>
 
+                    {/* Title & Description */}
                     <div className="space-y-1">
-                      <h4 className="font-heading text-xs font-bold text-[#0A1931] line-clamp-1">
+                      <h3 className="font-heading text-sm font-bold text-[#0A1931] line-clamp-1">
                         {req.title}
-                      </h4>
-                      <p className="font-body text-[11px] text-gray-500 line-clamp-2 leading-relaxed">
+                      </h3>
+                      <p className="font-body text-xs text-gray-500 line-clamp-2 leading-relaxed">
                         {req.description}
                       </p>
                     </div>
 
-                    <div className="pt-3 border-t border-gray-50 flex items-center justify-between text-xs">
-                      <div className="flex items-center gap-2">
-                        <Avatar name={req.requester_name} color="primary" size="xs" />
-                        <span className="font-heading text-xs font-semibold text-gray-600 truncate max-w-[100px]">
-                          {req.requester_name}
-                        </span>
+                    {/* Latest Response Callout Box */}
+                    {req.replies && req.replies.length > 0 && (
+                      <div className="bg-[#f8fafc] border-l-4 border-[#3b719f] p-3 rounded-r-2xl space-y-1">
+                        <div className="flex items-center gap-1.5 text-[10px] font-bold text-[#1A3D63] tracking-wider uppercase">
+                          <MessageSquare size={12} className="text-[#3b719f]" />
+                          LATEST RESPONSE
+                        </div>
+                        <p className="font-body text-xs text-gray-600 line-clamp-2 leading-relaxed">
+                          {req.replies[req.replies.length - 1].body}
+                        </p>
                       </div>
-                      <span className="font-body text-[10px] text-gray-400">
-                        💬 {req.replies.length} replies
+                    )}
+
+                    {/* Footer: User Avatar, Name, Role & Date */}
+                    <div className="pt-3 border-t border-gray-100 flex items-center justify-between">
+                      <div className="flex items-center gap-2.5">
+                        <Avatar name={req.requester_name} color="primary" size="xs" />
+                        <div>
+                          <h4 className="font-heading text-xs font-bold text-[#0A1931] leading-tight truncate max-w-[120px]">
+                            {req.requester_name}
+                          </h4>
+                          <p className="font-body text-[10px] text-gray-400 capitalize">
+                            {req.requester_role || "Student"}
+                          </p>
+                        </div>
+                      </div>
+                      <span className="font-body text-xs text-gray-400">
+                        {req.created_at ? new Date(req.created_at).toLocaleDateString("en-US", { month: "short", day: "2-digit", year: "numeric" }) : ""}
                       </span>
                     </div>
 
+                    {/* Action Link */}
                     <button
                       onClick={() => setActivePublicRequest(req)}
-                      className="font-body text-[10px] font-bold text-[#4A7FA7] hover:text-[#1A3D63] text-left flex items-center gap-1 transition-colors border-none bg-transparent cursor-pointer"
+                      className="font-body text-xs font-bold text-[#3b719f] hover:text-[#1A3D63] text-left flex items-center gap-1.5 transition-colors border-none bg-transparent cursor-pointer pt-1"
                     >
-                      View Question & Answers
-                      <ArrowRight size={12} />
+                      Open Discussion & Reply
+                      <ArrowRight size={14} />
                     </button>
                   </div>
                 ))}
