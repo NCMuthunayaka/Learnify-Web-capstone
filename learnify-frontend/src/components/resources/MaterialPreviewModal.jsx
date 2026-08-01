@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from "react"
 import { X, ExternalLink, Download, Eye, FileText, Film, Image as ImageIcon, Music, HelpCircle, User, Calendar, HardDrive, BookOpen, AlertTriangle } from "lucide-react"
-import { getResource, trackDownload } from "../../api/resourcesApi"
+import { getResource, trackDownload, rateResource } from "../../api/resourcesApi"
+import StarRating from "../common/StarRating"
 
 function MaterialPreviewModal({ resource, isOpen, onClose, onDownload }) {
   const [detailedResource, setDetailedResource] = useState(null)
@@ -129,6 +130,23 @@ function MaterialPreviewModal({ resource, isOpen, onClose, onDownload }) {
       }
     } else {
       window.open(fullUrl, "_blank")
+    }
+  }
+
+  const handleRate = async (newRating) => {
+    if (!currentResource?.id) return
+    try {
+      const res = await rateResource(currentResource.id, newRating)
+      if (res?.data) {
+        setDetailedResource((prev) => ({
+          ...(prev || currentResource),
+          avg_rating: res.data.avg_rating,
+          rating_count: res.data.rating_count,
+          user_rating: res.data.user_rating,
+        }))
+      }
+    } catch (err) {
+      console.error("Failed to rate resource:", err)
     }
   }
 
@@ -328,8 +346,8 @@ function MaterialPreviewModal({ resource, isOpen, onClose, onDownload }) {
           )}
         </div>
 
-        {/* Modal Footer / Stats */}
-        <div className="px-6 py-3 border-t border-slate-100 bg-slate-50/80 flex items-center justify-between text-xs text-slate-500">
+        {/* Modal Footer / Stats & Rating */}
+        <div className="px-6 py-3 border-t border-slate-100 bg-slate-50/80 flex flex-wrap items-center justify-between gap-3 text-xs text-slate-500">
           <div className="flex items-center gap-4">
             <span className="flex items-center gap-1.5">
               <Eye size={13} className="text-slate-400" />
@@ -340,6 +358,26 @@ function MaterialPreviewModal({ resource, isOpen, onClose, onDownload }) {
               <span>{currentResource.download_count || 0} downloads</span>
             </span>
           </div>
+
+          {/* Interactive Rating Control */}
+          <div className="flex items-center gap-2 bg-amber-50/80 border border-amber-200/80 px-3 py-1 rounded-xl shadow-xs">
+            <span className="text-xs font-semibold text-slate-700">Rate material:</span>
+            <StarRating
+              rating={currentResource.avg_rating || 0}
+              count={currentResource.rating_count || 0}
+              userRating={currentResource.user_rating}
+              interactive={true}
+              onRate={handleRate}
+              size={17}
+              showLabel={true}
+            />
+            {currentResource.user_rating && (
+              <span className="text-[10px] font-bold text-amber-700 bg-amber-100 px-1.5 py-0.5 rounded ml-1">
+                Your rating: {currentResource.user_rating}★
+              </span>
+            )}
+          </div>
+
           {currentResource.uploaded_at && (
             <span className="flex items-center gap-1 text-slate-400">
               <Calendar size={12} />

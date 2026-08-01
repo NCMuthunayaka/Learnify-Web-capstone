@@ -17,6 +17,7 @@ import {
 import { getSubjects, createSubject } from "../../api/subjectsApi"
 import { getStudentsList } from "../../api/usersApi"
 import MaterialPreviewModal from "../../components/resources/MaterialPreviewModal"
+import StarRating from "../../components/common/StarRating"
 
 const fileTypeIdMap = { "PDF": 1, "DOCX": 2, "PPTX": 3, "Video": 4 }
 const sortOptions   = ["Newest First", "Oldest First", "A–Z", "Z–A"]
@@ -672,7 +673,7 @@ function MentorResourcesPage() {
             <table className="w-full">
               <thead>
                 <tr className="border-b border-gray-100">
-                  {["RESOURCE", "SUBJECT", "TYPE", "UPLOADED",
+                  {["RESOURCE", "SUBJECT", "TYPE", "RATING", "UPLOADED",
                     "SIZE", "DOWNLOADS", "VIEWS", "ACTIONS"].map(h => (
                     <th key={h}
                       className="font-body text-[10px] font-semibold
@@ -713,6 +714,16 @@ function MentorResourcesPage() {
 
                     <td className="px-5 py-3.5">
                       <TypeBadge type={resource.file_type_name} />
+                    </td>
+
+                    <td className="px-5 py-3.5">
+                      <StarRating
+                        rating={resource.avg_rating || 0}
+                        count={resource.rating_count || 0}
+                        userRating={resource.user_rating}
+                        interactive={false}
+                        size={13}
+                      />
                     </td>
 
                     <td className="px-5 py-3.5">

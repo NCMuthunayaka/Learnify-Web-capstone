@@ -62,3 +62,9 @@ export async function shareResource(resourceId, studentId) {
     const response = await api.post(`/resources/${resourceId}/share`, { student_id: studentId })
     return response.data
 }
+
+// ── Rate resource ─────────────────────────────────────────
+export async function rateResource(id, rating) {
+    const response = await api.post(`/resources/${id}/rate`, { rating })
+    return response.data
+}

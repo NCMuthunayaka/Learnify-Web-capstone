@@ -10,14 +10,16 @@ import {
   uploadResource,
   uploadFile,
   trackDownload,
+  rateResource,
 } from "../api/resourcesApi"
 import { getSubjects, createSubject } from "../api/subjectsApi"
 import { getStudentsList } from "../api/usersApi"
 import { shareResource } from "../api/resourcesApi"
 import MaterialPreviewModal from "../components/resources/MaterialPreviewModal"
+import StarRating from "../components/common/StarRating"
 
 const typeOptions   = ["All Types", "PDF", "Video", "DOCX", "PPTX"]
-const sortOptions   = ["Newest First", "Oldest First", "A–Z", "Z–A"]
+const sortOptions   = ["Newest First", "Highest Rated", "Oldest First", "A–Z", "Z–A"]
 const fileTypeIdMap = { "PDF": 1, "DOCX": 2, "PPTX": 3, "Video": 4 }
 
 // ── Type Badge ─────────────────────────────────────────────
@@ -386,6 +388,8 @@ function ResourcesPage() {
   function sortResources(data, sortKey) {
     const sorted = [...data]
     switch (sortKey) {
+      case "Highest Rated":
+        return sorted.sort((a, b) => (b.avg_rating || 0) - (a.avg_rating || 0))
       case "Oldest First":
         return sorted.sort((a, b) =>
           new Date(a.uploaded_at) - new Date(b.uploaded_at))
@@ -397,6 +401,29 @@ function ResourcesPage() {
       default:
         return sorted.sort((a, b) =>
           new Date(b.uploaded_at) - new Date(a.uploaded_at))
+    }
+  }
+
+  // ── Handle rating submission ───────────────────────────
+  async function handleInlineRate(resourceId, rating) {
+    try {
+      const res = await rateResource(resourceId, rating)
+      if (res?.data) {
+        setResources((prev) =>
+          prev.map((r) =>
+            r.id === resourceId
+              ? {
+                  ...r,
+                  avg_rating: res.data.avg_rating,
+                  rating_count: res.data.rating_count,
+                  user_rating: res.data.user_rating,
+                }
+              : r
+          )
+        )
+      }
+    } catch (err) {
+      console.error("Failed to submit rating:", err)
     }
   }
 
@@ -593,7 +620,7 @@ function ResourcesPage() {
             <table className="w-full">
               <thead>
                 <tr className="border-b border-gray-100">
-                  {["RESOURCE", "SUBJECT", "MENTOR", "TYPE",
+                  {["RESOURCE", "SUBJECT", "MENTOR", "TYPE", "RATING",
                     "UPLOADED", "SIZE", "ACTIONS"].map(h => (
                     <th key={h}
                       className="font-body text-[10px] font-semibold
@@ -653,6 +680,17 @@ function ResourcesPage() {
 
                     <td className="px-5 py-3.5">
                       <TypeBadge type={resource.file_type_name} />
+                    </td>
+
+                    <td className="px-5 py-3.5">
+                      <StarRating
+                        rating={resource.avg_rating || 0}
+                        count={resource.rating_count || 0}
+                        userRating={resource.user_rating}
+                        interactive={true}
+                        onRate={(newRating) => handleInlineRate(resource.id, newRating)}
+                        size={13}
+                      />
                     </td>
 
                     <td className="px-5 py-3.5">
