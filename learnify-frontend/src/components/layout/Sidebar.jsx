@@ -15,7 +15,7 @@ const studentNavItems = [
   { label: "Progress",     icon: TrendingUp,      path: "/progress"   },
   { label: "AI Assistant", icon: Bot,             path: "/ai-chat"    },
   { label: "Materials",    icon: BookOpen,        path: "/resources"  },
-  { label: "Help",         icon: HelpCircle,      path: "/help"       },
+  { label: "Community",    icon: Users,           path: "/community"  },
 ]
 
 const mentorNavItems = [
@@ -23,7 +23,7 @@ const mentorNavItems = [
   { label: "Student Requests", icon: MessageSquare,   path: "/mentor/requests"  },
   { label: "AI Assistant",     icon: Bot,             path: "/ai-chat"          },
   { label: "My Resources",     icon: BookOpen,        path: "/mentor/resources" },
-  { label: "Help",             icon: HelpCircle,      path: "/help"             },
+  { label: "Community",        icon: Users,           path: "/community"        },
 ]
 
 const adminNavItems = [

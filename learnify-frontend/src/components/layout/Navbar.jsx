@@ -52,6 +52,7 @@ const pageTitles = {
   "/profile":               "My Profile",
   "/notifications":         "Notifications",
   "/help":                  "Help",
+  "/community":             "Community Hub",
   "/mentor/requests":       "Student Requests",
   "/mentor/resources":      "My Resources",
   "/mentor/profile":        "My Profile",
