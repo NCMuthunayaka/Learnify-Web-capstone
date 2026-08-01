@@ -222,16 +222,35 @@ function HelpPage() {
                   </label>
                   <select
                     value={selectedMentor}
-                    onChange={(e) => setSelectedMentor(e.target.value)}
+                    onChange={(e) => {
+                      const val = e.target.value
+                      setSelectedMentor(val)
+                      if (val.startsWith("Peer:")) {
+                        setRequestType("Peer")
+                      } else {
+                        setRequestType("Mentor")
+                      }
+                    }}
                     className="w-full bg-[#f2f1ed] text-gray-800 font-body text-xs px-4 py-3 rounded-2xl border-none focus:outline-none focus:ring-1 focus:ring-[#3b719f]/30 transition-all cursor-pointer"
                   >
-                    {mentors.filter(m => requestType === "Peer" ? m.name.startsWith("Peer:") : !m.name.startsWith("Peer:")).length > 0 ? (
-                      mentors.filter(m => requestType === "Peer" ? m.name.startsWith("Peer:") : !m.name.startsWith("Peer:")).map(m => (
-                        <option key={m.id} value={m.display}>{m.display}</option>
-                      ))
-                    ) : (
-                      <option value="">{requestType === "Peer" ? "No peer helpers online" : "No mentors available"}</option>
-                    )}
+                    <optgroup label="🎓 Academic Mentors">
+                      {mentors.filter(m => !m.name.startsWith("Peer:")).length > 0 ? (
+                        mentors.filter(m => !m.name.startsWith("Peer:")).map(m => (
+                          <option key={m.id} value={m.display}>{m.display}</option>
+                        ))
+                      ) : (
+                        <option value="" disabled>No academic mentors online</option>
+                      )}
+                    </optgroup>
+                    <optgroup label="👥 Student Peer Helpers">
+                      {mentors.filter(m => m.name.startsWith("Peer:")).length > 0 ? (
+                        mentors.filter(m => m.name.startsWith("Peer:")).map(m => (
+                          <option key={m.id} value={m.display}>{m.display}</option>
+                        ))
+                      ) : (
+                        <option value="" disabled>No peer helpers online</option>
+                      )}
+                    </optgroup>
                   </select>
                 </div>
 
