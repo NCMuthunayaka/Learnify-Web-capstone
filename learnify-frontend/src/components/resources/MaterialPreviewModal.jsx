@@ -13,8 +13,13 @@ function MaterialPreviewModal({ resource, isOpen, onClose, onDownload }) {
   const getFullUrl = (url) => {
     if (!url) return ""
     if (url.startsWith("http://") || url.startsWith("https://")) return url
-    const backendUrl = import.meta.env.VITE_BACKEND_URL || "http://localhost:5000"
-    return `${backendUrl}${url.startsWith("/") ? "" : "/"}${url}`
+    const backendUrl =
+      import.meta.env.VITE_BACKEND_URL ||
+      import.meta.env.VITE_API_URL?.replace(/\/api\/?$/, "") ||
+      "http://localhost:5000"
+    const cleanBackendUrl = backendUrl.replace(/\/$/, "")
+    const cleanUrl = url.startsWith("/") ? url : `/${url}`
+    return `${cleanBackendUrl}${cleanUrl}`
   }
 
   const currentResource = detailedResource || resource
@@ -63,7 +68,7 @@ function MaterialPreviewModal({ resource, isOpen, onClose, onDownload }) {
   // Get extension
   const getExtension = () => {
     if (!currentResource?.file_url) return ""
-    const parts = currentResource.file_url.split(".")
+    const parts = currentResource.file_url.split("?")[0].split(".")
     return parts.length > 1 ? parts.pop().toLowerCase() : ""
   }
 
@@ -117,20 +122,23 @@ function MaterialPreviewModal({ resource, isOpen, onClose, onDownload }) {
   const handleDownloadClick = async () => {
     if (onDownload) {
       onDownload(currentResource)
-    } else if (currentResource?.id) {
+      return
+    }
+    let targetUrl = fullUrl
+    if (currentResource?.id) {
       try {
         const res = await trackDownload(currentResource.id)
         if (res?.data?.file_url) {
-          window.open(getFullUrl(res.data.file_url), "_blank")
-        } else {
-          window.open(fullUrl, "_blank")
+          targetUrl = getFullUrl(res.data.file_url)
         }
       } catch (e) {
-        window.open(fullUrl, "_blank")
+        console.error("Track download warning:", e)
       }
-    } else {
-      window.open(fullUrl, "_blank")
     }
+    if (targetUrl && !targetUrl.includes("download=1")) {
+      targetUrl += (targetUrl.includes("?") ? "&" : "?") + "download=1"
+    }
+    window.open(targetUrl, "_blank")
   }
 
   const handleRate = async (newRating) => {

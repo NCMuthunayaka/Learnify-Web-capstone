@@ -474,7 +474,8 @@ def track_download(resource_id):
     # Build full URL for local files
     file_url = resource.file_url
     if file_url and file_url.startswith("/uploads/"):
-        file_url = f"http://localhost:5000{file_url}"
+        base_url = os.getenv("BACKEND_URL") or os.getenv("PUBLIC_URL") or request.host_url.rstrip("/")
+        file_url = f"{base_url}{file_url}?download=1"
 
     return success_response(
         data={"file_url": file_url},

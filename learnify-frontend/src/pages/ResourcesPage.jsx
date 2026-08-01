@@ -431,7 +431,22 @@ function ResourcesPage() {
   async function handleDownload(resource) {
     try {
       const response = await trackDownload(resource.id)
-      window.open(response.data.file_url, "_blank")
+      let downloadUrl = response?.data?.file_url || resource.file_url
+      if (downloadUrl) {
+        if (!downloadUrl.startsWith("http://") && !downloadUrl.startsWith("https://")) {
+          const backendUrl =
+            import.meta.env.VITE_BACKEND_URL ||
+            import.meta.env.VITE_API_URL?.replace(/\/api\/?$/, "") ||
+            "http://localhost:5000"
+          const cleanBackendUrl = backendUrl.replace(/\/$/, "")
+          const cleanUrl = downloadUrl.startsWith("/") ? downloadUrl : `/${downloadUrl}`
+          downloadUrl = `${cleanBackendUrl}${cleanUrl}`
+        }
+        if (!downloadUrl.includes("download=1")) {
+          downloadUrl += (downloadUrl.includes("?") ? "&" : "?") + "download=1"
+        }
+        window.open(downloadUrl, "_blank")
+      }
     } catch (err) {
       console.error("Download failed:", err)
       setError("Failed to download. Please try again.")
