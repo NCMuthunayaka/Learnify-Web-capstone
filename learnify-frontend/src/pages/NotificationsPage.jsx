@@ -111,25 +111,15 @@ function NotificationsPage() {
   }
 
   async function handleMarkRead(notification) {
-    // Navigate to action_url if exists
-    if (notification.action_url && !notification.is_read) {
-      await markAsRead(notification.id).catch(() => {})
+    if (!notification.is_read) {
+      markAsRead(notification.id).catch(() => {})
       setNotifications(prev => prev.map(n =>
         n.id === notification.id ? { ...n, is_read: true } : n
       ))
-      navigate(notification.action_url)
-      return
     }
 
-    if (notification.is_read) return
-
-    try {
-      await markAsRead(notification.id)
-      setNotifications(prev => prev.map(n =>
-        n.id === notification.id ? { ...n, is_read: true } : n
-      ))
-    } catch (err) {
-      console.error("Failed to mark as read:", err)
+    if (notification.action_url) {
+      navigate(notification.action_url)
     }
   }
 
