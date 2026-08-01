@@ -194,7 +194,7 @@ def get_dashboard_stats():
             until_time = format_time(avail_rows[0][2])
             max_requests = avail_rows[0][3]
 
-        # 3. Calculate Ticket Counts (Open vs Resolved)
+        # 3. Calculate Ticket Counts (Open vs Resolved) & Dynamic Metrics
         open_count = db.session.execute(
             text(
                 "SELECT COUNT(*) FROM help_requests "
@@ -211,6 +211,29 @@ def get_dashboard_stats():
             ),
             {"uid": user_id}
         ).scalar() or 0
+
+        # Dynamic total students helped (distinct students served)
+        total_students_helped_count = db.session.execute(
+            text(
+                "SELECT COUNT(DISTINCT student_id) FROM help_requests "
+                "WHERE assigned_to = :uid AND status = 'resolved'"
+            ),
+            {"uid": user_id}
+        ).scalar() or 0
+
+        # Dynamic average response time in minutes
+        avg_resp_row = db.session.execute(
+            text(
+                "SELECT AVG(TIMESTAMPDIFF(MINUTE, created_at, updated_at)) FROM help_requests "
+                "WHERE assigned_to = :uid AND status IN ('accepted', 'in_progress', 'resolved')"
+            ),
+            {"uid": user_id}
+        ).scalar()
+        avg_resp_min = round(float(avg_resp_row)) if avg_resp_row is not None else 0
+
+        # Override profile_data with live dynamic calculations
+        profile_data["total_students_helped"] = total_students_helped_count
+        profile_data["avg_response_time_min"] = avg_resp_min
 
         # 4. Fetch Active Today's Sessions (accepted or in_progress assigned to mentor)
         session_rows = db.session.execute(
