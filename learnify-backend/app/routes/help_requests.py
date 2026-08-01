@@ -181,6 +181,59 @@ def create_help_request():
         )
         db.session.commit()
 
+        # Sync seamlessly into Community Hub tables
+        try:
+            if assigned_to_id:
+                # Insert into direct_requests for private mentor messages
+                db.session.execute(text("""
+                    INSERT INTO direct_requests (sender_id, recipient_id, subject, initial_message, status, created_at)
+                    VALUES (:sid, :rid, :subj, :msg, 'pending', :now)
+                """), {
+                    "sid": user_id,
+                    "rid": assigned_to_id,
+                    "subj": title,
+                    "msg": description,
+                    "now": datetime.utcnow()
+                })
+                db.session.commit()
+
+                dr_id = db.session.execute(text("SELECT LAST_INSERT_ID()")).scalar()
+                db.session.execute(text("""
+                    INSERT INTO direct_messages (request_id, sender_id, body, created_at)
+                    VALUES (:tid, :sid, :msg, :now)
+                """), {"tid": dr_id, "sid": user_id, "msg": description, "now": datetime.utcnow()})
+                db.session.commit()
+
+                if attachment_url:
+                    db.session.execute(text("""
+                        INSERT INTO request_attachments (request_id, request_type, file_url, file_name, file_size, uploaded_by, created_at)
+                        VALUES (:rid, 'direct', :furl, 'Attachment', 0, :uid, :now)
+                    """), {"rid": dr_id, "furl": attachment_url, "uid": user_id, "now": datetime.utcnow()})
+                    db.session.commit()
+            else:
+                # Insert into public_requests for Public Forum Q&A
+                db.session.execute(text("""
+                    INSERT INTO public_requests (requester_id, subject_id, title, description, status, created_at)
+                    VALUES (:uid, :subid, :title, :desc, 'open', :now)
+                """), {
+                    "uid": user_id,
+                    "subid": subject_id,
+                    "title": title,
+                    "desc": description,
+                    "now": datetime.utcnow()
+                })
+                db.session.commit()
+
+                pr_id = db.session.execute(text("SELECT LAST_INSERT_ID()")).scalar()
+                if attachment_url:
+                    db.session.execute(text("""
+                        INSERT INTO request_attachments (request_id, request_type, file_url, file_name, file_size, uploaded_by, created_at)
+                        VALUES (:rid, 'public', :furl, 'Attachment', 0, :uid, :now)
+                    """), {"rid": pr_id, "furl": attachment_url, "uid": user_id, "now": datetime.utcnow()})
+                    db.session.commit()
+        except Exception as sync_err:
+            print(f"Community sync warning: {sync_err}")
+
         # Send notification to assigned helper if specified
         if assigned_to_id:
             try:
@@ -191,9 +244,9 @@ def create_help_request():
                 create_notification(
                     user_id=assigned_to_id,
                     type_name="system",
-                    title="New Help Request",
-                    body=f"{sender_name} sent you a help request: '{title}'",
-                    action_url="/help"
+                    title="New Direct Request",
+                    body=f"{sender_name} sent you a direct request: '{title}'",
+                    action_url="/community"
                 )
             except Exception as notif_err:
                 print(f"Error creating notification: {notif_err}")
