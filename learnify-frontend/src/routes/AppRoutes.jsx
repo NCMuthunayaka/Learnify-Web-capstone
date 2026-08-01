@@ -43,10 +43,10 @@ function DashboardDispatcher() {
     const payload = JSON.parse(atob(token.split(".")[1]))
     const role = payload.role
     if (role === "mentor") {
-      return <Navigate to="/mentor/dashboard" replace />
+      return <MentorDashboardPage />
     }
     if (role === "admin") {
-      return <Navigate to="/admin/dashboard" replace />
+      return <AdminAnalyticsPage />
     }
   } catch (err) {
     console.error("Failed to parse token in dispatcher:", err)
@@ -193,6 +193,9 @@ function AppRoutes() {
           <Route path="/admin/profile" element={<PrivateRoute roles={["admin"]}><AdminProfilePage /></PrivateRoute>} />
           <Route path="/admin/profile/edit" element={<PrivateRoute roles={["admin"]}><AdminEditProfilePage /></PrivateRoute>} />
           <Route path="/admin/change-password" element={<PrivateRoute roles={["admin"]}><AdminChangePasswordPage /></PrivateRoute>} />
+
+          {/* Catch-all fallback route for safety */}
+          <Route path="*" element={<Navigate to="/dashboard" replace />} />
 
         </Route>
 
