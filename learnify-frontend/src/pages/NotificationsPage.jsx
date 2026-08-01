@@ -1,8 +1,7 @@
 import { useState, useEffect } from "react"
-import { Clock, BookOpen, AlertCircle, CheckCheck, Trash2, Bell } from "lucide-react"
+import { Clock, BookOpen, AlertCircle, CheckCheck, Trash2, Bell, BellRing, Filter } from "lucide-react"
 import { useNavigate } from "react-router-dom"
 import Button from "../components/common/Button"
-import Badge from "../components/common/Badge"
 import Tooltip from "../components/common/Tooltip"
 import LoadingSpinner from "../components/common/LoadingSpinner"
 import ErrorMessage from "../components/common/ErrorMessage"
@@ -25,11 +24,11 @@ function NotificationIcon({ type }) {
     mentor_reply: { icon: AlertCircle, bg: "bg-yellow-100", color: "text-yellow-500" },
     achievement:  { icon: AlertCircle, bg: "bg-pink-100",   color: "text-pink-500"   },
     reminder:     { icon: Clock,       bg: "bg-orange-100", color: "text-orange-500" },
+    approval:     { icon: CheckCheck,  bg: "bg-emerald-100",color: "text-emerald-500"},
   }
   const { icon: Icon, bg, color } = config[type] || config.system
   return (
-    <div className={`w-10 h-10 rounded-full ${bg} flex items-center
-      justify-center flex-shrink-0`}>
+    <div className={`w-10 h-10 rounded-full ${bg} flex items-center justify-center flex-shrink-0 shadow-sm`}>
       <Icon size={18} className={color} />
     </div>
   )
@@ -152,7 +151,6 @@ function NotificationsPage() {
     return acc
   }, {})
 
-  // Always show in Today → Yesterday → Earlier order
   const grouped = GROUP_ORDER
     .filter(g => groupMap[g]?.length > 0)
     .map(g => [g, groupMap[g]])
@@ -162,176 +160,189 @@ function NotificationsPage() {
 
   if (loading) {
     return (
-      <div className="flex items-center justify-center h-64">
+      <div className="flex items-center justify-center min-h-[60vh]">
         <LoadingSpinner size="lg" label="Loading notifications..." />
       </div>
     )
   }
 
   return (
-    <div className="max-w-3xl space-y-5">
+    <div className="min-h-screen w-full flex flex-col items-center px-4 py-8">
+      <div className="w-full max-w-2xl mx-auto space-y-6">
 
-      {/* Header */}
-      <div className="flex items-center justify-between">
-        <div>
-          <h2 className="font-heading text-2xl font-bold text-[#0A1931]">
-            Notifications
-          </h2>
-          <p className="font-body text-sm text-gray-400 mt-1">
-            {unreadCount > 0
-              ? `You have ${unreadCount} unread notification${unreadCount > 1 ? "s" : ""}`
-              : "All caught up! No unread notifications"}
-          </p>
-        </div>
-        {unreadCount > 0 && (
-          <Button variant="secondary" icon={CheckCheck} onClick={handleMarkAllRead}>
-            Mark all as read
-          </Button>
-        )}
-      </div>
-
-      {/* Error */}
-      {error && (
-        <ErrorMessage message={error} onRetry={fetchNotifications}
-          onDismiss={() => setError("")} />
-      )}
-
-      {/* Filter Tabs */}
-      <div className="bg-white rounded-2xl p-1.5 shadow-sm
-        border border-gray-100 flex flex-wrap gap-1">
-        {filterTabs.map((tab) => {
-          const count = getTabCount(tab)
-          return (
-            <button
-              key={tab}
-              onClick={() => setActiveFilter(tab)}
-              className={`font-body text-xs font-medium px-4 py-2
-                rounded-xl transition-colors duration-200 flex items-center gap-1.5
-                ${activeFilter === tab
-                  ? "bg-[#1A3D63] text-white"
-                  : "text-gray-400 hover:text-[#1A3D63] hover:bg-gray-50"}`}
-            >
-              {tab}
-              {/* Show count badge on tabs that have items */}
-              {count > 0 && tab !== "All" && (
-                <span className={`font-body text-[10px] font-bold px-1.5 py-0.5
-                  rounded-full min-w-[18px] text-center
-                  ${activeFilter === tab
-                    ? "bg-white/20 text-white"
-                    : tab === "Unread"
-                    ? "bg-red-100 text-red-500"
-                    : "bg-gray-100 text-gray-500"}`}>
-                  {count}
-                </span>
-              )}
-            </button>
-          )
-        })}
-      </div>
-
-      {/* Empty States */}
-      {hasNoNotifications ? (
-        <div className="bg-white rounded-2xl p-12 shadow-sm
-          border border-gray-100 text-center">
-          <Bell size={32} className="text-gray-200 mx-auto mb-3" />
-          <p className="font-heading text-sm font-semibold text-gray-300">
-            No notifications yet
-          </p>
-          <p className="font-body text-xs text-gray-200 mt-1">
-            You'll be notified about resources, deadlines and more
-          </p>
-        </div>
-      ) : hasNoResults ? (
-        <div className="bg-white rounded-2xl p-12 shadow-sm
-          border border-gray-100 text-center">
-          <Bell size={32} className="text-gray-200 mx-auto mb-3" />
-          <p className="font-heading text-sm font-semibold text-gray-300">
-            No {activeFilter.toLowerCase()} notifications
-          </p>
-          <button
-            onClick={() => setActiveFilter("All")}
-            className="font-body text-xs text-[#4A7FA7] hover:text-[#1A3D63]
-              mt-3 transition-colors font-medium"
-          >
-            View all notifications
-          </button>
-        </div>
-      ) : (
-        /* Notification Groups — in fixed order */
-        grouped.map(([date, items]) => (
-          <div key={date} className="space-y-2">
-            <p className="font-body text-xs font-semibold text-gray-400
-              uppercase tracking-wider px-1">
-              {date}
-            </p>
-
-            <div className="bg-white rounded-2xl shadow-sm
-              border border-gray-100 overflow-hidden">
-              {items.map((notification, index) => (
-                <div
-                  key={notification.id}
-                  className={`flex items-start gap-4 px-5 py-4
-                    transition-colors hover:bg-gray-50 cursor-pointer
-                    ${index !== items.length - 1 ? "border-b border-gray-50" : ""}
-                    ${!notification.is_read ? "bg-blue-50/40" : "bg-white"}`}
-                  onClick={() => handleMarkRead(notification)}
-                >
-                  <NotificationIcon type={notification.type} />
-
-                  <div className="flex-1 min-w-0">
-                    <div className="flex items-start justify-between gap-2">
-                      <p className={`font-body text-sm leading-tight
-                        ${!notification.is_read
-                          ? "font-semibold text-[#0A1931]"
-                          : "font-medium text-gray-600"}`}>
-                        {notification.title}
-                      </p>
-                      <div className="flex items-center gap-2 flex-shrink-0">
-                        {!notification.is_read && (
-                          <span className="w-2 h-2 rounded-full bg-blue-500
-                            flex-shrink-0" />
-                        )}
-                        <Tooltip text="Delete" position="left">
-                          <button
-                            onClick={(e) => handleDelete(e, notification.id)}
-                            className="p-1 text-gray-200 hover:text-red-400
-                              transition-colors rounded"
-                          >
-                            <Trash2 size={13} />
-                          </button>
-                        </Tooltip>
-                      </div>
-                    </div>
-                    <p className="font-body text-xs text-gray-400
-                      mt-0.5 leading-relaxed">
-                      {notification.body}
-                    </p>
-                    <div className="flex items-center gap-2 mt-1">
-                      <p className="font-body text-[11px] text-gray-300">
-                        {formatTime(notification.created_at)}
-                      </p>
-                      {/* Show clickable link if action_url exists */}
-                      {notification.action_url && (
-                        <button
-                          type="button"
-                          onClick={(e) => {
-                            e.stopPropagation()
-                            handleMarkRead(notification)
-                          }}
-                          className="font-body text-[11px] font-bold text-[#4A7FA7] hover:text-[#1A3D63] transition-colors border-none bg-transparent cursor-pointer p-0 underline"
-                        >
-                          View →
-                        </button>
-                      )}
-                    </div>
-                  </div>
-                </div>
-              ))}
+        {/* ── Hero Header Banner ── */}
+        <div className="bg-gradient-to-r from-[#0A1931] to-[#1A3D63] rounded-3xl px-8 py-7 shadow-lg flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+          <div className="flex items-center gap-4">
+            <div className="w-12 h-12 rounded-2xl bg-white/10 flex items-center justify-center border border-white/10 shadow">
+              {unreadCount > 0
+                ? <BellRing size={24} className="text-amber-300 animate-pulse" />
+                : <Bell size={24} className="text-white/70" />
+              }
+            </div>
+            <div>
+              <h1 className="font-heading text-xl font-bold text-white">Notifications</h1>
+              <p className="font-body text-xs text-gray-300 mt-0.5">
+                {unreadCount > 0
+                  ? <span className="text-amber-300 font-semibold">{unreadCount} unread</span>
+                  : "All caught up!"}
+                {" "}· {notifications.length} total
+              </p>
             </div>
           </div>
-        ))
-      )}
+          {unreadCount > 0 && (
+            <button
+              onClick={handleMarkAllRead}
+              className="flex items-center gap-2 bg-white/10 hover:bg-white/20 border border-white/20 text-white font-body text-xs font-semibold px-4 py-2.5 rounded-xl transition-all cursor-pointer"
+            >
+              <CheckCheck size={14} />
+              Mark all read
+            </button>
+          )}
+        </div>
 
+        {/* ── Error ── */}
+        {error && (
+          <ErrorMessage message={error} onRetry={fetchNotifications} onDismiss={() => setError("")} />
+        )}
+
+        {/* ── Filter Tabs ── */}
+        <div className="bg-white rounded-2xl p-1.5 shadow-sm border border-gray-100">
+          <div className="flex flex-wrap gap-1">
+            {filterTabs.map((tab) => {
+              const count = getTabCount(tab)
+              const isActive = activeFilter === tab
+              return (
+                <button
+                  key={tab}
+                  onClick={() => setActiveFilter(tab)}
+                  className={`font-body text-xs font-medium px-4 py-2 rounded-xl transition-all duration-200 flex items-center gap-1.5 cursor-pointer border-none ${
+                    isActive
+                      ? "bg-[#1A3D63] text-white shadow-sm"
+                      : "text-gray-500 hover:text-[#1A3D63] hover:bg-gray-50"
+                  }`}
+                >
+                  {tab}
+                  {count > 0 && tab !== "All" && (
+                    <span className={`font-body text-[10px] font-bold px-1.5 py-0.5 rounded-full min-w-[18px] text-center ${
+                      isActive
+                        ? "bg-white/20 text-white"
+                        : tab === "Unread"
+                        ? "bg-red-100 text-red-500"
+                        : "bg-gray-100 text-gray-500"
+                    }`}>
+                      {count}
+                    </span>
+                  )}
+                </button>
+              )
+            })}
+          </div>
+        </div>
+
+        {/* ── Content ── */}
+        {hasNoNotifications ? (
+          /* Empty — no notifications at all */
+          <div className="bg-white rounded-3xl shadow-sm border border-gray-100 flex flex-col items-center justify-center py-20 px-8 text-center">
+            <div className="w-16 h-16 rounded-full bg-gray-50 border border-gray-100 flex items-center justify-center mb-5 shadow-inner">
+              <Bell size={28} className="text-gray-300" />
+            </div>
+            <h3 className="font-heading text-base font-bold text-gray-400">No notifications yet</h3>
+            <p className="font-body text-xs text-gray-300 mt-1.5 max-w-xs leading-relaxed">
+              You'll be notified about resources, deadlines, sessions, and community activity here.
+            </p>
+          </div>
+        ) : hasNoResults ? (
+          /* Empty for current filter */
+          <div className="bg-white rounded-3xl shadow-sm border border-gray-100 flex flex-col items-center justify-center py-20 px-8 text-center">
+            <div className="w-16 h-16 rounded-full bg-gray-50 border border-gray-100 flex items-center justify-center mb-5 shadow-inner">
+              <Filter size={24} className="text-gray-300" />
+            </div>
+            <h3 className="font-heading text-base font-bold text-gray-400">
+              No {activeFilter.toLowerCase()} notifications
+            </h3>
+            <button
+              onClick={() => setActiveFilter("All")}
+              className="font-body text-xs font-semibold text-[#4A7FA7] hover:text-[#1A3D63] mt-4 transition-colors border-none bg-transparent cursor-pointer underline"
+            >
+              View all notifications
+            </button>
+          </div>
+        ) : (
+          /* Notification Groups — in fixed Today → Yesterday → Earlier order */
+          <div className="space-y-5">
+            {grouped.map(([date, items]) => (
+              <div key={date} className="space-y-2">
+                {/* Date section label */}
+                <p className="font-body text-[11px] font-bold text-gray-400 uppercase tracking-widest px-1">
+                  {date}
+                </p>
+
+                <div className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden divide-y divide-gray-50">
+                  {items.map((notification) => (
+                    <div
+                      key={notification.id}
+                      className={`flex items-start gap-4 px-5 py-4 transition-colors hover:bg-gray-50/80 cursor-pointer group ${
+                        !notification.is_read ? "bg-blue-50/30" : "bg-white"
+                      }`}
+                      onClick={() => handleMarkRead(notification)}
+                    >
+                      <NotificationIcon type={notification.type} />
+
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-start justify-between gap-2">
+                          <p className={`font-body text-sm leading-snug ${
+                            !notification.is_read
+                              ? "font-semibold text-[#0A1931]"
+                              : "font-medium text-gray-600"
+                          }`}>
+                            {notification.title}
+                          </p>
+                          <div className="flex items-center gap-2 flex-shrink-0 mt-0.5">
+                            {!notification.is_read && (
+                              <span className="w-2 h-2 rounded-full bg-blue-500 flex-shrink-0" />
+                            )}
+                            <Tooltip text="Delete" position="left">
+                              <button
+                                onClick={(e) => handleDelete(e, notification.id)}
+                                className="p-1.5 text-gray-200 hover:text-red-400 hover:bg-red-50 rounded-lg transition-all opacity-0 group-hover:opacity-100 border-none cursor-pointer"
+                              >
+                                <Trash2 size={13} />
+                              </button>
+                            </Tooltip>
+                          </div>
+                        </div>
+
+                        <p className="font-body text-xs text-gray-400 mt-0.5 leading-relaxed">
+                          {notification.body}
+                        </p>
+
+                        <div className="flex items-center gap-3 mt-1.5">
+                          <span className="font-body text-[11px] text-gray-300">
+                            {formatTime(notification.created_at)}
+                          </span>
+                          {notification.action_url && (
+                            <button
+                              type="button"
+                              onClick={(e) => {
+                                e.stopPropagation()
+                                handleMarkRead(notification)
+                              }}
+                              className="font-body text-[11px] font-bold text-[#4A7FA7] hover:text-[#1A3D63] transition-colors border-none bg-transparent cursor-pointer p-0"
+                            >
+                              View →
+                            </button>
+                          )}
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+
+      </div>
     </div>
   )
 }
