@@ -89,7 +89,7 @@ function CandidateDetailModal({ candidate, onClose, onApprove, onReject, actione
                     <BookOpen size={13} className="text-[#3b719f]" /> EXPERIENCE
                   </span>
                   <span className="font-heading text-lg font-extrabold text-[#0A1931] mt-1">
-                    {candidate.experience || "—"}
+                    {candidate.total_points ?? 0} Pts · {candidate.peer_assistance_count ?? 0} Helps
                   </span>
                 </div>
 
@@ -100,6 +100,28 @@ function CandidateDetailModal({ candidate, onClose, onApprove, onReject, actione
                   <span className="font-heading text-lg font-extrabold text-[#0A1931] mt-1">
                     {timeAgo(candidate.created_at)}
                   </span>
+                </div>
+              </div>
+
+              {/* Automated Platform Performance Card */}
+              <div className="bg-[#EBF3F9] border border-[#B3CFE5] rounded-2xl p-4 space-y-2">
+                <span className="font-bold text-[#1A3D63] uppercase tracking-wider text-[10px] flex items-center gap-1.5">
+                  <Sparkles size={13} className="text-amber-500" />
+                  AUTOMATED PLATFORM PERFORMANCE
+                </span>
+                <div className="grid grid-cols-3 gap-2.5 pt-1">
+                  <div className="bg-white p-2.5 rounded-xl border border-slate-200/80 text-center">
+                    <span className="font-body text-[10px] text-slate-400 font-bold uppercase block">Activity Points</span>
+                    <span className="font-heading text-sm font-extrabold text-[#0A1931]">{candidate.total_points ?? 0} Pts</span>
+                  </div>
+                  <div className="bg-white p-2.5 rounded-xl border border-slate-200/80 text-center">
+                    <span className="font-body text-[10px] text-slate-400 font-bold uppercase block">Peer Helps</span>
+                    <span className="font-heading text-sm font-extrabold text-[#0A1931]">{candidate.peer_assistance_count ?? 0} Helps</span>
+                  </div>
+                  <div className="bg-white p-2.5 rounded-xl border border-slate-200/80 text-center">
+                    <span className="font-body text-[10px] text-slate-400 font-bold uppercase block">Study Streak</span>
+                    <span className="font-heading text-sm font-extrabold text-[#0A1931]">{candidate.study_streak_days ?? 0} Days</span>
+                  </div>
                 </div>
               </div>
 

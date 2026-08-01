@@ -228,6 +228,59 @@ def delete_user(user_id):
     return success_response(message="User deleted")
 
 
+def get_user_platform_performance(user_id):
+    total_points = 0
+    study_streak_days = 0
+    semester_goal_pct = 0.0
+    try:
+        sp_row = db.session.execute(
+            text("SELECT total_points, study_streak_days, semester_goal_pct FROM student_profiles WHERE user_id = :uid"),
+            {"uid": user_id}
+        ).fetchone()
+        if sp_row:
+            total_points = sp_row[0] or 0
+            study_streak_days = sp_row[1] or 0
+            semester_goal_pct = float(sp_row[2] or 0.0)
+    except Exception:
+        pass
+
+    pub_cnt = 0
+    dir_cnt = 0
+    help_cnt = 0
+    try:
+        pub_cnt = db.session.execute(
+            text("SELECT COUNT(*) FROM public_replies WHERE author_id = :uid"),
+            {"uid": user_id}
+        ).scalar() or 0
+    except Exception:
+        pass
+
+    try:
+        dir_cnt = db.session.execute(
+            text("SELECT COUNT(*) FROM direct_messages WHERE sender_id = :uid"),
+            {"uid": user_id}
+        ).scalar() or 0
+    except Exception:
+        pass
+
+    try:
+        help_cnt = db.session.execute(
+            text("SELECT COUNT(*) FROM help_requests WHERE student_id = :uid OR assigned_to = :uid"),
+            {"uid": user_id}
+        ).scalar() or 0
+    except Exception:
+        pass
+
+    peer_assistance_count = pub_cnt + dir_cnt + help_cnt
+
+    return {
+        "total_points": total_points,
+        "peer_assistance_count": peer_assistance_count,
+        "study_streak_days": study_streak_days,
+        "semester_goal_pct": semester_goal_pct
+    }
+
+
 # ── GET /api/admin/approvals/pending ─────────────────────────
 @bp.route("/approvals/pending", methods=["GET"])
 @jwt_required()
@@ -258,8 +311,11 @@ def get_pending_approvals():
             {"limit": PAGE_SIZE, "offset": (page - 1) * PAGE_SIZE}
         ).fetchall()
 
-        users = [
-            {
+        users = []
+        for r in rows:
+            uid = r[1]
+            perf = get_user_platform_performance(uid)
+            users.append({
                 "application_id": r[0],
                 "id": r[1],
                 "name": r[2],
@@ -268,10 +324,13 @@ def get_pending_approvals():
                 "certifications": r[5],
                 "created_at": r[6].isoformat() if r[6] else None,
                 "role": "mentor",
-                "status": "pending"
-            }
-            for r in rows
-        ]
+                "status": "pending",
+                "total_points": perf["total_points"],
+                "peer_assistance_count": perf["peer_assistance_count"],
+                "study_streak_days": perf["study_streak_days"],
+                "semester_goal_pct": perf["semester_goal_pct"],
+                "experience": f"{perf['total_points']} Pts · {perf['peer_assistance_count']} Assists"
+            })
     except Exception as e:
         print(f"Error querying mentor_applications: {e}")
         query = User.query.filter_by(status="pending")
