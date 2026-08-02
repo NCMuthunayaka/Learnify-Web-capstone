@@ -22,7 +22,7 @@ def send_reset_password_email(recipient_email, recipient_name, reset_url):
       <h2 style="color: #0A1931;">Reset Your Password</h2>
       <p style="color: #555;">Hi {recipient_name or 'there'},</p>
       <p style="color: #555;">
-        You requested a password reset for your Learnify account.
+        You requested a password reset for your WhisperHive account.
         Click the button below to reset your password.
         This link expires in <strong>1 hour</strong>.
       </p>
@@ -35,7 +35,7 @@ def send_reset_password_email(recipient_email, recipient_name, reset_url):
       </p>
       <hr style="border: none; border-top: 1px solid #eee;" />
       <p style="color: #999; font-size: 11px;">
-        © 2026 Learnify · Sabaragamuwa University of Sri Lanka
+        © 2026 WhisperHive · Sabaragamuwa University of Sri Lanka
       </p>
     </div>
     """
@@ -45,7 +45,7 @@ def send_reset_password_email(recipient_email, recipient_name, reset_url):
         try:
             print(f"📧 Sending reset email via Resend API to {recipient_email}...")
             # Resend requires onboarding@resend.dev for unverified domains
-            resend_from = os.environ.get("RESEND_FROM_EMAIL", "Learnify <onboarding@resend.dev>")
+            resend_from = os.environ.get("RESEND_FROM_EMAIL", "WhisperHive <onboarding@resend.dev>")
 
             resp = requests.post(
                 "https://api.resend.com/emails",
@@ -56,7 +56,7 @@ def send_reset_password_email(recipient_email, recipient_name, reset_url):
                 json={
                     "from": resend_from,
                     "to": [recipient_email],
-                    "subject": "Reset Your Learnify Password",
+                    "subject": "Reset Your WhisperHive Password",
                     "html": html_content,
                 },
                 timeout=10
@@ -76,7 +76,7 @@ def send_reset_password_email(recipient_email, recipient_name, reset_url):
     try:
         sender = current_app.config.get("MAIL_DEFAULT_SENDER") or current_app.config.get("MAIL_USERNAME")
         msg = Message(
-            subject="Reset Your Learnify Password",
+            subject="Reset Your WhisperHive Password",
             recipients=[recipient_email],
             sender=sender,
             html=html_content
