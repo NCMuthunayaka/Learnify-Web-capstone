@@ -11,11 +11,11 @@ import StarRating from "../common/StarRating"
 const buildFullUrl = (url) => {
   if (!url || typeof url !== "string") return ""
   if (url.startsWith("http://") || url.startsWith("https://")) return url
-  const backendUrl =
+  const rawBackend =
     import.meta.env.VITE_BACKEND_URL ||
-    import.meta.env.VITE_API_URL?.replace(/\/api\/?$/, "") ||
+    import.meta.env.VITE_API_URL ||
     "http://localhost:5000"
-  const cleanBackend = backendUrl.replace(/\/$/, "")
+  const cleanBackend = rawBackend.replace(/\/api\/?$/, "").replace(/\/$/, "")
   const cleanPath = url.startsWith("/") ? url : `/${url}`
   return `${cleanBackend}${cleanPath}`
 }
@@ -159,9 +159,29 @@ function MaterialPreviewModal({ resource, isOpen, onClose, onDownload }) {
     e?.preventDefault(); e?.stopPropagation()
     if (typeof onClose === "function") onClose()
   }
-  const handleOpenTab = (e) => {
+  const handleOpenTab = async (e) => {
     e?.preventDefault(); e?.stopPropagation()
-    if (fullUrl) window.open(fullUrl, "_blank", "noopener,noreferrer")
+    if (!fullUrl) return
+    if (blobUrl) {
+      window.open(blobUrl, "_blank")
+      return
+    }
+    try {
+      const token = localStorage.getItem("access_token")
+      const res = await fetch(fullUrl, {
+        headers: token ? { Authorization: `Bearer ${token}` } : {},
+      })
+      if (res.ok) {
+        const blob = await res.blob()
+        const url = URL.createObjectURL(blob)
+        window.open(url, "_blank")
+        setTimeout(() => URL.revokeObjectURL(url), 10000)
+        return
+      }
+    } catch (err) {
+      console.error("Open in tab fetch error:", err)
+    }
+    window.open(fullUrl, "_blank", "noopener,noreferrer")
   }
   const handleDownloadClick = async (e) => {
     e?.preventDefault(); e?.stopPropagation()

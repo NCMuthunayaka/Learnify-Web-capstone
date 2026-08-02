@@ -433,11 +433,11 @@ function ResourcesPage() {
       let downloadUrl = resource?.file_url
       if (downloadUrl) {
         if (!downloadUrl.startsWith("http://") && !downloadUrl.startsWith("https://")) {
-          const backendUrl =
+          const rawBackend =
             import.meta.env.VITE_BACKEND_URL ||
-            import.meta.env.VITE_API_URL?.replace(/\/api\/?$/, "") ||
+            import.meta.env.VITE_API_URL ||
             "http://localhost:5000"
-          const cleanBackendUrl = backendUrl.replace(/\/$/, "")
+          const cleanBackendUrl = rawBackend.replace(/\/api\/?$/, "").replace(/\/$/, "")
           const cleanUrl = downloadUrl.startsWith("/") ? downloadUrl : `/${downloadUrl}`
           downloadUrl = `${cleanBackendUrl}${cleanUrl}`
         }
