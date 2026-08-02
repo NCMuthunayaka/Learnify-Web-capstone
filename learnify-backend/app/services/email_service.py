@@ -40,7 +40,35 @@ def send_reset_password_email(recipient_email, recipient_name, reset_url):
     </div>
     """
 
-    # Method 1: Resend HTTP API (HTTPS Port 443 — Never blocked on Railway)
+    # Method 1: Brevo HTTP API (300 free emails/day to ANY recipient worldwide)
+    brevo_api_key = os.environ.get("BREVO_API_KEY", "").strip()
+    if brevo_api_key:
+        try:
+            print(f"📧 Sending reset email via Brevo API to {recipient_email}...")
+            sender_email = os.environ.get("MAIL_USERNAME") or "noreply@whisperhive.com"
+            resp = requests.post(
+                "https://api.brevo.com/v3/smtp/email",
+                headers={
+                    "api-key": brevo_api_key,
+                    "Content-Type": "application/json"
+                },
+                json={
+                    "sender": {"name": "WhisperHive", "email": sender_email},
+                    "to": [{"email": recipient_email}],
+                    "subject": "Reset Your WhisperHive Password",
+                    "htmlContent": html_content,
+                },
+                timeout=10
+            )
+            if resp.status_code in (200, 201):
+                print(f"✅ Email delivered successfully via Brevo API: {resp.json()}")
+                return True, resp.json()
+            else:
+                print(f"⚠️ Brevo API error ({resp.status_code}): {resp.text}")
+        except Exception as e:
+            print(f"⚠️ Brevo HTTP API error: {e}")
+
+    # Method 2: Resend HTTP API (HTTPS Port 443 — Never blocked on Railway)
     if resend_api_key:
         try:
             print(f"📧 Sending reset email via Resend API to {recipient_email}...")
