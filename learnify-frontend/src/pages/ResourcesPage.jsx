@@ -428,7 +428,7 @@ function ResourcesPage() {
   }
 
   // ── Handle download ────────────────────────────────────
-  function handleDownload(resource) {
+  async function handleDownload(resource) {
     try {
       let downloadUrl = resource?.file_url
       if (downloadUrl) {
@@ -445,19 +445,35 @@ function ResourcesPage() {
           downloadUrl += (downloadUrl.includes("?") ? "&" : "?") + "download=1"
         }
 
-        // Direct anchor download to bypass browser popup blocker
-        const link = document.createElement("a")
-        link.href = downloadUrl
-        link.target = "_blank"
-        link.rel = "noopener noreferrer"
-        if (resource.title) {
-          link.download = resource.title
+        // Fetch file as blob with auth token to avoid browser error windows
+        const token = localStorage.getItem("access_token")
+        const response = await fetch(downloadUrl, {
+          headers: token ? { Authorization: `Bearer ${token}` } : {},
+        })
+
+        if (!response.ok) {
+          throw new Error(`Download failed: ${response.status}`)
         }
+
+        const blob = await response.blob()
+        const blobUrl = URL.createObjectURL(blob)
+
+        // Determine filename from resource title + extension
+        const ext = resource.file_url?.split("?")[0].split(".").pop() || ""
+        const title = resource.title || "download"
+        const fileName = title.includes(".") ? title : `${title}.${ext}`
+
+        const link = document.createElement("a")
+        link.href = blobUrl
+        link.download = fileName
         document.body.appendChild(link)
         link.click()
         document.body.removeChild(link)
 
-        // Track download count in background without blocking execution
+        // Clean up blob URL
+        setTimeout(() => URL.revokeObjectURL(blobUrl), 1000)
+
+        // Track download count in background
         if (resource.id) {
           trackDownload(resource.id).catch((err) =>
             console.error("Track download warning:", err)

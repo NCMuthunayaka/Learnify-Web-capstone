@@ -14,7 +14,7 @@ const studentNavItems = [
   { label: "Scheduler",    icon: CalendarDays,    path: "/scheduler"  },
   { label: "Progress",     icon: TrendingUp,      path: "/progress"   },
   { label: "AI Assistant", icon: Bot,             path: "/ai-chat"    },
-  { label: "Materials",    icon: BookOpen,        path: "/resources"  },
+  { label: "Study Materials", icon: BookOpen,        path: "/resources"  },
   { label: "Community",    icon: Users,           path: "/community"  },
   { label: "Feedback",     icon: MessageSquare,   path: "/feedback"   },
 ]

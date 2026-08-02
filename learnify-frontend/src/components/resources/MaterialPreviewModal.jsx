@@ -36,6 +36,8 @@ function MaterialPreviewModal({ resource, isOpen, onClose, onDownload }) {
   const [fileStatus, setFileStatus]             = useState(STATUS.IDLE)
   const [docPreviewFailed, setDocPreviewFailed] = useState(false)
   const [iframeKey, setIframeKey]               = useState(0)
+  const [blobUrl, setBlobUrl]                   = useState(null)
+  const [loadingBlob, setLoadingBlob]           = useState(false)
 
   const currentResource = detailedResource || resource || {}
   const fullUrl = buildFullUrl(currentResource?.file_url)
@@ -79,6 +81,7 @@ function MaterialPreviewModal({ resource, isOpen, onClose, onDownload }) {
     if (isOpen && resource?.id) {
       setDetailedResource(resource)
       setDocPreviewFailed(false)
+      setBlobUrl(null)
       getResource(resource.id)
         .then((res) => { if (res?.data) setDetailedResource(res.data) })
         .catch((err) => console.error("Error fetching resource details:", err))
@@ -87,6 +90,7 @@ function MaterialPreviewModal({ resource, isOpen, onClose, onDownload }) {
       setTextContent(null)
       setFileStatus(STATUS.IDLE)
       setDocPreviewFailed(false)
+      if (blobUrl) { URL.revokeObjectURL(blobUrl); setBlobUrl(null) }
     }
   }, [isOpen, resource?.id])
 
@@ -94,6 +98,41 @@ function MaterialPreviewModal({ resource, isOpen, onClose, onDownload }) {
   useEffect(() => {
     if (isOpen && fullUrl) checkFile(fullUrl)
   }, [isOpen, fullUrl, checkFile])
+
+  // ── Fetch file as blob for preview (handles CORS/auth) ───
+  useEffect(() => {
+    if (!isOpen || !fullUrl || isDoc || isText) return
+    // Only fetch blob for PDF, video, image, audio
+    if (!isPdf && !isVideo && !isImage && !isAudio) return
+    let cancelled = false
+    setLoadingBlob(true)
+    const token = localStorage.getItem("access_token")
+    fetch(fullUrl, {
+      headers: token ? { Authorization: `Bearer ${token}` } : {},
+    })
+      .then((res) => {
+        if (!res.ok) throw new Error(`HTTP ${res.status}`)
+        return res.blob()
+      })
+      .then((blob) => {
+        if (!cancelled) {
+          const url = URL.createObjectURL(blob)
+          setBlobUrl(url)
+          setFileStatus(STATUS.OK)
+        }
+      })
+      .catch((err) => {
+        console.error("Blob fetch failed, falling back to direct URL:", err)
+        if (!cancelled) setFileStatus(STATUS.OK) // optimistic fallback
+      })
+      .finally(() => { if (!cancelled) setLoadingBlob(false) })
+    return () => { cancelled = true }
+  }, [isOpen, fullUrl, isPdf, isVideo, isImage, isAudio, isDoc, isText])
+
+  // ── Clean up blob URL on unmount ──────────────────────────
+  useEffect(() => {
+    return () => { if (blobUrl) URL.revokeObjectURL(blobUrl) }
+  }, [blobUrl])
 
   // ── Fetch text content for text files ────────────────────
   useEffect(() => {
@@ -124,19 +163,41 @@ function MaterialPreviewModal({ resource, isOpen, onClose, onDownload }) {
     e?.preventDefault(); e?.stopPropagation()
     if (fullUrl) window.open(fullUrl, "_blank", "noopener,noreferrer")
   }
-  const handleDownloadClick = (e) => {
+  const handleDownloadClick = async (e) => {
     e?.preventDefault(); e?.stopPropagation()
     if (onDownload) { onDownload(currentResource); return }
     if (!fullUrl) return
-    let targetUrl = fullUrl
-    if (!targetUrl.includes("download=1"))
-      targetUrl += (targetUrl.includes("?") ? "&" : "?") + "download=1"
-    const link = document.createElement("a")
-    link.href = targetUrl; link.target = "_blank"; link.rel = "noopener noreferrer"
-    if (currentResource?.title) link.download = currentResource.title
-    document.body.appendChild(link); link.click(); document.body.removeChild(link)
-    if (currentResource?.id)
-      trackDownload(currentResource.id).catch((err) => console.error("Track download warning:", err))
+    try {
+      let targetUrl = fullUrl
+      if (!targetUrl.includes("download=1"))
+        targetUrl += (targetUrl.includes("?") ? "&" : "?") + "download=1"
+
+      // Fetch file as blob with auth token to avoid browser error windows
+      const token = localStorage.getItem("access_token")
+      const response = await fetch(targetUrl, {
+        headers: token ? { Authorization: `Bearer ${token}` } : {},
+      })
+      if (!response.ok) throw new Error(`Download failed: ${response.status}`)
+
+      const blob = await response.blob()
+      const blobUrl = URL.createObjectURL(blob)
+
+      const ext = getExtension(currentResource?.file_url) || ""
+      const title = currentResource?.title || "download"
+      const fileName = title.includes(".") ? title : `${title}.${ext}`
+
+      const link = document.createElement("a")
+      link.href = blobUrl
+      link.download = fileName
+      document.body.appendChild(link); link.click(); document.body.removeChild(link)
+
+      setTimeout(() => URL.revokeObjectURL(blobUrl), 1000)
+
+      if (currentResource?.id)
+        trackDownload(currentResource.id).catch((err) => console.error("Track download warning:", err))
+    } catch (err) {
+      console.error("Download failed:", err)
+    }
   }
   const handleRate = async (newRating) => {
     if (!currentResource?.id) return
@@ -161,13 +222,15 @@ function MaterialPreviewModal({ resource, isOpen, onClose, onDownload }) {
   }
 
   // ── Preview renderer ──────────────────────────────────────
+  const previewUrl = blobUrl || fullUrl // prefer blob, fallback to direct
+
   const renderPreview = () => {
     // Loading check
-    if (fileStatus === STATUS.CHECKING) {
+    if (fileStatus === STATUS.CHECKING || loadingBlob) {
       return (
         <div className="flex flex-col items-center justify-center gap-3 text-slate-400 py-16">
           <Loader2 size={32} className="animate-spin text-[#4A7FA7]" />
-          <p className="font-body text-sm">Checking file availability...</p>
+          <p className="font-body text-sm">{loadingBlob ? "Loading preview..." : "Checking file availability..."}</p>
         </div>
       )
     }
@@ -198,7 +261,7 @@ function MaterialPreviewModal({ resource, isOpen, onClose, onDownload }) {
         <div className="w-full h-[65vh] flex flex-col rounded-xl overflow-hidden border border-slate-200 shadow-sm bg-white">
           <iframe
             key={iframeKey}
-            src={`${fullUrl}#toolbar=1&navpanes=0`}
+            src={`${previewUrl}#toolbar=1&navpanes=0`}
             className="w-full flex-1 border-none"
             title={currentResource.title || "PDF Preview"}
           />
@@ -219,7 +282,7 @@ function MaterialPreviewModal({ resource, isOpen, onClose, onDownload }) {
     if (isImage) {
       return (
         <div className="flex items-center justify-center w-full h-full max-h-[65vh] bg-white rounded-xl p-4 shadow-sm border border-slate-200 overflow-hidden">
-          <img src={fullUrl} alt={currentResource.title || "Image Material"}
+          <img src={previewUrl} alt={currentResource.title || "Image Material"}
             className="max-h-[60vh] max-w-full object-contain rounded-lg shadow-sm" />
         </div>
       )
@@ -229,7 +292,7 @@ function MaterialPreviewModal({ resource, isOpen, onClose, onDownload }) {
     if (isVideo) {
       return (
         <div className="w-full max-w-4xl bg-black rounded-xl overflow-hidden shadow-lg border border-slate-800">
-          <video src={fullUrl} controls autoPlay={false} className="w-full max-h-[65vh]">
+          <video src={previewUrl} controls autoPlay={false} className="w-full max-h-[65vh]">
             Your browser does not support the video tag.
           </video>
         </div>
@@ -246,7 +309,7 @@ function MaterialPreviewModal({ resource, isOpen, onClose, onDownload }) {
           <h4 className="font-heading font-semibold text-slate-800 text-base mb-4">
             {currentResource.title || "Audio Material"}
           </h4>
-          <audio src={fullUrl} controls className="w-full">Your browser does not support the audio element.</audio>
+          <audio src={previewUrl} controls className="w-full">Your browser does not support the audio element.</audio>
         </div>
       )
     }

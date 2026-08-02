@@ -63,10 +63,13 @@ def create_app(config_name="development"):
         allowed_origins = [url.strip().rstrip("/") for url in frontend_url_env.split(",") if url.strip()]
         
     cors.init_app(app,
-        resources={r"/api/*": {"origins": allowed_origins}},
+        resources={
+            r"/api/*":     {"origins": allowed_origins},
+            r"/uploads/*": {"origins": allowed_origins},
+        },
         supports_credentials=allowed_origins != "*",
         allow_headers=["Content-Type", "Authorization", "X-Refresh-Token",],
-        methods=["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"]
+        methods=["GET", "HEAD", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"]
     )
 
     # ── Auto-ensure database tables & columns exist ──────────
@@ -156,8 +159,11 @@ def create_app(config_name="development"):
 
     # ── Serve uploaded files ──────────────────────────────
     # This makes /uploads/filename.pdf accessible from browser
-    @app.route("/uploads/<path:filename>")
+    @app.route("/uploads/<path:filename>", methods=["GET", "HEAD", "OPTIONS"])
     def serve_file(filename):
+        # Handle CORS preflight
+        if request.method == "OPTIONS":
+            return "", 204
         upload_folder = app.config["UPLOAD_FOLDER"]
         as_attachment = request.args.get("download", "0") == "1"
         download_name = request.args.get("name")
