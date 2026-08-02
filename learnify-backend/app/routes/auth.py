@@ -231,8 +231,10 @@ def forgot_password():
         db.session.add(reset)
         db.session.commit()
 
-        # Build reset URL
-        frontend_url = os.environ.get("FRONTEND_URL", "http://localhost:3000").rstrip("/")
+        # Build reset URL cleanly handling comma-separated FRONTEND_URL values
+        raw_frontend_url = os.environ.get("FRONTEND_URL", "https://learnify-web-capstone-git-main-muthunayaka.vercel.app")
+        urls = [u.strip().rstrip("/") for u in raw_frontend_url.split(",") if u.strip()]
+        frontend_url = next((u for u in urls if "vercel.app" in u or "railway.app" in u or "whisperhive" in u), urls[0] if urls else "https://learnify-web-capstone-git-main-muthunayaka.vercel.app")
         reset_url = f"{frontend_url}/reset-password?token={token}"
 
 
