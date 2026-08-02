@@ -308,7 +308,7 @@ def test_email():
             "MAIL_NOT_CONFIGURED",
             "MAIL_USERNAME or MAIL_PASSWORD environment variables are missing on the server.",
             details=diag,
-            status=500
+            status=200
         )
 
     try:
@@ -332,7 +332,7 @@ def test_email():
             "MAIL_SEND_FAILED",
             f"Failed to send email: {err_msg}",
             details={"config": diag, "error": err_msg},
-            status=500
+            status=200
         )
 
 
