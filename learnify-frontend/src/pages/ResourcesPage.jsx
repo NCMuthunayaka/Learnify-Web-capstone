@@ -428,10 +428,9 @@ function ResourcesPage() {
   }
 
   // ── Handle download ────────────────────────────────────
-  async function handleDownload(resource) {
+  function handleDownload(resource) {
     try {
-      const response = await trackDownload(resource.id)
-      let downloadUrl = response?.data?.file_url || resource.file_url
+      let downloadUrl = resource?.file_url
       if (downloadUrl) {
         if (!downloadUrl.startsWith("http://") && !downloadUrl.startsWith("https://")) {
           const backendUrl =
@@ -445,7 +444,25 @@ function ResourcesPage() {
         if (!downloadUrl.includes("download=1")) {
           downloadUrl += (downloadUrl.includes("?") ? "&" : "?") + "download=1"
         }
-        window.open(downloadUrl, "_blank")
+
+        // Direct anchor download to bypass browser popup blocker
+        const link = document.createElement("a")
+        link.href = downloadUrl
+        link.target = "_blank"
+        link.rel = "noopener noreferrer"
+        if (resource.title) {
+          link.download = resource.title
+        }
+        document.body.appendChild(link)
+        link.click()
+        document.body.removeChild(link)
+
+        // Track download count in background without blocking execution
+        if (resource.id) {
+          trackDownload(resource.id).catch((err) =>
+            console.error("Track download warning:", err)
+          )
+        }
       }
     } catch (err) {
       console.error("Download failed:", err)

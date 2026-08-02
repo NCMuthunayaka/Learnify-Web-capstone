@@ -108,7 +108,8 @@ def create_app(config_name="development"):
     def serve_file(filename):
         upload_folder = app.config["UPLOAD_FOLDER"]
         as_attachment = request.args.get("download", "0") == "1"
-        return send_from_directory(upload_folder, filename, as_attachment=as_attachment)
+        download_name = request.args.get("name")
+        return send_from_directory(upload_folder, filename, as_attachment=as_attachment, download_name=download_name)
 
     # Register blueprints
     app.register_blueprint(auth.bp,          url_prefix="/api/auth")

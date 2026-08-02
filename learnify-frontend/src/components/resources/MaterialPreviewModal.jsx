@@ -119,26 +119,34 @@ function MaterialPreviewModal({ resource, isOpen, onClose, onDownload }) {
 
   if (!isOpen || !resource) return null
 
-  const handleDownloadClick = async () => {
+  const handleDownloadClick = () => {
     if (onDownload) {
       onDownload(currentResource)
       return
     }
     let targetUrl = fullUrl
-    if (currentResource?.id) {
-      try {
-        const res = await trackDownload(currentResource.id)
-        if (res?.data?.file_url) {
-          targetUrl = getFullUrl(res.data.file_url)
-        }
-      } catch (e) {
-        console.error("Track download warning:", e)
-      }
-    }
     if (targetUrl && !targetUrl.includes("download=1")) {
       targetUrl += (targetUrl.includes("?") ? "&" : "?") + "download=1"
     }
-    window.open(targetUrl, "_blank")
+
+    // Direct anchor element click to bypass browser popup blockers
+    const link = document.createElement("a")
+    link.href = targetUrl
+    link.target = "_blank"
+    link.rel = "noopener noreferrer"
+    if (currentResource?.title) {
+      link.download = currentResource.title
+    }
+    document.body.appendChild(link)
+    link.click()
+    document.body.removeChild(link)
+
+    // Track download count in background
+    if (currentResource?.id) {
+      trackDownload(currentResource.id).catch((e) =>
+        console.error("Track download warning:", e)
+      )
+    }
   }
 
   const handleRate = async (newRating) => {
