@@ -98,13 +98,15 @@ export default function AdminEditProfilePage() {
           await api.post("/users/profile/image", fd, {
             headers: { "Content-Type": "multipart/form-data" },
           })
-        } catch {}
+        } catch {
+          pushToast("Photo upload failed — profile details will still be saved.", "error")
+        }
         localStorage.setItem(STORAGE_KEY, imagePreview)
         setProfileImage(imagePreview)
       }
 
       try {
-        await api.put("/auth/me", { name: form.name, phone: form.phone })
+        await api.patch("/users/profile", { name: form.name, phone: form.phone })
       } catch {}
 
       pushToast("Profile updated successfully!", "success")

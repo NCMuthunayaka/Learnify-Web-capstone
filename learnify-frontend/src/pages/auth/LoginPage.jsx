@@ -67,24 +67,38 @@ function LoginPage() {
   }
 
   const handleGoogleLogin = useGoogleLogin({
+    flow: "implicit",
+    ux_mode: "popup",
+    prompt: "select_account",
+    scope: "openid email profile",
     onSuccess: async (tokenResponse) => {
+      console.log("Google Login onSuccess triggered. Token Response:", tokenResponse)
       try {
         setGLoading(true)
         setApiError("")
-        const response                              = await googleAuth(tokenResponse.access_token)
+        const response                              = await googleAuth(tokenResponse.access_token, "login")
         const { user, access_token, refresh_token } = response.data
         login(user, access_token, refresh_token)
         navigate("/dashboard")
       } catch (err) {
+        console.error("Google Login Backend API failed:", err)
         setApiError(
-          err.response?.data?.error?.message || "Google login failed."
+          err.response?.data?.error?.message || "Google login failed. Please try again."
         )
       } finally {
         setGLoading(false)
       }
     },
-    onError: () => setApiError("Google login was cancelled or failed.")
+    onError: (error) => {
+      console.error("Google Login onError triggered. Error details:", error)
+      setApiError(
+        error?.error === "popup_closed_by_user"
+          ? "Google sign-in was cancelled."
+          : "Google login failed. Make sure popups are not blocked and try again."
+      )
+    }
   })
+
 
   return (
     <div className="relative min-h-screen w-full flex items-center justify-center">
@@ -105,7 +119,7 @@ function LoginPage() {
             Welcome Back To
           </p>
           <h1 className="font-heading text-4xl font-bold text-white mb-4">
-            Learnify
+            WhisperHive
           </h1>
           <p className="font-body text-white/60 text-sm leading-relaxed">
             Login to continue your learning journey.
@@ -133,7 +147,7 @@ function LoginPage() {
 
           {/* Google Button */}
           <button
-            onClick={() => handleGoogleLogin()}
+            onClick={handleGoogleLogin}
             disabled={loading || gLoading}
             className="w-full flex items-center justify-center gap-3
               bg-white text-gray-700 font-body text-sm font-medium

@@ -51,10 +51,22 @@ def submit_feedback():
         sentiment  = sentiment,
         confidence = confidence,
     )
-    db.session.add(fb)
-    db.session.commit()
-
     user = User.query.get(user_id)
+
+    # Notify mentor if feedback is assigned to a mentor
+    if data.get("mentor_id"):
+        try:
+            from app.services.notification_service import create_notification
+            create_notification(
+                user_id   = int(data["mentor_id"]),
+                type_name = "achievement",
+                title     = f"New Student Review ⭐ {rating}/5",
+                body      = f"{user.name if user else 'A student'} rated your session {rating}/5 stars: \"{data['comment'][:60]}\"" if data.get("comment") else f"{user.name if user else 'A student'} rated your mentoring session {rating}/5 stars.",
+                action_url = "/mentor/dashboard"
+            )
+        except Exception as e:
+            print(f"Error creating mentor feedback notification: {e}")
+
     return success_response(
         data    = fb.to_dict(user_name=user.name if user else None),
         message = "Feedback submitted successfully",

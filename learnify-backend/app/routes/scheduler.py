@@ -6,6 +6,19 @@ from app.utils.response_utils import success_response, error_response
 
 bp = Blueprint("scheduler", __name__)
 
+# Safety-net: map any AI-returned session_type to valid DB ENUM values
+SESSION_TYPE_MAP = {
+    "study":     "study",
+    "exam_prep": "exam_prep",
+    "break":     "break",
+    # Legacy / hallucinated values → map to closest valid ENUM
+    "revision":  "study",
+    "practice":  "study",
+    "rest":      "break",
+    "review":    "study",
+}
+
+
 
 # ── Helper: resolve student_id from user_id ───────────────
 def _get_student_profile_id(user_id: int):
@@ -27,12 +40,13 @@ def _get_student_profile_id(user_id: int):
 @jwt_required()
 def get_timetable():
     user_id = int(get_jwt_identity())
+    week_offset = request.args.get("week_offset", type=int, default=0)
 
     try:
         from datetime import date, timedelta
-        today     = date.today()
-        # Get Monday of current week
-        week_start = today - timedelta(days=today.weekday())
+        today      = date.today()
+        # Get Monday of week based on week_offset (+1 = +7 days, +2 = +14 days, etc.)
+        week_start = today - timedelta(days=today.weekday()) + timedelta(weeks=week_offset)
         week_end   = week_start + timedelta(days=6)
 
         rows = db.session.execute(
@@ -505,9 +519,10 @@ def generate_timetable():
     user_id = int(get_jwt_identity())
     data    = request.get_json(silent=True) or {}
 
-    intensity     = data.get("intensity", "Balanced (4-5 hrs/day)")
-    focus_subject = data.get("focus_subject", "General")
-    exam_date     = data.get("exam_date", "")
+    intensity         = data.get("intensity", "Balanced (4-5 hrs/day)")
+    focus_subject     = data.get("focus_subject", "General")
+    exam_date         = data.get("exam_date", "")
+    unavailable_slots = data.get("unavailable_slots", "")
 
     # Fetch the user's enrolled subjects for context
     try:
@@ -537,6 +552,7 @@ def generate_timetable():
             focus_subject=focus_subject,
             exam_date=exam_date,
             subjects=subjects,
+            unavailable_slots=unavailable_slots,
         )
     except RuntimeError as e:
         return error_response("AI_ERROR", str(e), status=503)
@@ -563,7 +579,9 @@ def generate_timetable():
             start_str  = session.get("start_time", "08:00")
             end_str    = session.get("end_time",   "10:00")
             subj_name  = session.get("subject", focus_subject)
-            sess_type  = session.get("session_type", "study")
+            sess_type  = SESSION_TYPE_MAP.get(
+                session.get("session_type", "study").lower(), "study"
+            )
 
             day_offset  = DAY_MAP.get(day_name, 0)
             session_date = week_start + timedelta(days=day_offset)

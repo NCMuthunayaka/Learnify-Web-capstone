@@ -1,4 +1,4 @@
-import { useState } from "react"
+import { useState, useEffect } from "react"
 import {
   Search, Filter, CheckCircle2, XCircle, Play, Send,
   Paperclip, Clock, AlertCircle, MessageSquare, BookOpen, User
@@ -7,90 +7,56 @@ import Avatar from "../../components/common/Avatar"
 import Badge from "../../components/common/Badge"
 import Button from "../../components/common/Button"
 import profileImg from "../../assets/icons/profile.png"
-
-// ── Mock Data for Student Help Requests ────────────────────
-const initialRequests = [
-  {
-    id: 101,
-    studentName: "Ashani Weerasinghe",
-    studentInitials: "AW",
-    subject: "Mathematics",
-    title: "Need help with Integration by Parts",
-    description: "I'm having trouble applying integration by parts to trigonometric functions. Specifically, when we have repeating integrals like e^x * sin(x). Any simple shortcut or method to remember the sequence?",
-    priority: "High",
-    status: "Pending",
-    date: "10 mins ago",
-    replies: []
-  },
-  {
-    id: 102,
-    studentName: "M. Nayana",
-    studentInitials: "MN",
-    subject: "Geometry",
-    title: "Proof by Contradiction in Triangles",
-    description: "I am confused on how to start the proof showing that a triangle cannot have more than one obtuse angle using proof by contradiction. What is the negation statement I should begin with?",
-    priority: "Medium",
-    status: "In Progress",
-    date: "1 hour ago",
-    replies: [
-      {
-        id: 1,
-        sender: "mentor",
-        content: "Hi Nayana, for proof by contradiction, start by assuming the opposite of what you want to prove. Assume the triangle *does* have two obtuse angles (both > 90 degrees). Then calculate the sum of angles. It will exceed 180 degrees, which contradicts the triangle sum theorem!",
-        time: "45 mins ago"
-      }
-    ]
-  },
-  {
-    id: 103,
-    studentName: "Kavindu Chamith",
-    studentInitials: "KC",
-    subject: "Statistics",
-    title: "Regression Analysis & R-Squared Value",
-    description: "Could you explain what a low R-squared value with a significant p-value means in a linear regression? Does it mean the model is still useful?",
-    priority: "Low",
-    status: "Resolved",
-    date: "Yesterday",
-    replies: [
-      {
-        id: 1,
-        sender: "mentor",
-        content: "A low R-squared but low p-value means that your independent variables are still statistically significant (there is a real relationship), but they do not explain much of the variability in the dependent variable. It is common in social sciences where behavior is hard to predict.",
-        time: "Yesterday, 3:00 PM"
-      },
-      {
-        id: 2,
-        sender: "student",
-        content: "That makes perfect sense. Thank you so much, Dr. Davis! I will mark this as resolved.",
-        time: "Yesterday, 4:15 PM"
-      }
-    ]
-  },
-  {
-    id: 104,
-    studentName: "Mugith Nayana",
-    studentInitials: "MN",
-    subject: "Algebra",
-    title: "Matrix Multiplication Dimensions mismatch",
-    description: "Why does multiplying a 3x2 matrix by a 3x2 matrix fail? I keep getting errors. What is the dimensional rule for matrix multiplication?",
-    priority: "High",
-    status: "Pending",
-    date: "2 hours ago",
-    replies: []
-  }
-]
+import LoadingSpinner from "../../components/common/LoadingSpinner"
+import {
+  getMentorRequests,
+  acceptRequest,
+  declineRequest,
+  resolveRequest,
+  sendRequestReply,
+  getMentorStats
+} from "../../api/mentorApi"
 
 export default function MentorRequestsPage() {
-  const [requests, setRequests] = useState(initialRequests)
+  const [requests, setRequests] = useState([])
   const [selectedRequestId, setSelectedRequestId] = useState(null)
   const [searchQuery, setSearchQuery] = useState("")
   const [statusFilter, setStatusFilter] = useState("All") // "All", "Pending", "In Progress", "Resolved"
   const [replyText, setReplyText] = useState("")
+  const [loading, setLoading] = useState(true)
+  const [avgResponse, setAvgResponse] = useState(15)
+
+  // Fetch help requests queue
+  const loadRequests = async () => {
+    try {
+      const response = await getMentorRequests()
+      setRequests(response.data.requests)
+    } catch (err) {
+      console.error("Failed to fetch help requests:", err)
+    }
+  }
+
+  useEffect(() => {
+    async function init() {
+      setLoading(true)
+      await loadRequests()
+      try {
+        const statsRes = await getMentorStats()
+        if (statsRes.data && statsRes.data.stats) {
+          setAvgResponse(statsRes.data.stats.avg_response)
+        }
+      } catch (err) {
+        console.error("Failed to load mentor stats:", err)
+      }
+      setLoading(false)
+    }
+    init()
+  }, [])
 
   // Calculate Metrics
-  const pendingCount = requests.filter(r => r.status === "Pending").length
-  const activeCount = requests.filter(r => r.status === "In Progress").length
-  const resolvedCount = requests.filter(r => r.status === "Resolved").length
+  const pendingCount = requests.filter(r => r.db_status === "pending").length
+  const activeCount = requests.filter(r => r.db_status === "in_progress" || r.db_status === "accepted").length
+  const resolvedCount = requests.filter(r => r.db_status === "resolved").length
 
   // Find currently selected request
   const selectedRequest = requests.find(r => r.id === selectedRequestId)
@@ -107,49 +73,59 @@ export default function MentorRequestsPage() {
   })
 
   // Action: Accept Request
-  function handleAccept(id) {
-    setRequests(prev => prev.map(r => r.id === id ? { ...r, status: "In Progress" } : r))
+  async function handleAccept(id) {
+    try {
+      await acceptRequest(id)
+      await loadRequests()
+    } catch (err) {
+      console.error("Failed to accept request:", err)
+    }
   }
 
   // Action: Decline Request
-  function handleDecline(id) {
+  async function handleDecline(id) {
     if (confirm("Are you sure you want to decline this request?")) {
-      setRequests(prev => prev.filter(r => r.id !== id))
-      if (selectedRequestId === id) {
-        setSelectedRequestId(null)
+      try {
+        await declineRequest(id)
+        await loadRequests()
+        if (selectedRequestId === id) {
+          setSelectedRequestId(null)
+        }
+      } catch (err) {
+        console.error("Failed to decline request:", err)
       }
     }
   }
 
   // Action: Resolve Request
-  function handleResolve(id) {
-    setRequests(prev => prev.map(r => r.id === id ? { ...r, status: "Resolved" } : r))
+  async function handleResolve(id) {
+    try {
+      await resolveRequest(id)
+      await loadRequests()
+    } catch (err) {
+      console.error("Failed to resolve request:", err)
+    }
   }
 
   // Action: Send Reply Message
-  function handleSendReply() {
+  async function handleSendReply() {
     if (!replyText.trim() || !selectedRequestId) return
 
-    const newReply = {
-      id: Date.now(),
-      sender: "mentor",
-      content: replyText,
-      time: "Just now"
+    try {
+      await sendRequestReply(selectedRequestId, replyText)
+      setReplyText("")
+      await loadRequests()
+    } catch (err) {
+      console.error("Failed to send reply:", err)
     }
+  }
 
-    setRequests(prev => prev.map(r => {
-      if (r.id === selectedRequestId) {
-        return {
-          ...r,
-          // Auto transition to "In Progress" if a message is sent on a "Pending" request
-          status: r.status === "Pending" ? "In Progress" : r.status,
-          replies: [...r.replies, newReply]
-        }
-      }
-      return r
-    }))
-
-    setReplyText("")
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center h-64">
+        <LoadingSpinner size="lg" label="Loading requests queue..." />
+      </div>
+    )
   }
 
   return (
@@ -194,7 +170,7 @@ export default function MentorRequestsPage() {
         <div className="bg-white rounded-2xl p-5 border border-gray-100 shadow-sm flex items-center justify-between">
           <div>
             <p className="font-body text-[10px] text-gray-400 uppercase tracking-wider font-semibold">Avg Response Time</p>
-            <span className="font-heading text-3xl font-extrabold text-teal-600 block mt-1">18 mins</span>
+            <span className="font-heading text-3xl font-extrabold text-teal-600 block mt-1">{avgResponse} mins</span>
           </div>
           <div className="w-10 h-10 rounded-xl bg-teal-50 text-teal-500 flex items-center justify-center">
             <Clock size={20} />
@@ -240,7 +216,7 @@ export default function MentorRequestsPage() {
       {/* ── 3. List-Detail Layout Workspace ── */}
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-stretch">
         
-        {/* Left Side: Requests List (5/12 width) */}
+        {/* Left Side: Requests List */}
         <div className="lg:col-span-5 space-y-3 max-h-[600px] overflow-y-auto pr-1">
           {filteredRequests.length === 0 ? (
             <div className="bg-white rounded-2xl p-8 border border-gray-100 text-center shadow-sm">
@@ -269,8 +245,8 @@ export default function MentorRequestsPage() {
 
                     <div className="flex flex-col items-end gap-1.5">
                       <span className={`px-2 py-0.5 rounded-full font-body text-[9px] font-bold ${
-                        req.status === "Pending" ? "bg-red-50 text-red-600 border border-red-100" :
-                        req.status === "In Progress" ? "bg-blue-50 text-blue-600 border border-blue-100" :
+                        req.db_status === "pending" ? "bg-red-50 text-red-600 border border-red-100" :
+                        req.db_status === "in_progress" || req.db_status === "accepted" ? "bg-blue-50 text-blue-600 border border-blue-100" :
                         "bg-green-50 text-green-600 border border-green-100"
                       }`}>
                         {req.status}
@@ -302,7 +278,7 @@ export default function MentorRequestsPage() {
           )}
         </div>
 
-        {/* Right Side: Request Details & Action Box (7/12 width) */}
+        {/* Right Side: Request Details & Action Box */}
         <div className="lg:col-span-7 bg-white rounded-2xl border border-gray-100 shadow-sm flex flex-col justify-between overflow-hidden min-h-[500px]">
           {selectedRequest ? (
             <div className="flex flex-col h-full justify-between flex-1">
@@ -318,8 +294,8 @@ export default function MentorRequestsPage() {
                 </div>
                 <div className="flex items-center gap-2">
                   <span className={`px-2.5 py-0.5 rounded-full font-body text-[10px] font-bold ${
-                    selectedRequest.status === "Pending" ? "bg-red-50 text-red-600 border border-red-100" :
-                    selectedRequest.status === "In Progress" ? "bg-blue-50 text-blue-600 border border-blue-100" :
+                    selectedRequest.db_status === "pending" ? "bg-red-50 text-red-600 border border-red-100" :
+                    selectedRequest.db_status === "in_progress" || selectedRequest.db_status === "accepted" ? "bg-blue-50 text-blue-600 border border-blue-100" :
                     "bg-green-50 text-green-600 border border-green-100"
                   }`}>
                     {selectedRequest.status}
@@ -335,15 +311,27 @@ export default function MentorRequestsPage() {
                   <h3 className="font-heading text-base font-extrabold text-[#0A1931] leading-snug">
                     {selectedRequest.title}
                   </h3>
-                  <div className="bg-gray-50 border border-gray-100 rounded-2xl p-4">
+                  <div className="bg-gray-50 border border-gray-100 rounded-2xl p-4 space-y-2">
                     <p className="font-body text-xs text-gray-600 leading-relaxed whitespace-pre-wrap">
                       {selectedRequest.description}
                     </p>
+                    {selectedRequest.attachment_url && (
+                      <div className="pt-2 border-t border-gray-200/60">
+                        <a
+                          href={`${import.meta.env.VITE_BACKEND_URL || "http://localhost:5000"}${selectedRequest.attachment_url}`}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="inline-flex items-center gap-1 font-body text-[11px] text-[#3b719f] hover:underline font-bold"
+                        >
+                          📎 View Student Attachment
+                        </a>
+                      </div>
+                    )}
                   </div>
                 </div>
 
                 {/* Primary Action bar for Pending tickets */}
-                {selectedRequest.status === "Pending" && (
+                {selectedRequest.db_status === "pending" && (
                   <div className="flex items-center gap-3 bg-red-50/40 border border-red-100 p-4 rounded-2xl">
                     <div className="flex-1">
                       <p className="font-body text-xs font-bold text-red-950">Awaiting Your Acceptance</p>
@@ -352,7 +340,7 @@ export default function MentorRequestsPage() {
                     <div className="flex gap-2">
                       <button
                         onClick={() => handleDecline(selectedRequest.id)}
-                        className="flex items-center gap-1 px-4 py-2 border border-red-200 text-red-600 bg-white hover:bg-red-50 rounded-xl font-body text-xs font-bold transition-all"
+                        className="flex items-center gap-1 px-4 py-2 border border-red-200 text-red-600 bg-white hover:bg-red-50 rounded-xl font-body text-xs font-bold transition-all cursor-pointer"
                       >
                         <XCircle size={13} />
                         Decline
@@ -387,7 +375,7 @@ export default function MentorRequestsPage() {
                         >
                           <Avatar
                             src={reply.sender === "mentor" ? null : profileImg}
-                            name={reply.sender === "mentor" ? "Dr. Davis" : selectedRequest.studentName}
+                            name={reply.senderName}
                             color={reply.sender === "mentor" ? "accent" : "primary"}
                             size="sm"
                           />
@@ -425,13 +413,13 @@ export default function MentorRequestsPage() {
                       className="flex-1 bg-transparent text-xs text-gray-700 placeholder-gray-400 focus:outline-none"
                     />
                     <div className="flex items-center gap-1">
-                      <button className="p-1 rounded-lg hover:bg-gray-100 text-gray-400 transition-colors">
+                      <button className="p-1 rounded-lg hover:bg-gray-100 text-gray-400 transition-colors border-none bg-transparent cursor-pointer">
                         <Paperclip size={14} />
                       </button>
                       <button
                         onClick={handleSendReply}
                         disabled={!replyText.trim()}
-                        className={`p-1.5 rounded-lg text-white shadow-md transition-all ${
+                        className={`p-1.5 rounded-lg text-white shadow-md transition-all border-none cursor-pointer ${
                           replyText.trim()
                             ? "bg-[#0A1931] hover:bg-[#1A3D63]"
                             : "bg-gray-300 cursor-not-allowed shadow-none"
@@ -442,7 +430,7 @@ export default function MentorRequestsPage() {
                     </div>
                   </div>
 
-                  {selectedRequest.status === "In Progress" && (
+                  {(selectedRequest.db_status === "in_progress" || selectedRequest.db_status === "accepted") && (
                     <button
                       onClick={() => handleResolve(selectedRequest.id)}
                       className="flex items-center justify-center gap-1.5 px-4 bg-green-600 hover:bg-green-700 text-white rounded-xl font-body text-xs font-bold shadow-sm transition-all border-none cursor-pointer"

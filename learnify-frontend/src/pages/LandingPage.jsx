@@ -63,7 +63,7 @@ const steps = [
     icon: setting,
     title: "Get Your Smart Schedule",
     description:
-      "Learnify auto-generates a personalized timetable based on your priorities and difficulty levels.",
+      "WhisperHive auto-generates a personalized timetable based on your priorities and difficulty levels.",
   },
   {
     number: "03",
@@ -87,13 +87,13 @@ function LandingPage() {
           {/* Left — Text */}
           <div className="flex-1 space-y-6">
             <h1 className="font-heading text-5xl font-bold text-[#0A1931] leading-tight">
-              Learnify <br />
+              WhisperHive <br />
               Study <br />
               Smarter, <br />
               <span className="text-[#4A7FA7]">Not Harder</span>
             </h1>
             <p className="font-body text-gray-600 text-base max-w-sm leading-relaxed">
-              Learnify generates personalized study schedules, connects you
+              WhisperHive generates personalized study schedules, connects you
               with mentors & peers, and tracks your progress — all in one place.
             </p>
             <div className="flex items-center gap-4">
@@ -120,7 +120,7 @@ function LandingPage() {
           <div className="flex-1 flex justify-center">
             <img
               src={heroImage}
-              alt="Learnify Hero"
+              alt="WhisperHive Hero"
               className="w-full max-w-md rounded-2xl object-cover shadow-lg"
             />
           </div>
@@ -232,7 +232,7 @@ function LandingPage() {
             Ready to Transform Your Study Routine?
           </h2>
           <p className="font-body text-sm text-gray-500 leading-relaxed">
-            Join Learnify today and experience smarter scheduling,
+            Join WhisperHive today and experience smarter scheduling,
             AI-powered guidance, and a supportive learning community.
           </p>
           <Link

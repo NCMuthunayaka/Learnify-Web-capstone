@@ -7,3 +7,10 @@ export async function getProgressSummary() {
     const response = await api.get("/progress/summary")
     return response.data
 }
+
+// GET /api/progress/report
+// Returns: AI study analysis report
+export async function getProgressReport() {
+    const response = await api.get("/progress/report")
+    return response.data
+}

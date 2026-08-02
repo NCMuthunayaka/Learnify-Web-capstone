@@ -3,8 +3,10 @@ import api from "./axiosInstance"
 // ── Timetable ─────────────────────────────────────────────
 // GET /api/scheduler/timetable
 // Returns the student's study sessions for the current week
-export async function getTimetable() {
-    const response = await api.get("/scheduler/timetable")
+export async function getTimetable(weekOffset = 0) {
+    const response = await api.get("/scheduler/timetable", {
+        params: { week_offset: weekOffset }
+    })
     return response.data
 }
 
@@ -48,11 +50,12 @@ export async function getSchedulerStats() {
 
 // ── AI Timetable Generation ───────────────────────────────
 // POST /api/scheduler/generate
-export async function generateTimetable({ intensity, focus_subject, exam_date }) {
+export async function generateTimetable({ intensity, focus_subject, exam_date, unavailable_slots }) {
     const response = await api.post("/scheduler/generate", {
         intensity,
         focus_subject,
         exam_date,
+        unavailable_slots,
     })
     return response.data
 }

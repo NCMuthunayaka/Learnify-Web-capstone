@@ -6,13 +6,12 @@ import Button from "../components/common/Button"
 import Badge from "../components/common/Badge"
 import LoadingSpinner from "../components/common/LoadingSpinner"
 import { getTasks, getSchedulerStats, getTimetable, generateTimetable, createTask, updateTaskStatus } from "../api/schedulerApi"
-import { getSubjects } from "../api/subjectsApi"
+import { getSubjects, createSubject } from "../api/subjectsApi"
 import { startSession, endSession } from "../api/trackingApi"
 
 // ── statsData is now built dynamically from API (see dynamicStats below)
 
 const days = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"]
-const timeSlots = ["8:00 AM", "10:00 AM", "12:00 PM", "1:00 PM", "3:00 PM", "5:00 PM"]
 
 const subjectColors = {
   Mathematics: "bg-[#0D2440]",
@@ -32,87 +31,31 @@ const subjectTextColors = {
   English: "text-[#0D2440]",
 }
 
-const timetable = {
-  "8:00 AM": {
-    Monday: { subject: "Mathematics", detail: "Calculus - Ch.4" },
-    Tuesday: null,
-    Wednesday: { subject: "Mathematics", detail: "Algebra" },
-    Thursday: null,
-    Friday: { subject: "Physics", detail: "Mechanics" },
-    Saturday: null,
-  },
-  "10:00 AM": {
-    Monday: { subject: "Chemistry", detail: "Organic - Lab" },
-    Tuesday: { subject: "Physics", detail: "Waves & Optics" },
-    Wednesday: { subject: "English", detail: "Essay Writing" },
-    Thursday: { subject: "Chemistry", detail: "Periodic Table" },
-    Friday: { subject: "Mathematics", detail: "Statistics" },
-    Saturday: { subject: "Biology", detail: "Cell Biology" },
-  },
-  "12:00 PM": {
-    Monday: null, Tuesday: null, Wednesday: null,
-    Thursday: null, Friday: null, Saturday: null,
-  },
-  "1:00 PM": {
-    Monday: { subject: "Biology", detail: "Genetics" },
-    Tuesday: { subject: "English Lit", detail: "Shakespeare" },
-    Wednesday: { subject: "Physics", detail: "Thermodynamics" },
-    Thursday: { subject: "Biology", detail: "Ecosystems" },
-    Friday: null,
-    Saturday: { subject: "Chemistry", detail: "Revision" },
-  },
-  "3:00 PM": {
-    Monday: { subject: "English", detail: "Reading" },
-    Tuesday: { subject: "Mathematics", detail: "Problem Set" },
-    Wednesday: null,
-    Thursday: { subject: "Mathematics", detail: "Practice" },
-    Friday: { subject: "Biology", detail: "Diagrams" },
-    Saturday: null,
-  },
-  "5:00 PM": {
-    Monday: null,
-    Tuesday: { subject: "Chemistry", detail: "Past Papers" },
-    Wednesday: { subject: "Biology", detail: "Flash Cards" },
-    Thursday: { subject: "English", detail: "Poetry" },
-    Friday: null,
-    Saturday: { subject: "Mathematics", detail: "Mock Test" },
-  },
+// Helper: convert 24h hour to readable slot label
+function hourToSlotLabel(hour) {
+  if (hour === 0) return "12:00 AM"
+  if (hour < 12) return `${hour}:00 AM`
+  if (hour === 12) return "12:00 PM"
+  return `${hour - 12}:00 PM`
 }
 
-const todaysSessions = [
-  {
-    subject: "Mathematics — Statistics",
-    detail: "Chapter 7: Probability",
-    time: "8:00 – 9:30 AM",
-    status: "Done",
-    statusColor: "text-green-500",
-    dot: "bg-blue-500",
-  },
-  {
-    subject: "Physics — Thermodynamics",
-    detail: "Heat Transfer & Entropy",
-    time: "10:00 – 11:30 AM",
-    status: "Active",
-    statusColor: "text-yellow-500",
-    dot: "bg-sky-500",
-  },
-  {
-    subject: "Chemistry — Organic Lab",
-    detail: "Organic reactions write-up",
-    time: "1:00 – 2:30 PM",
-    status: "Soon",
-    statusColor: "text-gray-400",
-    dot: "bg-cyan-500",
-  },
-  {
-    subject: "English — Essay Writing",
-    detail: "Argumentative structure",
-    time: "3:00 – 4:00 PM",
-    status: "Soon",
-    statusColor: "text-gray-400",
-    dot: "bg-indigo-500",
-  },
-]
+// Helper: get Monday of the week for a given offset from current week
+function getWeekStart(offset = 0) {
+  const d = new Date()
+  const day = d.getDay()
+  const diff = d.getDate() - day + (day === 0 ? -6 : 1) + (offset * 7)
+  const monday = new Date(d.getFullYear(), d.getMonth(), diff)
+  monday.setHours(0, 0, 0, 0)
+  return monday
+}
+
+function formatWeekRange(weekStart) {
+  const weekEnd = new Date(weekStart)
+  weekEnd.setDate(weekEnd.getDate() + 6)
+  const opts = { month: "short", day: "numeric" }
+  const yearOpts = { ...opts, year: "numeric" }
+  return `${weekStart.toLocaleDateString([], opts)} – ${weekEnd.toLocaleDateString([], yearOpts)}`
+}
 
 
 
@@ -150,11 +93,15 @@ function SchedulerPage() {
   const [intensity, setIntensity] = useState("Balanced (4–5 hrs/day)")
   const [subject, setSubject]     = useState("Mathematics")
   const [examDate, setExamDate]   = useState("")
+  const [unavailableSlots, setUnavailableSlots] = useState("")
   const [generating, setGenerating] = useState(false)
   const [generateMsg, setGenerateMsg] = useState(null)
   const [allSubjects, setAllSubjects] = useState([])
   const [isCustomSubject, setIsCustomSubject] = useState(false)
   const [customSubjectName, setCustomSubjectName] = useState("")
+
+  // ── Week navigation state ──────────────────────────────
+  const [weekOffset, setWeekOffset] = useState(0)
 
   // ── Live API state ────────────────────────────────────
   const [apiStats, setApiStats]           = useState(null)
@@ -204,13 +151,7 @@ function SchedulerPage() {
       const dayName = daysOfWeek[dateObj.getDay()]
       
       const hour = dateObj.getHours()
-      let slot = null
-      if (hour === 8) slot = "8:00 AM"
-      else if (hour === 10) slot = "10:00 AM"
-      else if (hour === 12) slot = "12:00 PM"
-      else if (hour === 13) slot = "1:00 PM"
-      else if (hour === 15) slot = "3:00 PM"
-      else if (hour === 17) slot = "5:00 PM"
+      const slot = hourToSlotLabel(hour)
 
       handleOpenModal(
         slot || "",
@@ -240,7 +181,7 @@ function SchedulerPage() {
         const [statsRes, tasksRes, timetableRes, subjectsRes] = await Promise.allSettled([
           getSchedulerStats(),
           getTasks(),
-          getTimetable(),
+          getTimetable(weekOffset),
           getSubjects(),
         ])
         if (statsRes.status === "fulfilled") setApiStats(statsRes.value?.data ?? statsRes.value)
@@ -251,7 +192,7 @@ function SchedulerPage() {
       finally { setStatsLoading(false) }
     }
     loadSchedulerData()
-  }, [])
+  }, [weekOffset])
 
   useEffect(() => {
     if (allSubjects.length > 0 && !subject) {
@@ -265,7 +206,7 @@ function SchedulerPage() {
       const [statsRes, tasksRes, timetableRes] = await Promise.allSettled([
         getSchedulerStats(),
         getTasks(),
-        getTimetable(),
+        getTimetable(weekOffset),
       ])
       if (statsRes.status === "fulfilled") setApiStats(statsRes.value?.data ?? statsRes.value)
       if (tasksRes.status === "fulfilled") setApiTasks((tasksRes.value?.data ?? tasksRes.value)?.tasks || [])
@@ -288,6 +229,7 @@ function SchedulerPage() {
         intensity,
         focus_subject: finalSubject,
         exam_date: examDate,
+        unavailable_slots: unavailableSlots,
       })
       const resData = res?.data ?? res
       const count = resData?.sessions_created || 0
@@ -336,40 +278,54 @@ function SchedulerPage() {
       color:   s.color_hex,
     }))
 
-  // Build dynamic timetable grid from apiTimetable
+  // Build dynamic timetable grid from apiTimetable — auto-discover time slots
   const dynamicTimetable = {}
-  timeSlots.forEach(slot => {
-    dynamicTimetable[slot] = {
-      Monday: null, Tuesday: null, Wednesday: null, Thursday: null, Friday: null, Saturday: null, Sunday: null
-    }
-  })
+  const discoveredSlots = new Set()
+  const daysOfWeek = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"]
 
   apiTimetable.forEach(session => {
     if (!session.start_time) return
     const dateObj = new Date(session.start_time)
-    const daysOfWeek = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"]
     const dayName = daysOfWeek[dateObj.getDay()]
-    
     const hour = dateObj.getHours()
-    let slot = null
-    if (hour === 8) slot = "8:00 AM"
-    else if (hour === 10) slot = "10:00 AM"
-    else if (hour === 12) slot = "12:00 PM"
-    else if (hour === 13) slot = "1:00 PM"
-    else if (hour === 15) slot = "3:00 PM"
-    else if (hour === 17) slot = "5:00 PM"
-    
-    if (slot && dayName in dynamicTimetable[slot]) {
-      dynamicTimetable[slot][dayName] = {
-        id: session.id,
-        subject: session.subject_name,
-        detail: session.session_type,
-        completed: session.completed,
-        color_hex: session.color_hex,
-        raw: session
+    const slot = hourToSlotLabel(hour)
+
+    discoveredSlots.add(hour) // track the raw hour for sorting
+
+    if (!dynamicTimetable[slot]) {
+      dynamicTimetable[slot] = {
+        Monday: null, Tuesday: null, Wednesday: null, Thursday: null, Friday: null, Saturday: null, Sunday: null
+      }
+    }
+
+    dynamicTimetable[slot][dayName] = {
+      id: session.id,
+      subject: session.subject_name,
+      detail: session.session_type,
+      completed: session.completed,
+      color_hex: session.color_hex,
+      raw: session
+    }
+  })
+
+  // Sort time slots chronologically
+  const sortedHours = [...discoveredSlots].sort((a, b) => a - b)
+  const timeSlots = sortedHours.length > 0
+    ? sortedHours.map(h => hourToSlotLabel(h))
+    : ["8:00 AM", "10:00 AM", "12:00 PM", "1:00 PM", "3:00 PM", "5:00 PM"]
+
+  // Ensure all displayed slots have entries in dynamicTimetable
+  timeSlots.forEach(slot => {
+    if (!dynamicTimetable[slot]) {
+      dynamicTimetable[slot] = {
+        Monday: null, Tuesday: null, Wednesday: null, Thursday: null, Friday: null, Saturday: null, Sunday: null
       }
     }
   })
+
+  // Compute current week range for display
+  const currentWeekStart = getWeekStart(weekOffset)
+  const weekRangeLabel = formatWeekRange(currentWeekStart)
 
   // Timetable study status logs state (initialised with logs to sum to exactly 24.5h and 18 completed sessions)
   const [timetableLogs, setTimetableLogs] = useState({})
@@ -386,6 +342,7 @@ function SchedulerPage() {
   const [isTaskModalOpen, setIsTaskModalOpen] = useState(false)
   const [taskTitle, setTaskTitle] = useState("")
   const [taskSubjectId, setTaskSubjectId] = useState("")
+  const [customTaskSubject, setCustomTaskSubject] = useState("")
   const [taskDueDate, setTaskDueDate] = useState("")
   const [taskType, setTaskType] = useState("assignment")
   const [taskCreateLoading, setTaskCreateLoading] = useState(false)
@@ -401,19 +358,35 @@ function SchedulerPage() {
       setTaskCreateError("Subject is required.")
       return
     }
+    if (taskSubjectId === "NEW_CUSTOM_SUBJECT" && !customTaskSubject.trim()) {
+      setTaskCreateError("Please type the new subject name.")
+      return
+    }
     try {
       setTaskCreateLoading(true)
       setTaskCreateError(null)
+
+      let finalSubjectId = taskSubjectId
+      if (taskSubjectId === "NEW_CUSTOM_SUBJECT") {
+        const newSubRes = await createSubject(customTaskSubject.trim())
+        finalSubjectId = newSubRes.data.id
+
+        // Refresh subjects dropdown list
+        const refreshedSubs = await getSubjects()
+        setAllSubjects(refreshedSubs.data || [])
+      }
+
       await createTask({
         title: taskTitle.trim(),
-        subject_id: taskSubjectId,
+        subject_id: parseInt(finalSubjectId),
         due_date: taskDueDate,
         type: taskType
       })
       await reloadTimetable()
       setIsTaskModalOpen(false)
+      setCustomTaskSubject("")
     } catch (err) {
-      setTaskCreateError("Failed to create task on server.")
+      setTaskCreateError("Failed to create task or subject on server.")
     } finally {
       setTaskCreateLoading(false)
     }
@@ -488,10 +461,10 @@ function SchedulerPage() {
   const totalHours = apiStats
     ? apiStats.weekly_hours
     : Object.values(timetableLogs).reduce((sum, log) => sum + log.hours, 0)
-  const focusScore = apiStats ? apiStats.focus_score : 91
-  const upcomingCount = apiStats ? apiStats.upcoming_deadlines : 4
-  const weekDeadlines = apiStats ? apiStats.week_deadlines : 2
-  const completionRate = apiStats ? apiStats.completion_rate : 86
+  const focusScore = apiStats ? apiStats.focus_score : 0
+  const upcomingCount = apiStats ? apiStats.upcoming_deadlines : 0
+  const weekDeadlines = apiStats ? apiStats.week_deadlines : 0
+  const completionRate = apiStats ? apiStats.completion_rate : 0
 
   const dynamicStats = [
     {
@@ -572,22 +545,57 @@ function SchedulerPage() {
         {/* Weekly Timetable — spans 2 cols */}
         <div className="lg:col-span-2 bg-white rounded-2xl p-6 shadow-lg border border-gray-100">
 
-          <div className="flex items-center justify-between mb-4">
+          <div className="flex flex-wrap items-center justify-between gap-2 mb-4">
             <h3 className="font-heading text-sm font-semibold text-[#0A1931]">
               Weekly Timetable
             </h3>
             <div className="flex items-center gap-2">
-              <button className="p-1 rounded hover:bg-gray-100
-                text-gray-400 transition-colors">
+              <button
+                onClick={() => setWeekOffset(prev => prev - 1)}
+                className="p-1 rounded hover:bg-gray-100 text-gray-400 transition-colors"
+                title="Previous Week"
+              >
                 <ChevronLeft size={16} />
               </button>
-              <span className="font-body text-xs text-gray-500">
-                Apr 14 – Apr 20, 2026
+              <span className="font-body text-xs font-bold text-[#0A1931]">
+                {weekRangeLabel}
               </span>
-              <button className="p-1 rounded hover:bg-gray-100
-                text-gray-400 transition-colors">
+              <button
+                onClick={() => setWeekOffset(prev => prev + 1)}
+                className="p-1 rounded hover:bg-gray-100 text-gray-400 transition-colors"
+                title="Next Week (+7 Days)"
+              >
                 <ChevronRight size={16} />
               </button>
+
+              <div className="flex items-center gap-1 ml-2">
+                {weekOffset !== 0 && (
+                  <button
+                    onClick={() => setWeekOffset(0)}
+                    className="font-body text-[10px] font-bold text-[#4A7FA7] hover:underline bg-blue-50 px-2 py-0.5 rounded-md"
+                  >
+                    Today
+                  </button>
+                )}
+                <button
+                  onClick={() => setWeekOffset(1)}
+                  className={`font-body text-[10px] font-semibold px-2 py-0.5 rounded-md transition-colors ${
+                    weekOffset === 1 ? "bg-[#1A3D63] text-white" : "bg-gray-100 text-gray-600 hover:bg-gray-200"
+                  }`}
+                  title="View Next Week (+7 Days)"
+                >
+                  +7 Days
+                </button>
+                <button
+                  onClick={() => setWeekOffset(2)}
+                  className={`font-body text-[10px] font-semibold px-2 py-0.5 rounded-md transition-colors ${
+                    weekOffset === 2 ? "bg-[#1A3D63] text-white" : "bg-gray-100 text-gray-600 hover:bg-gray-200"
+                  }`}
+                  title="View 2 Weeks Forward (+14 Days)"
+                >
+                  +14 Days
+                </button>
+              </div>
             </div>
           </div>
 
@@ -737,9 +745,9 @@ function SchedulerPage() {
                   <button
                     type="button"
                     onClick={() => setIsCustomSubject(!isCustomSubject)}
-                    className="font-body text-[10px] text-[#4A7FA7] hover:underline bg-transparent border-none cursor-pointer"
+                    className="font-body text-[11px] font-semibold text-sky-300 hover:text-white bg-sky-950/60 hover:bg-sky-900/80 px-2 py-0.5 rounded-md border border-sky-400/30 transition-all cursor-pointer"
                   >
-                    {isCustomSubject ? "Select existing" : "Type custom name"}
+                    {isCustomSubject ? "← Select existing" : "+ Type custom name"}
                   </button>
                 </div>
                 {isCustomSubject ? (
@@ -748,13 +756,13 @@ function SchedulerPage() {
                     placeholder="e.g. Human Computer Interaction"
                     value={customSubjectName}
                     onChange={(e) => setCustomSubjectName(e.target.value)}
-                    className="w-full bg-[#0A1931] text-white font-body text-xs px-3 py-2.5 rounded-lg border border-white/10 focus:outline-none focus:border-[#4A7FA7] transition-colors"
+                    className="w-full bg-[#071325] text-white placeholder-gray-400 font-body text-xs px-3 py-2.5 rounded-lg border border-sky-400/40 focus:outline-none focus:border-sky-400 transition-colors shadow-inner"
                   />
                 ) : (
                   <select
                     value={subject}
                     onChange={(e) => setSubject(e.target.value)}
-                    className="w-full bg-[#0A1931] text-white font-body text-xs px-3 py-2.5 rounded-lg border border-white/10 focus:outline-none focus:border-[#4A7FA7] transition-colors"
+                    className="w-full bg-[#071325] text-white font-body text-xs px-3 py-2.5 rounded-lg border border-white/20 focus:outline-none focus:border-sky-400 transition-colors"
                   >
                     {(allSubjects.length > 0 ? allSubjects.map(s => s.name) : ["Mathematics", "Physics", "Chemistry", "Biology", "English"]).map(s => (
                       <option key={s}>{s}</option>
@@ -771,7 +779,20 @@ function SchedulerPage() {
                   type="date"
                   value={examDate}
                   onChange={(e) => setExamDate(e.target.value)}
-                  className="w-full bg-[#0A1931] text-white font-body text-xs px-3 py-2.5 rounded-lg border border-white/10 focus:outline-none focus:border-[#4A7FA7] transition-colors"
+                  className="w-full bg-[#071325] text-white font-body text-xs px-3 py-2.5 rounded-lg border border-white/20 focus:outline-none focus:border-sky-400 transition-colors"
+                />
+              </div>
+
+              <div>
+                <label className="font-body text-xs text-[#B3CFE5] mb-1 block font-semibold">
+                  Busy / Blocked Hours (Optional)
+                </label>
+                <input
+                  type="text"
+                  placeholder="e.g. School Mon-Fri 8am-2pm, Work Sat 5pm-9pm"
+                  value={unavailableSlots}
+                  onChange={(e) => setUnavailableSlots(e.target.value)}
+                  className="w-full bg-[#071325] text-white placeholder-gray-400 font-body text-xs px-3 py-2.5 rounded-lg border border-white/20 focus:outline-none focus:border-sky-400 transition-colors"
                 />
               </div>
               {generateMsg && (
@@ -1251,7 +1272,18 @@ function SchedulerPage() {
                   {allSubjects.map(s => (
                     <option key={s.id} value={s.id}>{s.name}</option>
                   ))}
+                  <option value="NEW_CUSTOM_SUBJECT">➕ Add New Subject...</option>
                 </select>
+
+                {taskSubjectId === "NEW_CUSTOM_SUBJECT" && (
+                  <input
+                    type="text"
+                    placeholder="Type new subject name (e.g. Artificial Intelligence)"
+                    value={customTaskSubject}
+                    onChange={(e) => setCustomTaskSubject(e.target.value)}
+                    className="w-full mt-2 bg-blue-50/40 text-gray-800 px-3 py-2 rounded-xl border border-gray-200 focus:outline-none focus:border-[#4A7FA7] font-body text-xs"
+                  />
+                )}
               </div>
 
               <div className="grid grid-cols-2 gap-3">

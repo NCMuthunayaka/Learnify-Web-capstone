@@ -1,17 +1,19 @@
 import { useEffect, useRef } from "react";
 
-const DEFAULT_DATA = [
-  { label: "Apr 1",  hours: 2.5 },
-  { label: "Apr 3",  hours: 4   },
-  { label: "Apr 5",  hours: 3   },
-  { label: "Apr 7",  hours: 5   },
-  { label: "Apr 9",  hours: 4.5 },
-  { label: "Apr 11", hours: 6   },
-  { label: "Apr 13", hours: 3.5 },
-  { label: "Apr 15", hours: 5.5 },
-  { label: "Apr 17", hours: 4   },
-  { label: "Apr 19", hours: 5   },
-];
+const getPastDays = () => {
+  const list = [];
+  for (let i = 6; i >= 0; i--) {
+    const d = new Date();
+    d.setDate(d.getDate() - i);
+    list.push({
+      label: d.toLocaleDateString("en-US", { month: "short", day: "numeric" }),
+      hours: 0
+    });
+  }
+  return list;
+};
+
+const DEFAULT_DATA = getPastDays();
 
 function loadChartJs(cb) {
   if (window.Chart) { cb(window.Chart); return; }
@@ -23,7 +25,7 @@ function loadChartJs(cb) {
 
 export default function ProductivityChart({
   title    = "Weekly Study Activity",
-  subtitle = "Hours studied per day — April 2025",
+  subtitle = `Daily study hours — ${new Date().toLocaleDateString("en-US", { month: "long", year: "numeric" })}`,
   data     = DEFAULT_DATA,
   target   = 4,
 }) {

@@ -1,5 +1,5 @@
-CREATE DATABASE IF NOT EXISTS learnify CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
-USE learnify;
+-- CREATE DATABASE IF NOT EXISTS learnify CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
+-- USE learnify;
 
 SET FOREIGN_KEY_CHECKS = 0;
 
@@ -68,6 +68,7 @@ CREATE TABLE users (
     password_hash VARCHAR(255) NOT NULL,
     role          ENUM('student', 'mentor', 'admin') NOT NULL DEFAULT 'student',
     status        ENUM('active', 'pending', 'inactive') NOT NULL DEFAULT 'pending',
+    availability_status VARCHAR(20) NOT NULL DEFAULT 'Online',
     avatar_url    VARCHAR(500) NULL,
     phone         VARCHAR(20) NULL,
     bio           TEXT NULL,
@@ -127,9 +128,25 @@ CREATE TABLE mentor_profiles (
     email_notifications   TINYINT(1)   NOT NULL DEFAULT 1,
     auto_accept_returning TINYINT(1)   NOT NULL DEFAULT 0,
     bio                   TEXT         NULL,
+    total_points          INT          NOT NULL DEFAULT 0,
+    response_streak_days  INT          NOT NULL DEFAULT 0,
     PRIMARY KEY (id),
     UNIQUE KEY uq_mp_user (user_id),
     CONSTRAINT fk_mp_user FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+) ENGINE = InnoDB;
+
+
+-- applications submitted by users wishing to become mentors
+CREATE TABLE mentor_applications (
+    id              INT          NOT NULL AUTO_INCREMENT,
+    user_id         INT          NOT NULL,
+    qualifications  TEXT         NOT NULL,
+    certifications  TEXT         NOT NULL,
+    status          VARCHAR(20)  NOT NULL DEFAULT 'pending',
+    created_at      DATETIME     NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    PRIMARY KEY (id),
+    UNIQUE KEY uq_ma_user (user_id),
+    CONSTRAINT fk_ma_user FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
 ) ENGINE = InnoDB;
 
 
@@ -327,6 +344,7 @@ CREATE TABLE mentor_reviews (
 CREATE TABLE resources (
     id             INT          NOT NULL AUTO_INCREMENT,
     uploader_id    INT          NOT NULL,
+    uploader_type  ENUM('mentor', 'peer') NOT NULL DEFAULT 'mentor',
     subject_id     INT          NOT NULL,
     file_type_id   TINYINT      NOT NULL,
     title          VARCHAR(255) NOT NULL,
@@ -336,6 +354,7 @@ CREATE TABLE resources (
     status         ENUM('draft', 'pending_review', 'published', 'hidden') NOT NULL DEFAULT 'draft',
     view_count     INT          NOT NULL DEFAULT 0,
     download_count INT          NOT NULL DEFAULT 0,
+    is_public      TINYINT(1)   NOT NULL DEFAULT 1,
     uploaded_at    DATETIME     NOT NULL DEFAULT CURRENT_TIMESTAMP,
     published_at   DATETIME     NULL,
     PRIMARY KEY (id),
@@ -345,6 +364,21 @@ CREATE TABLE resources (
     CONSTRAINT fk_res_uploader  FOREIGN KEY (uploader_id)  REFERENCES users(id)      ON DELETE CASCADE,
     CONSTRAINT fk_res_subject   FOREIGN KEY (subject_id)   REFERENCES subjects(id),
     CONSTRAINT fk_res_file_type FOREIGN KEY (file_type_id) REFERENCES file_types(id)
+) ENGINE = InnoDB;
+
+
+-- tracks resources shared with specific students (peers or mentors)
+CREATE TABLE IF NOT EXISTS resource_shares (
+    id          INT      NOT NULL AUTO_INCREMENT,
+    resource_id INT      NOT NULL,
+    student_id  INT      NOT NULL,
+    shared_by   INT      NOT NULL,
+    shared_at   DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    PRIMARY KEY (id),
+    UNIQUE KEY uq_resource_share (resource_id, student_id),
+    CONSTRAINT fk_rs_resource FOREIGN KEY (resource_id) REFERENCES resources(id) ON DELETE CASCADE,
+    CONSTRAINT fk_rs_student  FOREIGN KEY (student_id)  REFERENCES users(id)     ON DELETE CASCADE,
+    CONSTRAINT fk_rs_sharedby FOREIGN KEY (shared_by)   REFERENCES users(id)     ON DELETE CASCADE
 ) ENGINE = InnoDB;
 
 
@@ -574,4 +608,7 @@ INSERT INTO achievements (trigger_type_id, name, description, threshold) VALUES
 (1, 'Study Streak 30',     'Maintain a 30-day study streak', 30),
 (3, 'Help Seeker',         'Submit your first help request', 1),
 (4, 'Outstanding Student', 'Score above 90% on 5 consecutive tasks', 5),
-(3, 'Community Helper',    'Respond to 10 peer help requests', 10);
+(3, 'Community Helper',    'Respond to 10 peer help requests', 10),
+(3, 'Quick Solver',         'Resolve 5 student help requests', 5),
+(1, 'Streak Master',        'Maintain a 5-day active tutoring streak', 5),
+(3, 'Knowledge Contributor', 'Upload 5 published resources', 5);

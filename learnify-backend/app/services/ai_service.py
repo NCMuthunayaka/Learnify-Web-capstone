@@ -19,7 +19,7 @@ from google.genai import types as genai_types
 _gemini_key = os.getenv("GEMINI_API_KEY", "")
 gemini_client = genai.Client(api_key=_gemini_key) if _gemini_key else None
 
-GEMINI_MODEL = "gemini-2.5-flash-lite"
+GEMINI_MODEL = "gemini-flash-latest"
 
 # ── OpenAI (fallback) ─────────────────────────────────────────────────────────
 _openai_key    = os.getenv("OPENAI_API_KEY", "")
@@ -33,7 +33,7 @@ if _openai_key and _openai_key != "your-openai-api-key-here":
 
 # ── System prompt ─────────────────────────────────────────────────────────────
 SYSTEM_PROMPT = (
-    "You are Learnify's academic assistant. Help university students with "
+    "You are WhisperHive's academic assistant. Help university students with "
     "study planning, coursework questions, scheduling advice, and productivity. "
     "Be concise, encouraging, and professional. "
     "When analysing uploaded files, extract key academic content and summarise clearly."
@@ -137,13 +137,14 @@ def generate_timetable(
     focus_subject: str,
     exam_date: str,
     subjects: list,
+    unavailable_slots: str = "",
 ) -> list:
     """
     Returns a list of session dicts:
       [{ "day": "Monday", "start_time": "08:00", "end_time": "10:00",
          "subject": "Mathematics", "session_type": "revision" }, ...]
     """
-    prompt = _build_timetable_prompt(intensity, focus_subject, exam_date, subjects)
+    prompt = _build_timetable_prompt(intensity, focus_subject, exam_date, subjects, unavailable_slots)
     try:
         return _gemini_timetable(prompt)
     except Exception as e:
@@ -153,24 +154,30 @@ def generate_timetable(
         raise RuntimeError("Timetable generation failed. Please try again.")
 
 
-def _build_timetable_prompt(intensity, focus_subject, exam_date, subjects):
+def _build_timetable_prompt(intensity, focus_subject, exam_date, subjects, unavailable_slots=""):
     subjects_str = ", ".join(subjects) if subjects else "General Studies"
-    return (
+    prompt_str = (
         f"Generate a weekly study timetable for a university student.\n"
         f"Study intensity: {intensity}\n"
         f"Focus subject: {focus_subject}\n"
         f"Exam date: {exam_date if exam_date else 'not specified'}\n"
-        f"Subjects: {subjects_str}\n\n"
-        f"Rules:\n"
+        f"Subjects: {subjects_str}\n"
+    )
+    if unavailable_slots and str(unavailable_slots).strip():
+        prompt_str += f"BLOCKED / BUSY TIMES (CRITICAL: DO NOT schedule study sessions during these times because the student has school/work/commitments): {str(unavailable_slots).strip()}\n"
+
+    prompt_str += (
+        f"\nRules:\n"
         f"- Return ONLY a valid JSON array. No markdown, no code fences, no explanation.\n"
-        f"- Include 2-3 sessions per day, Monday through Sunday.\n"
+        f"- Include 2-3 study sessions per day (Monday through Sunday) ONLY during the student's free hours.\n"
         f"- Each session must have exactly these keys: "
         f'"day" (Monday-Sunday), "start_time" (HH:MM 24h), "end_time" (HH:MM 24h), '
         f'"subject" (must match one of the listed subjects), '
-        f'"session_type" (study|revision|practice|rest)\n'
+        f'"session_type" (study|exam_prep|break)\n'
         f"- Keep subject names short (exactly as listed).\n"
         f"- Output must be valid JSON parseable by Python json.loads()."
     )
+    return prompt_str
 
 
 def _extract_json_array(raw: str) -> list:

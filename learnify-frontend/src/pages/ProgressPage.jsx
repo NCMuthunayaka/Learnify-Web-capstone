@@ -42,6 +42,11 @@ export default function ProgressPage() {
         ((now - new Date(now.getFullYear(), 0, 1)) / 86400000 + 1) / 7
     );
 
+    const isNewUser = data && 
+        (!data?.stats?.tasks_total || data?.stats?.tasks_total === 0) && 
+        (!data?.stats?.study_hours_month || parseFloat(data?.stats?.study_hours_month) === 0) && 
+        (!data?.recent_activity || data?.recent_activity.length === 0);
+
     return (
         <div>
             <div className="mb-7 flex flex-wrap items-end justify-between gap-3">
@@ -67,14 +72,43 @@ export default function ProgressPage() {
                 </div>
             )}
 
-            <SectionLabel>Performance Overview</SectionLabel>
+            {loading ? (
+                <>
+                    <SectionLabel>Performance Overview</SectionLabel>
+                    <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4 mb-8 items-stretch">
+                        {[1, 2, 3, 4].map(i => <Skeleton key={i} h="h-32" />)}
+                    </div>
+                    <SectionLabel>Time Distribution &amp; Consistency</SectionLabel>
+                    <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 mb-8 items-stretch">
+                        <div className="lg:col-span-2">
+                            <Skeleton h="h-72" />
+                        </div>
+                        <Skeleton h="h-72" />
+                    </div>
+                </>
+            ) : isNewUser ? (
+                <div className="flex flex-col items-center justify-center bg-white rounded-[24px] border border-[#D0E3F0] p-10 text-center shadow-[0_4px_20px_rgba(10,25,49,0.06)] min-h-[480px] my-6 animate-fade-in">
+                    <span className="text-[64px] mb-6 animate-bounce">🚀</span>
+                    <h2 className="text-[22px] font-extrabold text-[#0A1931] mb-3" style={{ fontFamily: "Poppins, sans-serif" }}>
+                        Your Progress Dashboard is Ready!
+                    </h2>
+                    <p className="text-[14px] text-[#4A6880] max-w-md leading-relaxed mb-8" style={{ fontFamily: "Inter, sans-serif" }}>
+                        There is no study activity or progress logged on this account yet. Enroll in subjects, add study goals, or log study tasks to populate this page with charts, streak indicators, and AI analysis.
+                    </p>
+                    <a
+                        href="/scheduler"
+                        className="inline-flex items-center gap-2 text-[14px] font-bold text-white bg-[#4A7FA7] px-6 py-3 rounded-[12px] hover:bg-[#3b6b90] transition-all shadow-md hover:shadow-lg cursor-pointer decoration-none"
+                        style={{ fontFamily: "Poppins, sans-serif" }}
+                    >
+                        📅 Go to Scheduler &amp; Subjects
+                    </a>
+                </div>
+            ) : (
+                <>
+                    <SectionLabel>Performance Overview</SectionLabel>
 
-            {/* ── Stats row ── */}
-            <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4 mb-8 items-stretch">
-                {loading ? (
-                    [1,2,3,4].map(i => <Skeleton key={i} h="h-32" />)
-                ) : (
-                    <>
+                    {/* ── Stats row ── */}
+                    <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4 mb-8 items-stretch">
                         <StatsCard
                             variant="highlight"
                             label="Overall Progress"
@@ -109,65 +143,53 @@ export default function ProgressPage() {
                             iconColor="amber"
                             icon={<svg width="18" height="18" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.8}><path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z" /></svg>}
                         />
-                    </>
-                )}
-            </div>
+                    </div>
 
-            <SectionLabel>Time Distribution &amp; Consistency</SectionLabel>
+                    <SectionLabel>Time Distribution &amp; Consistency</SectionLabel>
 
-            {/* ── Charts row ── */}
-            <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 mb-8 items-stretch">
-                <div className="lg:col-span-2">
-                    {loading
-                        ? <Skeleton h="h-72" />
-                        : <ProductivityChart
-                            data={data?.study_chart ?? []}
-                            subtitle={`Daily study hours — ${now.toLocaleDateString("en-US", { month: "long", year: "numeric" })}`}
-                        />
-                    }
-                </div>
-                {loading
-                    ? <Skeleton h="h-72" />
-                    : <DonutChart data={data?.time_alloc ?? []} />
-                }
-            </div>
+                    {/* ── Charts row ── */}
+                    <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 mb-8 items-stretch">
+                        <div className="lg:col-span-2">
+                            <ProductivityChart
+                                data={data?.study_chart ?? []}
+                                subtitle={`Daily study hours — ${now.toLocaleDateString("en-US", { month: "long", year: "numeric" })}`}
+                            />
+                        </div>
+                        <DonutChart data={data?.time_alloc ?? []} />
+                    </div>
 
-            {/* ── Tasks + Streak + Subject Progress ── */}
-            <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 mb-8 items-stretch">
-                {loading ? (
-                    [1,2,3].map(i => <Skeleton key={i} h="h-64" />)
-                ) : (
-                    <>
+                    {/* ── Tasks + Streak + Subject Progress ── */}
+                    <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 mb-8 items-stretch">
                         <UpcomingTasks tasks={data?.tasks ?? []} />
                         <StudyStreak
                             streakDays={data?.streak_days ?? 0}
                             weeks={data?.heatmap ?? [[0,0,0,0,0,0,0],[0,0,0,0,0,0,0],[0,0,0,0,0,0,0],[0,0,0,0,0,0,0]]}
                         />
                         <SubjectProgress subjects={data?.subject_progress ?? []} />
-                    </>
-                )}
-            </div>
+                    </div>
 
-            <SectionLabel>Insights &amp; Community</SectionLabel>
+                    <SectionLabel>Insights &amp; Community</SectionLabel>
 
-            {/* ── Bottom row ── */}
-            <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 items-stretch">
-                <div className="lg:col-span-2">
-                    <MonthlyScoreChart chartData={data?.monthly_scores} />
-                </div>
-                <div className="flex flex-col gap-4">
-                    <RecentActivity activities={data?.recent_activity ?? []} />
-                    <ClassLeaderboard entries={data?.leaderboard ?? []} />
-                </div>
-            </div>
+                    {/* ── Bottom row ── */}
+                    <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 items-stretch">
+                        <div className="lg:col-span-2">
+                            <MonthlyScoreChart chartData={data?.monthly_scores} />
+                        </div>
+                        <div className="flex flex-col gap-4">
+                            <RecentActivity activities={data?.recent_activity ?? []} />
+                            <ClassLeaderboard entries={data?.leaderboard ?? []} />
+                        </div>
+                    </div>
 
-            <div className="mt-8">
-                <SectionLabel>AI-Powered Insights</SectionLabel>
-            </div>
+                    <div className="mt-8">
+                        <SectionLabel>AI-Powered Insights</SectionLabel>
+                    </div>
 
-            <div className="mt-1">
-                <AIInsights subjectProgress={data?.subject_progress ?? []} />
-            </div>
+                    <div className="mt-1">
+                        <AIInsights subjectProgress={data?.subject_progress ?? []} />
+                    </div>
+                </>
+            )}
         </div>
     );
 }

@@ -132,6 +132,7 @@ function RegisterPage() {
   const [formData, setFormData] = useState({
     firstName: "", lastName: "", email: "",
     password: "", confirmPassword: "", role: "",
+    qualifications: "", certifications: "",
   })
   const [loading, setLoading]   = useState(false)
   const [gLoading, setGLoading] = useState(false)
@@ -214,8 +215,16 @@ function RegisterPage() {
       newErrors.confirmPassword = "Passwords do not match"
     }
 
-    if (!formData.role)
+    if (!formData.role) {
       newErrors.role = "Please select a role"
+    } else if (formData.role === "mentor") {
+      if (!formData.qualifications.trim()) {
+        newErrors.qualifications = "Qualifications are required for mentors"
+      }
+      if (!formData.certifications.trim()) {
+        newErrors.certifications = "Certifications are required for mentors"
+      }
+    }
 
     setErrors(newErrors)
     return Object.keys(newErrors).length === 0
@@ -232,11 +241,17 @@ function RegisterPage() {
       setLoading(true)
       const fullName = `${formData.firstName} ${formData.lastName}`
       const response = await registerUser(
-        fullName, formData.email, formData.password, formData.role
+        fullName,
+        formData.email,
+        formData.password,
+        formData.role,
+        formData.qualifications,
+        formData.certifications
       )
       const { user, access_token, refresh_token } = response.data
       login(user, access_token, refresh_token)
-      navigate("/dashboard")
+      const targetRoute = user?.role === "mentor" ? "/mentor/dashboard" : user?.role === "admin" ? "/admin/dashboard" : "/dashboard"
+      navigate(targetRoute, { replace: true })
     } catch (err) {
       setApiError(
         err.response?.data?.error?.message || "Registration failed. Please try again."
@@ -248,11 +263,15 @@ function RegisterPage() {
 
   // ── Google Register ────────────────────────────────────
   const handleGoogleRegister = useGoogleLogin({
+    flow: "implicit",
+    ux_mode: "popup",
+    prompt: "select_account",
+    scope: "openid email profile",
     onSuccess: async (tokenResponse) => {
       try {
         setGLoading(true)
         setApiError("")
-        const response = await googleAuth(tokenResponse.access_token)
+        const response = await googleAuth(tokenResponse.access_token, "register")
         const { user, access_token, refresh_token, is_new_user } = response.data
 
         if (is_new_user) {
@@ -263,17 +282,22 @@ function RegisterPage() {
           setShowRoleSelect(true)
         } else {
           login(user, access_token, refresh_token)
-          navigate("/dashboard")
+          const targetRoute = user?.role === "mentor" ? "/mentor/dashboard" : user?.role === "admin" ? "/admin/dashboard" : "/dashboard"
+          navigate(targetRoute, { replace: true })
         }
       } catch (err) {
         setApiError(
-          err.response?.data?.error?.message || "Google signup failed."
+          err.response?.data?.error?.message || "Google signup failed. Please try again."
         )
       } finally {
         setGLoading(false)
       }
     },
-    onError: () => setApiError("Google signup was cancelled or failed.")
+    onError: (error) => setApiError(
+      error?.error === "popup_closed_by_user"
+        ? "Google sign-in was cancelled."
+        : "Google signup failed. Make sure popups are not blocked and try again."
+    )
   })
 
   // ── Confirm Role After Google Auth ─────────────────────
@@ -295,7 +319,8 @@ function RegisterPage() {
       await api.patch("/users/profile", { name: fullName, role: selectedRole })
       const updatedUser = { ...googleUserData.user, name: fullName, role: selectedRole }
       login(updatedUser, googleUserData.access_token, googleUserData.refresh_token)
-      navigate("/dashboard")
+      const targetRoute = selectedRole === "mentor" ? "/mentor/dashboard" : selectedRole === "admin" ? "/admin/dashboard" : "/dashboard"
+      navigate(targetRoute, { replace: true })
     } catch (err) {
       setApiError("Failed to save profile. Please try again.")
     } finally {
@@ -404,7 +429,7 @@ function RegisterPage() {
               disabled:opacity-50 disabled:cursor-not-allowed">
             {roleLoading
               ? <LoadingSpinner size="sm" color="white" />
-              : "Continue to Learnify"}
+              : "Continue to WhisperHive"}
           </button>
         </div>
       </div>
@@ -425,7 +450,7 @@ function RegisterPage() {
         <div className="hidden md:flex flex-1 flex-col justify-center
           px-10 py-12 bg-transparent space-y-4">
           <h1 className="font-heading text-5xl font-bold text-white">
-            Learnify
+            WhisperHive
           </h1>
           <div className="font-heading text-2xl font-bold text-white space-y-1">
             <p>Plan better.</p>
@@ -458,7 +483,7 @@ function RegisterPage() {
           )}
 
           {/* Google Button */}
-          <button onClick={() => handleGoogleRegister()}
+          <button onClick={handleGoogleRegister}
             disabled={loading || gLoading}
             className="w-full flex items-center justify-center gap-3
               bg-white text-gray-700 font-body text-sm font-medium
@@ -662,6 +687,53 @@ function RegisterPage() {
                 </p>
               )}
             </div>
+
+            {formData.role === "mentor" && (
+              <div className="space-y-4 pt-2">
+                <div>
+                  <textarea
+                    name="qualifications"
+                    placeholder="Academic Qualifications (e.g. Degree, University, GPA)*"
+                    value={formData.qualifications}
+                    onChange={handleChange}
+                    rows={3}
+                    className={`w-full bg-[#1A3D63] bg-opacity-60 text-white
+                      placeholder-[#B3CFE5] font-body text-sm px-4 py-3
+                      rounded-lg border transition-colors focus:outline-none resize-none
+                      ${errors.qualifications
+                        ? "border-red-400"
+                        : "border-[#4A7FA7] border-opacity-40 focus:border-[#4A7FA7]"}`}
+                  />
+                  {errors.qualifications && (
+                    <p className="font-body text-xs text-red-400 mt-1 ml-1">
+                      {errors.qualifications}
+                    </p>
+                  )}
+                </div>
+
+                <div>
+                  <textarea
+                    name="certifications"
+                    placeholder="Certifications & Experience (e.g. teaching, certifications)*"
+                    value={formData.certifications}
+                    onChange={handleChange}
+                    rows={3}
+                    className={`w-full bg-[#1A3D63] bg-opacity-60 text-white
+                      placeholder-[#B3CFE5] font-body text-sm px-4 py-3
+                      rounded-lg border transition-colors focus:outline-none resize-none
+                      ${errors.certifications
+                        ? "border-red-400"
+                        : "border-[#4A7FA7] border-opacity-40 focus:border-[#4A7FA7]"}`}
+                  />
+                  {errors.certifications && (
+                    <p className="font-body text-xs text-red-400 mt-1 ml-1">
+                      {errors.certifications}
+                    </p>
+                  )}
+                </div>
+              </div>
+            )}
+
 
             {/* Submit Button */}
             <button onClick={handleSubmit}

@@ -1,41 +1,235 @@
-import { useState } from "react"
+import { useState, useRef, useEffect } from "react"
 import { useNavigate } from "react-router-dom"
 import {
   Users, Video, BookOpen, Star, Calendar, Clock,
   ArrowRight, CheckCircle, MessageSquare, Bell,
-  AlertTriangle, Check, ShieldCheck, Play, BarChart4, FileText
+  AlertTriangle, Check, ShieldCheck, Play, BarChart4, FileText,
+  X, Copy, Plus, ChevronLeft, ChevronRight,
+  Award, Zap, Flame, Trophy, HelpCircle, Send, RotateCcw, Sparkles
 } from "lucide-react"
 import { useAuth } from "../../hooks/useAuth"
+import { getMentorStats, updateMentorSettings, logWorkSession, submitSupportTicket } from "../../api/mentorApi"
+import LoadingSpinner from "../../components/common/LoadingSpinner"
 
 export default function MentorDashboardPage() {
   const { user } = useAuth()
   const navigate = useNavigate()
 
   // Dynamic user details
-  const mentorName = user
-  ? `${user.firstName || ""} ${user.lastName || ""}`
-  : "Dr. James Davis"
+  const nameParts = (user?.name || "").split(" ")
+  const firstName = nameParts[0] || ""
+  const lastName = nameParts.slice(1).join(" ") || ""
 
+  const mentorName = user ? user.name : "Academic Mentor"
   const mentorInitials = user
-    ? `${user.firstName?.[0] || ""}${user.lastName?.[0] || ""}`
-    : "JD"
+    ? `${firstName[0] || ""}${lastName[0] || ""}`.toUpperCase()
+    : "AM"
 
-  // Stateful Availability & Status
+  // Stateful Availability & Preferences
   const [status, setStatus] = useState("Online")
   const [availableDays, setAvailableDays] = useState(["Mon", "Tue", "Wed", "Thu", "Fri"])
   const [fromTime, setFromTime] = useState("10:00 AM")
-  const [untilTime, setUntilTime] = useState("6:00 PM")
+  const [untilTime, setUntilTime] = useState("06:00 PM")
   const [maxRequests, setMaxRequests] = useState(8)
   const [acceptUrgent, setAcceptUrgent] = useState(true)
   const [emailNotif, setEmailNotif] = useState(true)
   const [autoAccept, setAutoAccept] = useState(false)
 
-  // Status handler
-  const statusOptions = [
-    { name: "Online", color: "bg-green-500", text: "text-green-600", activeBg: "bg-green-50 border-green-200" },
-    { name: "Busy", color: "bg-amber-500", text: "text-amber-600", activeBg: "bg-amber-50 border-amber-200" },
-    { name: "Away", color: "bg-red-500", text: "text-red-600", activeBg: "bg-red-50 border-red-200" }
-  ]
+  // API Stats Data States
+  const [loading, setLoading] = useState(true)
+  const [profile, setProfile] = useState({
+    title: "Academic Mentor",
+    institution: "Learnify",
+    years_experience: 0,
+    rating: 5.0,
+    total_students_helped: 0,
+    avg_response_time_min: 0,
+    bio: "",
+    subject: "General Mentorship"
+  })
+  const [stats, setStats] = useState({
+    open_requests: 0,
+    resolved: 0,
+    avg_response: 0,
+    rating: 0,
+    total_students: 0,
+    completion_rate: 0,
+    metrics_breakdown: [],
+    reviews: []
+  })
+  const [sessions, setSessions] = useState([])
+  const [performance, setPerformance] = useState([])
+  const [notifications, setNotifications] = useState([])
+  const [achievements, setAchievements] = useState([])
+  const [aiInsights, setAiInsights] = useState([])
+
+  // Support modal state
+  const [showSupportModal, setShowSupportModal] = useState(false)
+  const [supportTitle, setSupportTitle] = useState("")
+  const [supportDesc, setSupportDesc] = useState("")
+  const [submittingSupport, setSubmittingSupport] = useState(false)
+
+  // Timer states
+  const [timerDuration, setTimerDuration] = useState(25) // minutes
+  const [timerSecondsLeft, setTimerSecondsLeft] = useState(25 * 60)
+  const [timerActive, setTimerActive] = useState(false)
+  const [timerCategory, setTimerCategory] = useState("Lesson Prep")
+
+  // Availability section reference for scrolling
+  const availabilityRef = useRef(null)
+  const [highlightAvailability, setHighlightAvailability] = useState(false)
+  const [toastMessage, setToastMessage] = useState("")
+
+  // Modals state
+  const [activeSession, setActiveSession] = useState(null)
+  const [prepSession, setPrepSession] = useState(null)
+  const [showAllSessions, setShowAllSessions] = useState(false)
+  const [showPerfReport, setShowPerfReport] = useState(false)
+  const [showTemplateModal, setShowTemplateModal] = useState(false)
+
+  // Templates state
+  const [templates, setTemplates] = useState([
+    { id: 1, title: "Standard Welcome", content: "Hi [Student], thank you for reaching out! I've reviewed your request and would be happy to help. Let's schedule a brief session to discuss." },
+    { id: 2, title: "Follow-up Question", content: "Hi [Student], I am looking over your work. Could you please send over the specific question details or past paper year you are working on?" }
+  ])
+  const [newTemplateTitle, setNewTemplateTitle] = useState("")
+  const [newTemplateContent, setNewTemplateContent] = useState("")
+
+  // Work Prep Timer effect
+  useEffect(() => {
+    let interval = null
+    if (timerActive && timerSecondsLeft > 0) {
+      interval = setInterval(() => {
+        setTimerSecondsLeft(prev => prev - 1)
+      }, 1000)
+    } else if (timerSecondsLeft === 0 && timerActive) {
+      setTimerActive(false)
+      clearInterval(interval)
+      handleTimerComplete()
+    }
+    return () => clearInterval(interval)
+  }, [timerActive, timerSecondsLeft])
+
+  async function handleTimerComplete() {
+    try {
+      const res = await logWorkSession(timerDuration, timerCategory)
+      if (res.data) {
+        setProfile(prev => ({
+          ...prev,
+          total_points: res.data.total_points,
+          response_streak_days: res.data.response_streak_days
+        }))
+        setToastMessage(`Work session logged! You earned 10 XP!`)
+        setTimeout(() => setToastMessage(""), 3000)
+      }
+    } catch (err) {
+      console.error("Failed to log work session:", err)
+      setToastMessage("Session completed, but failed to log points.")
+      setTimeout(() => setToastMessage(""), 3000)
+    }
+    setTimerSecondsLeft(timerDuration * 60)
+  }
+
+  const handleDurationChange = (mins) => {
+    setTimerDuration(mins)
+    setTimerSecondsLeft(mins * 60)
+    setTimerActive(false)
+  }
+
+  async function handleSupportSubmit() {
+    if (!supportTitle.trim() || !supportDesc.trim()) return
+    try {
+      setSubmittingSupport(true)
+      await submitSupportTicket(supportTitle, supportDesc)
+      setToastMessage("Support ticket submitted successfully!")
+      setTimeout(() => setToastMessage(""), 3000)
+      setShowSupportModal(false)
+      setSupportTitle("")
+      setSupportDesc("")
+    } catch (err) {
+      console.error("Failed to submit support ticket:", err)
+      setToastMessage("Failed to submit support ticket.")
+      setTimeout(() => setToastMessage(""), 3000)
+    } finally {
+      setSubmittingSupport(false)
+    }
+  }
+
+  // Fetch mentor details and dashboard statistics on mount
+  useEffect(() => {
+    async function loadStats() {
+      try {
+        setLoading(true)
+        const response = await getMentorStats()
+        const data = response.data
+        
+        setProfile(data.profile)
+        setStats(data.stats)
+        
+        // Settings states
+        if (data.status) setStatus(data.status)
+        if (data.settings) {
+          setAvailableDays(data.settings.availableDays)
+          setFromTime(data.settings.fromTime)
+          setUntilTime(data.settings.untilTime)
+          setMaxRequests(data.settings.maxRequests)
+          setAcceptUrgent(data.settings.acceptUrgent)
+          setEmailNotif(data.settings.emailNotif)
+          setAutoAccept(data.settings.autoAccept)
+        }
+
+        setSessions(data.sessions)
+        setPerformance(data.performance)
+        setNotifications(data.notifications)
+        if (data.achievements) setAchievements(data.achievements)
+        if (data.ai_insights) setAiInsights(data.ai_insights)
+      } catch (err) {
+        console.error("Failed to load mentor dashboard data:", err)
+      } finally {
+        setLoading(false)
+      }
+    }
+    loadStats()
+  }, [])
+
+  // Auto-save settings toast trigger on input shifts
+  const isMounted = useRef(false)
+  useEffect(() => {
+    if (isMounted.current) {
+      const saveSettings = async () => {
+        try {
+          await updateMentorSettings({
+            status,
+            acceptUrgent,
+            emailNotif,
+            autoAccept,
+            availableDays,
+            fromTime,
+            untilTime,
+            maxRequests
+          })
+          setToastMessage("Settings auto-saved successfully!")
+          const timer = setTimeout(() => setToastMessage(""), 2000)
+          return () => clearTimeout(timer)
+        } catch (err) {
+          console.error("Failed to auto-save settings:", err)
+        }
+      }
+      saveSettings()
+    } else {
+      isMounted.current = true
+    }
+  }, [status, availableDays, fromTime, untilTime, maxRequests, acceptUrgent, emailNotif, autoAccept])
+
+  // Helper for notification icons
+  const getNotificationIcon = (title) => {
+    const t = title.toLowerCase()
+    if (t.includes("urgent") || t.includes("request")) return AlertTriangle
+    if (t.includes("reply") || t.includes("message") || t.includes("new request")) return MessageSquare
+    if (t.includes("review") || t.includes("rating") || t.includes("feedback")) return Star
+    if (t.includes("resolve") || t.includes("completed")) return CheckCircle
+    return Calendar
+  }
 
   // Day toggle handler
   function toggleDay(day) {
@@ -44,6 +238,20 @@ export default function MentorDashboardPage() {
     } else {
       setAvailableDays([...availableDays, day])
     }
+  }
+
+  const statusOptions = [
+    { name: "Online", color: "bg-green-500", text: "text-green-600", activeBg: "bg-green-50 border-green-200" },
+    { name: "Busy", color: "bg-amber-500", text: "text-amber-600", activeBg: "bg-amber-50 border-amber-200" },
+    { name: "Away", color: "bg-red-500", text: "text-red-600", activeBg: "bg-red-50 border-red-200" }
+  ]
+
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center h-64">
+        <LoadingSpinner size="lg" label="Loading mentor dashboard..." />
+      </div>
+    )
   }
 
   return (
@@ -61,61 +269,51 @@ export default function MentorDashboardPage() {
               GOOD MORNING
             </span>
             <h2 className="font-heading text-3xl md:text-4xl font-bold tracking-tight">
-              Welcome back, {user ? user.firstName : "Dr. Davis"} 👋
+              Welcome back, {user ? firstName : "Mentor"} 👋
             </h2>
             <p className="font-body text-sm text-[#B3CFE5] leading-relaxed">
-              You have 12 open requests · 3 urgent · 4 sessions today
+              You have {stats.open_requests} open requests · {sessions.length} sessions today
             </p>
             {/* Badges row */}
             <div className="flex flex-wrap items-center gap-3 pt-2 font-body text-xs">
               <span className="flex items-center gap-1.5 bg-white/10 hover:bg-white/15 px-3 py-1.5 rounded-full border border-white/10 transition-colors">
                 <Clock size={13} className="text-[#B3CFE5]" />
-                Avg response: 18 min
+                Avg response: {stats.avg_response} min
               </span>
               <span className="flex items-center gap-1.5 bg-white/10 hover:bg-white/15 px-3 py-1.5 rounded-full border border-white/10 transition-colors">
                 <Star size={13} className="text-amber-400 fill-amber-400" />
-                Rating: 4.8★
+                Rating: {stats.rating}★
               </span>
               <span className="flex items-center gap-1.5 bg-white/10 hover:bg-white/15 px-3 py-1.5 rounded-full border border-white/10 transition-colors">
                 <CheckCircle size={13} className="text-[#B3CFE5]" />
-                28 resolved this week
+                {stats.resolved} resolved this week
               </span>
             </div>
           </div>
 
-          {/* SVG Illustration */}
+          {/* Illustration Graphic */}
           <div className="hidden md:block flex-shrink-0">
             <svg width="150" height="110" viewBox="0 0 150 110" fill="none" xmlns="http://www.w3.org/2000/svg" className="opacity-95 drop-shadow-lg">
-              {/* Table */}
               <path d="M10 85 H140 V90 H10 Z" fill="#2E4F75" />
               <path d="M25 90 V105 H30 V90 Z" fill="#1E3E62" />
               <path d="M120 90 V105 H125 V90 Z" fill="#1E3E62" />
-              {/* Computer Monitor */}
               <rect x="50" y="25" width="50" height="34" rx="4" fill="#E2E8F0" stroke="#4A7FA7" strokeWidth="2.5" />
               <rect x="54" y="29" width="42" height="26" rx="2" fill="#0A1931" />
-              {/* Screen details / Code mock */}
               <rect x="58" y="34" width="20" height="4" rx="1" fill="#4A7FA7" />
               <rect x="58" y="41" width="34" height="2" rx="0.5" fill="#2E4F75" />
               <rect x="58" y="45" width="24" height="2" rx="0.5" fill="#2E4F75" />
               <rect x="58" y="49" width="16" height="2" rx="0.5" fill="#4A7FA7" />
-              {/* Monitor stand */}
               <path d="M70 59 L67 75 H83 L80 59 Z" fill="#CBD5E1" />
               <rect x="62" y="75" width="26" height="3" rx="1" fill="#94A3B8" />
-              {/* Keyboard */}
               <rect x="58" y="80" width="34" height="3" rx="1" fill="#94A3B8" />
-              {/* Chair backrest */}
               <path d="M105 50 C105 45 109 42 114 42 C119 42 123 45 123 50 V75 H105 Z" fill="#1E3E62" />
               <path d="M110 75 V95 H118 V75 Z" fill="#0D2440" />
-              {/* Laptop on table side */}
               <rect x="15" y="58" width="24" height="16" rx="1.5" transform="rotate(-8 15 58)" fill="#94A3B8" />
               <path d="M13 74 L37 71 V73 L13 76 Z" fill="#CBD5E1" />
-              {/* Sitting Person Illustration */}
               <circle cx="114" cy="28" r="9" fill="#FEE2E2" />
               <path d="M98 68 C98 56 104 50 114 50 C124 50 130 56 130 68 V85 H98 Z" fill="#4A7FA7" />
-              {/* Lamp on desk */}
               <path d="M22 85 L28 55" stroke="#E9C46A" strokeWidth="2" strokeLinecap="round" />
               <path d="M24 57 C22 55 18 52 20 48 C22 44 28 47 30 49 L24 57 Z" fill="#E9C46A" />
-              {/* Light glow */}
               <circle cx="20" cy="45" r="10" fill="#E9C46A" className="animate-pulse" opacity="0.2" />
             </svg>
           </div>
@@ -128,14 +326,12 @@ export default function MentorDashboardPage() {
         {/* Left Card: Profile & Stats */}
         <div className="lg:col-span-2 bg-white rounded-2xl p-6 border border-gray-100 shadow-sm flex flex-col justify-between">
           <div className="space-y-6">
-            {/* Header info */}
             <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
               <div className="flex items-center gap-4">
                 <div className="relative">
                   <div className="w-16 h-16 bg-[#1A3D63] text-white font-bold rounded-2xl flex items-center justify-center text-xl font-heading shadow-md">
                     {mentorInitials}
                   </div>
-                  {/* Verified checkmark badge */}
                   <span className="absolute -bottom-1 -right-1 bg-green-500 text-white rounded-full p-1 border-2 border-white shadow-sm flex items-center justify-center">
                     <ShieldCheck size={12} className="fill-white stroke-green-500" />
                   </span>
@@ -145,67 +341,75 @@ export default function MentorDashboardPage() {
                     {mentorName}
                   </h3>
                   <p className="font-body text-xs text-gray-500 mt-0.5">
-                    Mathematics Mentor · MIT PhD · 8 years experience
+                    {profile.title} · {profile.institution} · {profile.years_experience} years experience
                   </p>
                   <div className="flex items-center gap-1 mt-1 font-body text-xs text-amber-500 font-semibold">
                     <Star size={13} className="fill-amber-500 stroke-amber-500" />
-                    <span>4.8</span>
-                    <span className="text-gray-400 font-normal ml-0.5">(142 reviews)</span>
+                    <span>{profile.rating}</span>
+                    <span className="text-gray-400 font-normal ml-0.5">({stats.total_students} reviews)</span>
                   </div>
                 </div>
               </div>
             </div>
 
-            {/* Biography */}
             <p className="font-body text-xs text-gray-600 leading-relaxed italic">
-              "PhD in Applied Mathematics from MIT. I specialise in making complex calculus, algebra and statistics approachable and enjoyable for undergraduate students. My goal is to build lasting conceptual understanding, not just exam results."
+              "{profile.bio || 'Welcome! Update your bio in profile settings to share your expertise with students.'}"
             </p>
 
-            {/* Skills tag pill items */}
             <div className="flex flex-wrap gap-2">
-              {["Calculus", "Algebra", "Statistics", "Geometry", "Trigonometry"].map(skill => (
-                <span key={skill} className="bg-gray-50 text-[#1A3D63] font-medium font-body text-xs px-3 py-1.5 rounded-lg border border-gray-100 hover:bg-gray-100 transition-colors">
-                  {skill}
+              {(profile.subject || "Mathematics").split(",").map(skill => (
+                <span key={skill.trim()} className="bg-gray-50 text-[#1A3D63] font-medium font-body text-xs px-3 py-1.5 rounded-lg border border-gray-100 hover:bg-gray-100 transition-colors">
+                  {skill.trim()}
                 </span>
               ))}
             </div>
           </div>
 
-          {/* Bio stats card layout */}
           <div className="grid grid-cols-3 gap-4 border-t border-gray-50 pt-5 mt-6">
             <div className="text-center bg-[#F6FAFD]/60 rounded-xl p-3 border border-gray-50/50">
-              <span className="font-heading text-xl font-extrabold text-[#1A3D63]">142</span>
+              <span className="font-heading text-xl font-extrabold text-[#1A3D63]">{stats.total_students}</span>
               <p className="font-body text-[10px] text-gray-400 mt-1 uppercase tracking-wider">Students helped</p>
             </div>
             <div className="text-center bg-[#F6FAFD]/60 rounded-xl p-3 border border-gray-50/50">
-              <span className="font-heading text-xl font-extrabold text-[#1A3D63]">28</span>
+              <span className="font-heading text-xl font-extrabold text-[#1A3D63]">{stats.resolved}</span>
               <p className="font-body text-[10px] text-gray-400 mt-1 uppercase tracking-wider">Resolved this week</p>
             </div>
             <div className="text-center bg-[#F6FAFD]/60 rounded-xl p-3 border border-gray-50/50">
-              <span className="font-heading text-xl font-extrabold text-[#1A3D63]">18m</span>
+              <span className="font-heading text-xl font-extrabold text-[#1A3D63]">{stats.avg_response}m</span>
               <p className="font-body text-[10px] text-gray-400 mt-1 uppercase tracking-wider">Avg response time</p>
             </div>
           </div>
 
-          {/* Buttons footer */}
-          <div className="flex items-center gap-3 mt-6 border-t border-gray-50 pt-4">
+          <div className="flex flex-col sm:flex-row items-center gap-3 mt-6 border-t border-gray-50 pt-4">
             <button
               onClick={() => navigate("/mentor/profile")}
-              className="flex-1 bg-[#0A1931] hover:bg-[#1A3D63] text-white font-body text-xs font-semibold py-2.5 px-4 rounded-xl shadow-sm transition-colors duration-200"
+              className="w-full sm:flex-1 bg-[#0A1931] hover:bg-[#1A3D63] text-white font-body text-xs font-semibold py-2.5 px-4 rounded-xl shadow-sm transition-colors duration-200"
             >
               Edit Profile
             </button>
             <button
               onClick={() => navigate("/mentor/profile")}
-              className="flex-1 border border-[#4A7FA7] text-[#4A7FA7] hover:bg-[#F6FAFD] font-body text-xs font-semibold py-2.5 px-4 rounded-xl transition-colors duration-200"
+              className="w-full sm:flex-1 border border-[#4A7FA7] text-[#4A7FA7] hover:bg-[#F6FAFD] font-body text-xs font-semibold py-2.5 px-4 rounded-xl transition-colors duration-200"
             >
               View Public Profile
+            </button>
+            <button
+              onClick={() => setShowSupportModal(true)}
+              className="w-full sm:flex-1 border border-rose-200 text-rose-500 hover:bg-rose-50 font-body text-xs font-semibold py-2.5 px-4 rounded-xl transition-colors duration-200 flex items-center justify-center gap-1.5 cursor-pointer"
+            >
+              <HelpCircle size={14} />
+              Ask Support
             </button>
           </div>
         </div>
 
         {/* Right Card: Availability Settings */}
-        <div className="bg-white rounded-2xl p-6 border border-gray-100 shadow-sm flex flex-col justify-between">
+        <div
+          ref={availabilityRef}
+          className={`bg-white rounded-2xl p-6 border transition-all duration-500 shadow-sm flex flex-col justify-between ${
+            highlightAvailability ? "border-amber-400 ring-2 ring-amber-400/20 shadow-md scale-[1.01]" : "border-gray-100"
+          }`}
+        >
           <div className="space-y-5">
             <div className="flex items-center justify-between border-b border-gray-50 pb-3">
               <h3 className="font-heading text-sm font-bold text-[#0A1931] flex items-center gap-1.5">
@@ -305,9 +509,8 @@ export default function MentorDashboardPage() {
             </div>
           </div>
 
-          {/* Toggle Switches */}
+          {/* Toggle Preferences Switches */}
           <div className="space-y-3 pt-5 border-t border-gray-50 mt-4">
-            {/* Toggle 1: Accept urgent */}
             <div className="flex items-center justify-between">
               <div>
                 <span className="font-body text-xs font-semibold text-gray-700 block">Accept urgent requests</span>
@@ -325,7 +528,6 @@ export default function MentorDashboardPage() {
               </button>
             </div>
 
-            {/* Toggle 2: Email notifications */}
             <div className="flex items-center justify-between">
               <div>
                 <span className="font-body text-xs font-semibold text-gray-700 block">Email notifications</span>
@@ -343,7 +545,6 @@ export default function MentorDashboardPage() {
               </button>
             </div>
 
-            {/* Toggle 3: Auto-accept returning */}
             <div className="flex items-center justify-between">
               <div>
                 <span className="font-body text-xs font-semibold text-gray-700 block">Auto-accept returning students</span>
@@ -365,6 +566,192 @@ export default function MentorDashboardPage() {
 
       </div>
 
+      {/* ── 2b. Gamified Progress & Work Timer Row ── */}
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+
+        {/* Gamified Achievements Card */}
+        <div className="lg:col-span-2 bg-white rounded-2xl p-6 border border-gray-100 shadow-sm flex flex-col justify-between">
+          <div className="space-y-6">
+            <div className="flex items-center justify-between border-b border-gray-50 pb-3">
+              <h3 className="font-heading text-sm font-bold text-[#0A1931] flex items-center gap-1.5">
+                <Trophy className="text-amber-500" size={18} />
+                Helper Progress &amp; Badges
+              </h3>
+              <span className="font-body text-xs text-slate-400">Gamified Stats</span>
+            </div>
+
+            {/* Points & Streak cards */}
+            <div className="grid grid-cols-2 gap-4">
+              <div className="bg-gradient-to-br from-amber-50 to-orange-50 border border-amber-100 rounded-xl p-4 flex items-center gap-3">
+                <Trophy className="text-amber-600 fill-amber-300" size={24} />
+                <div>
+                  <span className="font-heading text-xl font-extrabold text-amber-900 block">
+                    {profile.total_points ?? 0}
+                  </span>
+                  <span className="font-body text-[10px] text-amber-700 font-semibold block uppercase tracking-wider">
+                    Helper XP Points
+                  </span>
+                </div>
+              </div>
+
+              <div className="bg-gradient-to-br from-red-50 to-orange-50 border border-red-100 rounded-xl p-4 flex items-center gap-3">
+                <Flame className="text-red-600 fill-red-300" size={24} />
+                <div>
+                  <span className="font-heading text-xl font-extrabold text-red-900 block">
+                    {profile.response_streak_days ?? 0} days
+                  </span>
+                  <span className="font-body text-[10px] text-red-700 font-semibold block uppercase tracking-wider">
+                    Response Streak
+                  </span>
+                </div>
+              </div>
+            </div>
+
+            {/* Badges Grid */}
+            <div className="space-y-3">
+              <h4 className="font-heading text-xs font-bold text-gray-500 uppercase tracking-wider">Unlocked Tutoring Badges</h4>
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                {achievements.map((ach, idx) => {
+                  const unlocked = ach.unlocked
+                  return (
+                    <div
+                      key={idx}
+                      className={`p-3.5 border rounded-xl flex flex-col justify-between items-start gap-2 transition-all duration-200 ${
+                        unlocked 
+                          ? "bg-emerald-50/50 border-emerald-100" 
+                          : "bg-gray-50/50 border-gray-100 opacity-60"
+                      }`}
+                    >
+                      <div className="flex items-center gap-2">
+                        <div className={`w-8 h-8 rounded-lg flex items-center justify-center ${
+                          unlocked ? "bg-emerald-100 text-emerald-600" : "bg-gray-200 text-gray-400"
+                        }`}>
+                          {ach.name.includes("Solver") ? (
+                            <Check size={16} />
+                          ) : ach.name.includes("Streak") ? (
+                            <Flame size={16} />
+                          ) : (
+                            <BookOpen size={16} />
+                          )}
+                        </div>
+                        <span className="font-heading text-xs font-bold text-slate-800 leading-tight">
+                          {ach.name}
+                        </span>
+                      </div>
+                      <p className="font-body text-[10px] text-slate-500 leading-relaxed min-h-[30px]">
+                        {ach.description}
+                      </p>
+                      <span className={`font-body text-[9px] font-bold uppercase px-2 py-0.5 rounded-md ${
+                        unlocked ? "bg-emerald-100 text-emerald-700" : "bg-gray-100 text-gray-500"
+                      }`}>
+                        {unlocked ? "Unlocked" : "Locked"}
+                      </span>
+                    </div>
+                  )
+                })}
+              </div>
+            </div>
+
+          </div>
+        </div>
+
+        {/* Prep Timer & AI Insights */}
+        <div className="bg-white rounded-2xl p-6 border border-gray-100 shadow-sm flex flex-col justify-between space-y-6">
+          
+          {/* Prep Timer Card */}
+          <div className="space-y-4">
+            <div className="flex items-center justify-between border-b border-gray-50 pb-3">
+              <h3 className="font-heading text-sm font-bold text-[#0A1931] flex items-center gap-1.5">
+                <Clock className="text-[#4A7FA7]" size={16} />
+                Prep Work Timer
+              </h3>
+              <span className={`w-2.5 h-2.5 rounded-full ${timerActive ? "bg-red-500 animate-pulse" : "bg-gray-300"}`} />
+            </div>
+
+            {/* Selector */}
+            <div className="flex gap-2">
+              {["Lesson Prep", "Grading", "Admin support"].map(cat => (
+                <button
+                  key={cat}
+                  onClick={() => setTimerCategory(cat)}
+                  disabled={timerActive}
+                  className={`flex-1 py-1 px-2 border rounded-lg text-[10px] font-semibold font-body text-center transition-all ${
+                    timerCategory === cat
+                      ? "bg-[#0A1931] text-white border-[#0A1931]"
+                      : "bg-slate-50 border-slate-100 text-slate-500 hover:bg-slate-100 disabled:opacity-50 cursor-pointer"
+                  }`}
+                >
+                  {cat}
+                </button>
+              ))}
+            </div>
+
+            {/* Timer digits & controls */}
+            <div className="bg-slate-50 rounded-2xl p-4 border border-slate-100 text-center space-y-3">
+              <div className="font-heading text-3xl font-extrabold text-[#0A1931] tracking-tight">
+                {String(Math.floor(timerSecondsLeft / 60)).padStart(2, '0')}:
+                {String(timerSecondsLeft % 60).padStart(2, '0')}
+              </div>
+              
+              <div className="flex items-center justify-center gap-2">
+                <button
+                  onClick={() => setTimerActive(!timerActive)}
+                  className={`py-1.5 px-4 font-body text-xs font-bold text-white rounded-xl shadow-sm border-none cursor-pointer ${
+                    timerActive ? "bg-amber-500 hover:bg-amber-600" : "bg-emerald-500 hover:bg-emerald-600"
+                  }`}
+                >
+                  {timerActive ? "Pause" : "Start"}
+                </button>
+                <button
+                  onClick={() => { setTimerActive(false); setTimerSecondsLeft(timerDuration * 60) }}
+                  className="p-1.5 border border-slate-200 hover:bg-slate-100 rounded-xl transition-colors cursor-pointer"
+                >
+                  <RotateCcw size={14} className="text-slate-500" />
+                </button>
+              </div>
+
+              {/* Quick durations */}
+              <div className="flex items-center justify-center gap-1.5 pt-1.5 border-t border-slate-100/50">
+                {[1, 5, 15, 25].map(m => (
+                  <button
+                    key={m}
+                    onClick={() => handleDurationChange(m)}
+                    disabled={timerActive}
+                    className="font-body text-[9px] font-bold text-[#4A7FA7] hover:underline bg-transparent border-none cursor-pointer disabled:opacity-50"
+                  >
+                    {m}m
+                  </button>
+                ))}
+              </div>
+            </div>
+          </div>
+
+          {/* AI Insights Card */}
+          <div className="space-y-3 border-t border-gray-50 pt-4">
+            <h4 className="font-heading text-xs font-bold text-gray-500 uppercase tracking-wider flex items-center gap-1">
+              <Sparkles size={13} className="text-[#4A7FA7] fill-[#4A7FA7]" />
+              AI Coaching Insights
+            </h4>
+            <div className="space-y-2">
+              {aiInsights.map((ins, idx) => (
+                <div key={idx} className="p-2.5 bg-[#F6FAFD] border border-blue-50/50 rounded-xl space-y-1">
+                  <div className="flex items-center justify-between">
+                    <span className="font-heading text-[9px] font-extrabold uppercase tracking-wider text-[#4A7FA7]">
+                      {ins.badge}
+                    </span>
+                  </div>
+                  <p className="font-body text-[10px] text-slate-600 leading-normal">
+                    {ins.text}
+                  </p>
+                </div>
+              ))}
+            </div>
+          </div>
+
+        </div>
+
+      </div>
+
       {/* ── 3. This Week At a Glance ── */}
       <div className="bg-white rounded-2xl p-6 border border-gray-100 shadow-sm space-y-6">
         <div className="flex items-center justify-between border-b border-gray-50 pb-4">
@@ -377,56 +764,51 @@ export default function MentorDashboardPage() {
         </div>
 
         <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-4">
-          {/* Card 1: Open Requests */}
           <div className="bg-[#F6FAFD]/60 border border-blue-100 hover:border-blue-300 rounded-2xl p-5 transition-all duration-200 shadow-sm">
             <span className="font-body text-[10px] text-gray-400 uppercase tracking-wider block font-semibold">
               Open Requests
             </span>
-            <span className="font-heading text-3xl font-extrabold text-blue-900 block mt-2">12</span>
+            <span className="font-heading text-3xl font-extrabold text-blue-900 block mt-2">{stats.open_requests}</span>
             <span className="font-body text-[10px] text-blue-600 font-semibold block mt-1.5">
-              3 urgent need attention
+              Requires attention
             </span>
           </div>
 
-          {/* Card 2: Resolved */}
           <div className="bg-[#F6FAFD]/60 border border-green-100 hover:border-green-300 rounded-2xl p-5 transition-all duration-200 shadow-sm">
             <span className="font-body text-[10px] text-gray-400 uppercase tracking-wider block font-semibold">
               Resolved
             </span>
-            <span className="font-heading text-3xl font-extrabold text-green-900 block mt-2">28</span>
+            <span className="font-heading text-3xl font-extrabold text-green-900 block mt-2">{stats.resolved}</span>
             <span className="font-body text-[10px] text-green-600 font-semibold block mt-1.5">
-              +4 vs last week
+              Completed discussions
             </span>
           </div>
 
-          {/* Card 3: Avg Response */}
           <div className="bg-[#F6FAFD]/60 border border-teal-100 hover:border-teal-300 rounded-2xl p-5 transition-all duration-200 shadow-sm">
             <span className="font-body text-[10px] text-gray-400 uppercase tracking-wider block font-semibold">
               Avg Response
             </span>
-            <span className="font-heading text-3xl font-extrabold text-teal-900 block mt-2">18m</span>
+            <span className="font-heading text-3xl font-extrabold text-teal-900 block mt-2">{stats.avg_response}m</span>
             <span className="font-body text-[10px] text-teal-600 font-semibold block mt-1.5">
-              Better than 30m target
+              Response time target
             </span>
           </div>
 
-          {/* Card 4: Student Rating */}
           <div className="bg-[#F6FAFD]/60 border border-amber-100 hover:border-amber-300 rounded-2xl p-5 transition-all duration-200 shadow-sm">
             <span className="font-body text-[10px] text-gray-400 uppercase tracking-wider block font-semibold">
               Student Rating
             </span>
-            <span className="font-heading text-3xl font-extrabold text-amber-900 block mt-2">4.8★</span>
+            <span className="font-heading text-3xl font-extrabold text-amber-900 block mt-2">{stats.rating}★</span>
             <span className="font-body text-[10px] text-amber-600 font-semibold block mt-1.5">
-              Top 5% of mentors
+              Cumulative reviews
             </span>
           </div>
 
-          {/* Card 5: Total Students */}
           <div className="bg-[#F6FAFD]/60 border border-purple-100 hover:border-purple-300 rounded-2xl p-5 col-span-2 md:col-span-1 transition-all duration-200 shadow-sm">
             <span className="font-body text-[10px] text-gray-400 uppercase tracking-wider block font-semibold">
               Total Students
             </span>
-            <span className="font-heading text-3xl font-extrabold text-purple-900 block mt-2">142</span>
+            <span className="font-heading text-3xl font-extrabold text-purple-900 block mt-2">{stats.total_students}</span>
             <span className="font-body text-[10px] text-purple-600 font-semibold block mt-1.5">
               All-time helped
             </span>
@@ -443,14 +825,14 @@ export default function MentorDashboardPage() {
             <div className="flex items-center justify-between border-b border-gray-50 pb-4 mb-5">
               <div className="flex items-center gap-2">
                 <h3 className="font-heading text-base font-bold text-[#0A1931]">
-                  Today's Sessions
+                  Active Sessions
                 </h3>
                 <span className="font-body text-xs font-semibold bg-[#EBF3F9] text-[#1A3D63] px-2.5 py-0.5 rounded-lg border border-[#D5E6F2]">
-                  4 scheduled
+                  {sessions.length} today
                 </span>
               </div>
               <button
-                onClick={() => navigate("/scheduler")}
+                onClick={() => setShowAllSessions(true)}
                 className="font-body text-xs font-bold text-[#4A7FA7] hover:text-[#1A3D63] hover:underline flex items-center gap-1 transition-colors"
               >
                 View all <ArrowRight size={13} />
@@ -458,57 +840,56 @@ export default function MentorDashboardPage() {
             </div>
 
             <div className="space-y-3">
-              {[
-                { time: "9:00 - 9:45 AM", initials: "AS", name: "Ashani We.", subject: "Calculus", desc: "Integration by parts", status: "In Progress", statusColor: "bg-green-500 text-green-600 border-green-100 bg-green-50/30", btnText: "Join", btnPrimary: true },
-                { time: "11:00 - 11:30", initials: "RL", name: "M. Nayana", subject: "Geometry", desc: "Proof by contradiction", status: "Upcoming", statusColor: "bg-blue-500 text-blue-600 border-blue-100 bg-blue-50/30", btnText: "Prepare", btnPrimary: false },
-                { time: "2:00 - 2:45 PM", initials: "LM", name: "Mugith", subject: "Algebra", desc: "Matrix operations - Exam tomorrow!", status: "Urgent", statusColor: "bg-orange-500 text-orange-600 border-orange-100 bg-orange-50/30", btnText: "Prepare", btnPrimary: false },
-                { time: "4:00 - 4:30 PM", initials: "DN", name: "Kavindu Chamith", subject: "Statistics", desc: "Regression analysis & R-squared", status: "Upcoming", statusColor: "bg-blue-500 text-blue-600 border-blue-100 bg-blue-50/30", btnText: "Prepare", btnPrimary: false }
-              ].map((sess, idx) => (
-                <div key={idx} className="flex flex-col sm:flex-row sm:items-center justify-between p-4 border border-gray-50 rounded-xl hover:bg-gray-50/50 transition-all duration-200 gap-4">
-                  <div className="flex items-center gap-3">
-                    <span className="w-24 font-body text-xs font-semibold text-gray-500">
-                      {sess.time}
-                    </span>
-                    <div className="w-9 h-9 rounded-full bg-slate-100 text-[#1A3D63] font-bold flex items-center justify-center text-xs font-heading">
-                      {sess.initials}
+              {sessions.length === 0 ? (
+                <p className="font-body text-xs text-gray-400 italic py-4">No active mentoring sessions today</p>
+              ) : (
+                sessions.map((sess, idx) => (
+                  <div key={idx} className="flex flex-col sm:flex-row sm:items-center justify-between p-4 border border-gray-50 rounded-xl hover:bg-gray-50/50 transition-all duration-200 gap-4">
+                    <div className="flex items-center gap-3">
+                      <span className="w-24 font-body text-xs font-semibold text-gray-500">
+                        {sess.time}
+                      </span>
+                      <div className="w-9 h-9 rounded-full bg-slate-100 text-[#1A3D63] font-bold flex items-center justify-center text-xs font-heading">
+                        {sess.initials}
+                      </div>
+                      <div>
+                        <h4 className="font-heading text-sm font-bold text-[#0A1931]">
+                          {sess.name}
+                        </h4>
+                        <p className="font-body text-xs text-gray-400 mt-0.5">
+                          <span className="font-semibold text-gray-500">{sess.subject}</span> — {sess.desc}
+                        </p>
+                      </div>
                     </div>
-                    <div>
-                      <h4 className="font-heading text-sm font-bold text-[#0A1931]">
-                        {sess.name}
-                      </h4>
-                      <p className="font-body text-xs text-gray-400 mt-0.5">
-                        <span className="font-semibold text-gray-500">{sess.subject}</span> — {sess.desc}
-                      </p>
+
+                    <div className="flex items-center gap-3 justify-end sm:justify-start">
+                      <span className={`px-2.5 py-1 rounded-lg border font-body text-[10px] font-bold flex items-center gap-1.5 ${sess.statusColor}`}>
+                        <span className={`w-1.5 h-1.5 rounded-full ${
+                          sess.status === "In Progress" ? "bg-green-500 animate-pulse" : "bg-blue-500"
+                        }`} />
+                        {sess.status}
+                      </span>
+
+                      {sess.btnPrimary ? (
+                        <button
+                          onClick={() => setActiveSession(sess)}
+                          className="bg-[#0A1931] hover:bg-[#1A3D63] text-white px-4 py-1.5 rounded-xl font-body text-xs font-semibold shadow-sm transition-colors flex items-center gap-1"
+                        >
+                          <Play size={12} className="fill-white" />
+                          {sess.btnText}
+                        </button>
+                      ) : (
+                        <button
+                          onClick={() => setPrepSession(sess)}
+                          className="border border-[#4A7FA7] text-[#4A7FA7] hover:bg-[#F6FAFD] px-4 py-1.5 rounded-xl font-body text-xs font-semibold transition-colors"
+                        >
+                          {sess.btnText}
+                        </button>
+                      )}
                     </div>
                   </div>
-
-                  <div className="flex items-center gap-3 justify-end sm:justify-start">
-                    <span className={`px-2.5 py-1 rounded-lg border font-body text-[10px] font-bold flex items-center gap-1.5 ${sess.statusColor}`}>
-                      <span className={`w-1.5 h-1.5 rounded-full ${
-                        sess.status === "In Progress" ? "bg-green-500 animate-pulse" : sess.status === "Urgent" ? "bg-orange-500" : "bg-blue-500"
-                      }`} />
-                      {sess.status}
-                    </span>
-
-                    {sess.btnPrimary ? (
-                      <button
-                        onClick={() => navigate("/scheduler")}
-                        className="bg-[#0A1931] hover:bg-[#1A3D63] text-white px-4 py-1.5 rounded-xl font-body text-xs font-semibold shadow-sm transition-colors flex items-center gap-1"
-                      >
-                        <Play size={12} className="fill-white" />
-                        {sess.btnText}
-                      </button>
-                    ) : (
-                      <button
-                        onClick={() => navigate("/scheduler")}
-                        className="border border-[#4A7FA7] text-[#4A7FA7] hover:bg-[#F6FAFD] px-4 py-1.5 rounded-xl font-body text-xs font-semibold transition-colors"
-                      >
-                        {sess.btnText}
-                      </button>
-                    )}
-                  </div>
-                </div>
-              ))}
+                ))
+              )}
             </div>
           </div>
         </div>
@@ -518,46 +899,44 @@ export default function MentorDashboardPage() {
           <div>
             <div className="flex items-center justify-between border-b border-gray-50 pb-4 mb-5">
               <h3 className="font-heading text-base font-bold text-[#0A1931]">
-                Performance by Subject
+                Subject Breakdown
               </h3>
               <BarChart4 size={18} className="text-[#4A7FA7]" />
             </div>
 
             <div className="space-y-4">
-              {[
-                { name: "Calculus", value: 92, bg: "bg-blue-500" },
-                { name: "Algebra", value: 67, bg: "bg-orange-500" },
-                { name: "Statistics", value: 78, bg: "bg-amber-600" },
-                { name: "Geometry", value: 85, bg: "bg-green-500" },
-                { name: "Trig", value: 83, bg: "bg-purple-500" }
-              ].map((subject, idx) => (
-                <div key={idx} className="space-y-1.5">
-                  <div className="flex justify-between text-xs font-body font-bold text-gray-700">
-                    <span>{subject.name}</span>
-                    <span>{subject.value}%</span>
+              {performance.length === 0 ? (
+                <p className="font-body text-xs text-gray-400 italic py-4">No resolved requests to show breakdown</p>
+              ) : (
+                performance.map((subject, idx) => (
+                  <div key={idx} className="space-y-1.5">
+                    <div className="flex justify-between text-xs font-body font-bold text-gray-700">
+                      <span>{subject.name}</span>
+                      <span>{subject.value}%</span>
+                    </div>
+                    <div className="w-full bg-gray-100 h-2 rounded-full overflow-hidden">
+                      <div
+                        className={`h-full rounded-full transition-all duration-500 ${subject.bg}`}
+                        style={{ width: `${subject.value}%` }}
+                      />
+                    </div>
                   </div>
-                  <div className="w-full bg-gray-100 h-2 rounded-full overflow-hidden">
-                    <div
-                      className={`h-full rounded-full transition-all duration-500 ${subject.bg}`}
-                      style={{ width: `${subject.value}%` }}
-                    />
-                  </div>
-                </div>
-              ))}
+                ))
+              )}
             </div>
           </div>
 
           <div className="flex justify-between border-t border-gray-50 pt-5 mt-6 font-body">
             <div className="text-left">
-              <span className="text-[10px] text-gray-400 uppercase tracking-wider font-semibold block">Overall Satisfaction</span>
+              <span className="text-[10px] text-gray-400 uppercase tracking-wider font-semibold block">Satisfaction</span>
               <span className="font-heading text-lg font-bold text-[#0A1931] mt-0.5 block">
-                4.8 <span className="text-xs text-gray-400 font-normal">/ 5.0</span>
+                {stats.rating} <span className="text-xs text-gray-400 font-normal">/ 5.0</span>
               </span>
             </div>
             <div className="text-right">
               <span className="text-[10px] text-gray-400 uppercase tracking-wider font-semibold block">Completion Rate</span>
               <span className="font-heading text-lg font-bold text-green-600 mt-0.5 block">
-                94%
+                {stats.completion_rate || 100}%
               </span>
             </div>
           </div>
@@ -573,40 +952,41 @@ export default function MentorDashboardPage() {
               Recent Notifications
             </h3>
             <span className="font-body text-xs font-semibold bg-red-50 text-red-500 px-2.5 py-0.5 rounded-lg border border-red-100">
-              3 new
+              {notifications.filter(n => n.unread).length} unread
             </span>
           </div>
-          <button className="font-body text-xs font-bold text-[#4A7FA7] hover:text-[#1A3D63] hover:underline flex items-center gap-1 transition-colors">
-            Mark all read <ArrowRight size={13} />
+          <button
+            onClick={() => navigate("/notifications")}
+            className="font-body text-xs font-bold text-[#4A7FA7] hover:text-[#1A3D63] hover:underline flex items-center gap-1 transition-colors border-none bg-transparent cursor-pointer"
+          >
+            View all <ArrowRight size={13} />
           </button>
         </div>
 
         <div className="divide-y divide-gray-50">
-          {[
-            { icon: AlertTriangle, bg: "bg-red-50 text-red-500 border-red-100", title: "Nayana", msg: "urgent! Exam tomorrow and needs help with matrix operations ASAP.", time: "10 minutes ago", unread: true },
-            { icon: MessageSquare, bg: "bg-amber-50 text-amber-500 border-amber-100", title: "New request from Jayamai", msg: "Statistics, confidence intervals. Awaiting your review.", time: "1 hour ago", unread: true },
-            { icon: Star, bg: "bg-orange-50 text-orange-500 border-orange-100", title: "Rashmika", msg: "left you a 5★ review: \"Dr. Davis explained integration by parts perfectly!\"", time: "3 hours ago", unread: true },
-            { icon: CheckCircle, bg: "bg-green-50 text-green-500 border-green-100", title: "Deshan's", msg: "session — Limits & Continuity — marked as resolved successfully.", time: "Yesterday, 4:30 PM", unread: false },
-            { icon: Calendar, bg: "bg-blue-50 text-blue-500 border-blue-100", title: "Your schedule for next week", msg: "has been published. 5 students have already booked sessions.", time: "Yesterday, 8:00 AM", unread: false }
-          ].map((notif, idx) => {
-            const IconComponent = notif.icon
-            return (
-              <div key={idx} className="flex items-start gap-3 py-4 first:pt-0 last:pb-0 transition-colors">
-                <div className={`w-9 h-9 rounded-full ${notif.bg} border flex items-center justify-center flex-shrink-0 mt-0.5`}>
-                  <IconComponent size={16} />
+          {notifications.length === 0 ? (
+            <p className="font-body text-xs text-gray-400 italic py-4 text-center">No recent notifications</p>
+          ) : (
+            notifications.map((notif, idx) => {
+              const IconComponent = getNotificationIcon(notif.title)
+              return (
+                <div key={idx} className="flex items-start gap-3 py-4 first:pt-0 last:pb-0 transition-colors">
+                  <div className="w-9 h-9 rounded-full bg-slate-50 border flex items-center justify-center flex-shrink-0 mt-0.5">
+                    <IconComponent size={16} className="text-[#4A7FA7]" />
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <p className="font-body text-xs text-gray-700 leading-relaxed">
+                      <span className="font-bold text-[#0A1931]">{notif.title}</span>: {notif.msg}
+                    </p>
+                    <span className="font-body text-[10px] text-gray-400 block mt-1">{notif.time}</span>
+                  </div>
+                  {notif.unread && (
+                    <span className="w-1.5 h-1.5 rounded-full bg-blue-500 flex-shrink-0 mt-2.5 animate-pulse" />
+                  )}
                 </div>
-                <div className="flex-1 min-w-0">
-                  <p className="font-body text-xs text-gray-700 leading-relaxed">
-                    <span className="font-bold text-[#0A1931]">{notif.title}</span> {notif.msg}
-                  </p>
-                  <span className="font-body text-[10px] text-gray-400 block mt-1">{notif.time}</span>
-                </div>
-                {notif.unread && (
-                  <span className="w-1.5 h-1.5 rounded-full bg-blue-500 flex-shrink-0 mt-2.5 animate-pulse" />
-                )}
-              </div>
-            )
-          })}
+              )
+            })
+          )}
         </div>
       </div>
 
@@ -620,17 +1000,30 @@ export default function MentorDashboardPage() {
         
         <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-4">
           {[
-            { icon: MessageSquare, bg: "bg-blue-50/55 text-blue-500 border-blue-100 hover:border-blue-300 hover:bg-blue-100/20", title: "View Pending Requests", path: "/mentor/requests" },
-            { icon: Calendar, bg: "bg-green-50/55 text-green-500 border-green-100 hover:border-green-300 hover:bg-green-100/20", title: "Set Next Week Schedule", path: "/scheduler" },
-            { icon: BarChart4, bg: "bg-purple-50/55 text-purple-500 border-purple-100 hover:border-purple-300 hover:bg-purple-100/20", title: "Monthly Performance Report", path: "/mentor/dashboard" },
-            { icon: FileText, bg: "bg-amber-50/55 text-amber-500 border-amber-100 hover:border-amber-300 hover:bg-amber-100/20", title: "Create Response Template", path: "/mentor/dashboard" },
-            { icon: BookOpen, bg: "bg-teal-50/55 text-teal-500 border-teal-100 hover:border-teal-300 hover:bg-teal-100/20", title: "Upload Study Resources", path: "/mentor/resources" }
+            { icon: MessageSquare, bg: "bg-blue-50/55 text-blue-500 border-blue-100 hover:border-blue-300 hover:bg-blue-100/20", title: "View Pending Requests", path: "/mentor/requests", actionType: "navigate" },
+            { icon: Calendar, bg: "bg-green-50/55 text-green-500 border-green-100 hover:border-green-300 hover:bg-green-100/20", title: "Set Next Week Schedule", path: "", actionType: "schedule" },
+            { icon: BarChart4, bg: "bg-purple-50/55 text-purple-500 border-purple-100 hover:border-purple-300 hover:bg-purple-100/20", title: "Monthly Performance Report", path: "", actionType: "performance" },
+            { icon: FileText, bg: "bg-amber-50/55 text-amber-500 border-amber-100 hover:border-amber-300 hover:bg-amber-100/20", title: "Create Response Template", path: "", actionType: "template" },
+            { icon: BookOpen, bg: "bg-teal-50/55 text-teal-500 border-teal-100 hover:border-teal-300 hover:bg-teal-100/20", title: "Upload Study Resources", path: "/mentor/resources", actionType: "navigate" }
           ].map((act, idx) => {
             const Icon = act.icon
+            const handleClick = () => {
+              if (act.actionType === "navigate") {
+                navigate(act.path)
+              } else if (act.actionType === "schedule") {
+                availabilityRef.current?.scrollIntoView({ behavior: "smooth", block: "center" })
+                setHighlightAvailability(true)
+                setTimeout(() => setHighlightAvailability(false), 2500)
+              } else if (act.actionType === "performance") {
+                setShowPerfReport(true)
+              } else if (act.actionType === "template") {
+                setShowTemplateModal(true)
+              }
+            }
             return (
               <button
                 key={idx}
-                onClick={() => navigate(act.path)}
+                onClick={handleClick}
                 className={`flex flex-col items-center justify-center text-center p-5 rounded-2xl border transition-all duration-200 shadow-sm cursor-pointer ${act.bg}`}
               >
                 <div className="w-10 h-10 rounded-xl flex items-center justify-center bg-white shadow-sm mb-3 border border-gray-100/50">
@@ -644,6 +1037,471 @@ export default function MentorDashboardPage() {
           })}
         </div>
       </div>
+
+      {/* ── Auto-save Notification Toast ── */}
+      {toastMessage && (
+        <div className="fixed bottom-5 right-5 z-[100] bg-green-600 text-white font-body text-xs font-semibold px-4 py-3 rounded-xl shadow-lg border border-green-500/20 flex items-center gap-2">
+          <CheckCircle size={15} />
+          {toastMessage}
+        </div>
+      )}
+
+      {/* ── Active Session Modal (Join) ── */}
+      {activeSession && (
+        <div className="fixed inset-0 z-50 bg-[#0A1931]/75 backdrop-blur-sm flex items-center justify-center p-4">
+          <div className="bg-white rounded-2xl border border-gray-100 w-full max-w-4xl shadow-2xl flex flex-col md:flex-row overflow-hidden max-h-[85vh] animate-in fade-in zoom-in-95 duration-200">
+            {/* Left side: Simulated Video Call */}
+            <div className="flex-1 bg-slate-950 p-6 flex flex-col justify-between text-white relative min-h-[300px] md:min-h-0">
+              <div className="flex items-center justify-between z-10">
+                <span className="bg-red-500 text-white text-[10px] uppercase font-bold px-2 py-0.5 rounded-full flex items-center gap-1">
+                  <span className="w-1.5 h-1.5 rounded-full bg-white animate-ping" />
+                  Live Class
+                </span>
+                <span className="font-mono text-xs bg-black/40 px-3 py-1 rounded-full text-slate-300">
+                  Time remaining: 24:15
+                </span>
+              </div>
+
+              <div className="absolute inset-0 flex flex-col items-center justify-center bg-gradient-to-b from-[#1A3D63]/30 to-[#0A1931]/80">
+                <div className="w-24 h-24 rounded-full bg-[#1A3D63] border-4 border-white/20 flex items-center justify-center shadow-lg mb-3">
+                  <span className="font-heading text-3xl font-bold text-white">{activeSession.initials}</span>
+                </div>
+                <h4 className="font-heading text-sm font-bold">{activeSession.name}</h4>
+                <p className="font-body text-xs text-slate-400 mt-1">{activeSession.subject} — {activeSession.desc}</p>
+              </div>
+
+              <div className="flex items-center justify-center gap-4 z-10">
+                <button className="w-10 h-10 rounded-full bg-white/10 hover:bg-white/20 flex items-center justify-center transition-colors border-none">
+                  <Clock size={16} />
+                </button>
+                <button className="w-10 h-10 rounded-full bg-[#4A7FA7] hover:bg-[#4A7FA7]/80 flex items-center justify-center transition-colors border-none">
+                  <Video size={16} />
+                </button>
+                <button className="w-10 h-10 rounded-full bg-white/10 hover:bg-white/20 flex items-center justify-center transition-colors border-none">
+                  <MessageSquare size={16} />
+                </button>
+              </div>
+            </div>
+
+            {/* Right side: Session details */}
+            <div className="w-full md:w-80 bg-slate-50 border-l border-slate-100 flex flex-col justify-between p-6">
+              <div className="space-y-5">
+                <div className="flex items-center justify-between">
+                  <h3 className="font-heading text-sm font-bold text-[#0A1931]">Virtual Classroom</h3>
+                  <button 
+                    onClick={() => setActiveSession(null)} 
+                    className="p-1 rounded-lg hover:bg-slate-200 text-slate-400 hover:text-slate-600 transition-colors border-none bg-transparent cursor-pointer"
+                  >
+                    <X size={16} />
+                  </button>
+                </div>
+
+                <div className="bg-white p-4 rounded-xl border border-slate-100 shadow-sm space-y-3">
+                  <div>
+                    <label className="text-[10px] text-slate-400 font-bold uppercase tracking-wider block">Student Name</label>
+                    <span className="text-xs text-slate-700 font-semibold">{activeSession.name}</span>
+                  </div>
+                  <div>
+                    <label className="text-[10px] text-slate-400 font-bold uppercase tracking-wider block">Session Topic</label>
+                    <span className="text-xs text-slate-700 font-semibold">{activeSession.desc}</span>
+                  </div>
+                  <div>
+                    <label className="text-[10px] text-slate-400 font-bold uppercase tracking-wider block">Meeting Type</label>
+                    <span className="text-xs text-slate-700 font-semibold">One-on-One Mentoring</span>
+                  </div>
+                </div>
+
+                <div className="space-y-2">
+                  <label className="text-[10px] text-slate-400 font-bold uppercase tracking-wider block">Quick Share Material</label>
+                  <button 
+                    onClick={() => {
+                      navigator.clipboard.writeText("https://whisperhive.app/shared/notes-calculus");
+                      setToastMessage("Resource link copied!");
+                      setTimeout(() => setToastMessage(""), 2000);
+                    }}
+                    className="w-full bg-white hover:bg-slate-100 border border-slate-200 rounded-lg p-2.5 flex items-center justify-between text-left text-xs font-semibold text-slate-600 transition-colors cursor-pointer"
+                  >
+                    <span className="truncate">Calculus cheat sheet.pdf</span>
+                    <Copy size={13} />
+                  </button>
+                </div>
+              </div>
+
+              <div className="space-y-2 pt-4 border-t border-slate-200">
+                <a 
+                  href="https://meet.google.com/mock-session" 
+                  target="_blank" 
+                  rel="noopener noreferrer"
+                  className="w-full bg-green-600 hover:bg-green-700 text-white font-body text-xs font-bold py-2.5 rounded-xl flex items-center justify-center gap-1.5 shadow-sm transition-colors text-center"
+                >
+                  <Video size={14} />
+                  Launch Google Meet
+                </a>
+                <button 
+                  onClick={() => setActiveSession(null)}
+                  className="w-full border border-red-200 text-red-600 hover:bg-red-50 font-body text-xs font-bold py-2.5 rounded-xl transition-colors bg-white cursor-pointer"
+                >
+                  End Classroom Session
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ── Prepare Session Modal (Prepare) ── */}
+      {prepSession && (
+        <div className="fixed inset-0 z-50 bg-[#0A1931]/75 backdrop-blur-sm flex items-center justify-center p-4">
+          <div className="bg-white rounded-2xl border border-gray-100 w-full max-w-md shadow-2xl p-6 space-y-5 animate-in fade-in zoom-in-95 duration-200">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <span className="w-2.5 h-2.5 rounded-full bg-blue-500" />
+                <h3 className="font-heading text-sm font-bold text-[#0A1931]">Prepare Session</h3>
+              </div>
+              <button 
+                onClick={() => setPrepSession(null)} 
+                className="p-1 rounded-lg hover:bg-slate-100 text-slate-400 hover:text-slate-600 transition-colors border-none bg-transparent cursor-pointer"
+              >
+                <X size={16} />
+              </button>
+            </div>
+
+            <div className="space-y-4">
+              <div className="bg-slate-50 p-4 rounded-xl border border-slate-100 shadow-sm">
+                <h4 className="font-heading text-xs font-bold text-[#0A1931]">{prepSession.name}</h4>
+                <p className="font-body text-xs text-slate-500 mt-1">{prepSession.subject} · {prepSession.desc}</p>
+                <div className="flex items-center gap-1.5 mt-3 text-[10px] text-[#4A7FA7] font-semibold bg-[#EBF3F9] px-2.5 py-1 rounded-lg w-max">
+                  <Clock size={12} />
+                  <span>Scheduled today: {prepSession.time}</span>
+                </div>
+              </div>
+
+              <div className="space-y-2">
+                <h5 className="text-[10px] text-slate-400 font-bold uppercase tracking-wider">Teaching Checklist</h5>
+                <div className="space-y-2.5">
+                  <label className="flex items-start gap-2.5 text-xs text-slate-600 cursor-pointer">
+                    <input type="checkbox" className="mt-0.5 rounded border-slate-300 accent-[#4A7FA7]" defaultChecked />
+                    <span>Review student's recent test performance</span>
+                  </label>
+                  <label className="flex items-start gap-2.5 text-xs text-slate-600 cursor-pointer">
+                    <input type="checkbox" className="mt-0.5 rounded border-slate-300 accent-[#4A7FA7]" />
+                    <span>Prepare Calculus practice exercises</span>
+                  </label>
+                  <label className="flex items-start gap-2.5 text-xs text-slate-600 cursor-pointer">
+                    <input type="checkbox" className="mt-0.5 rounded border-slate-300 accent-[#4A7FA7]" />
+                    <span>Open screen-share whiteboard app</span>
+                  </label>
+                </div>
+              </div>
+
+              <div className="space-y-2">
+                <h5 className="text-[10px] text-slate-400 font-bold uppercase tracking-wider">Suggested Material</h5>
+                <button 
+                  onClick={() => {
+                    setToastMessage("Material link copied!");
+                    setTimeout(() => setToastMessage(""), 2000);
+                  }}
+                  className="w-full bg-[#EBF3F9]/60 hover:bg-[#EBF3F9]/90 border border-slate-200 rounded-lg p-2.5 flex items-center justify-between text-left text-xs text-slate-700 transition-colors cursor-pointer"
+                >
+                  <span className="truncate">Reference Worksheet #3 — Limits.pdf</span>
+                  <Copy size={13} className="text-[#4A7FA7]" />
+                </button>
+              </div>
+            </div>
+
+            <div className="flex items-center gap-3 pt-3 border-t border-slate-100">
+              <button 
+                onClick={() => setPrepSession(null)}
+                className="flex-1 border border-slate-200 text-slate-500 hover:bg-slate-50 font-body text-xs font-semibold py-2.5 px-4 rounded-xl transition-colors bg-white cursor-pointer"
+              >
+                Close
+              </button>
+              <button 
+                onClick={() => {
+                  setPrepSession(null);
+                  setActiveSession(prepSession);
+                }}
+                className="flex-1 bg-[#0A1931] hover:bg-[#1A3D63] text-white font-body text-xs font-semibold py-2.5 px-4 rounded-xl shadow-sm transition-colors text-center cursor-pointer border-none"
+              >
+                Launch Session
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ── Weekly Schedule Modal (View all sessions) ── */}
+      {showAllSessions && (
+        <div className="fixed inset-0 z-50 bg-[#0A1931]/75 backdrop-blur-sm flex items-center justify-center p-4">
+          <div className="bg-white rounded-2xl border border-gray-100 w-full max-w-2xl shadow-2xl p-6 space-y-5 max-h-[80vh] overflow-y-auto animate-in fade-in zoom-in-95 duration-200">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <Calendar size={18} className="text-[#4A7FA7]" />
+                <h3 className="font-heading text-sm font-bold text-[#0A1931]">Weekly Schedule</h3>
+              </div>
+              <button 
+                onClick={() => setShowAllSessions(false)} 
+                className="p-1 rounded-lg hover:bg-slate-100 text-slate-400 hover:text-slate-600 transition-colors border-none bg-transparent cursor-pointer"
+              >
+                <X size={16} />
+              </button>
+            </div>
+
+            <div className="space-y-4 divide-y divide-slate-100">
+              {[
+                { day: "Monday", list: sessions.filter((_, i) => i % 5 === 0) },
+                { day: "Tuesday", list: sessions.filter((_, i) => i % 5 === 1) },
+                { day: "Wednesday", list: sessions.filter((_, i) => i % 5 === 2) },
+                { day: "Thursday", list: sessions.filter((_, i) => i % 5 === 3) },
+                { day: "Friday", list: sessions.filter((_, i) => i % 5 === 4) }
+              ].map((group, index) => (
+                <div key={index} className="pt-3 first:pt-0">
+                  <h4 className="font-heading text-xs font-bold text-slate-400 mb-2">{group.day}</h4>
+                  {group.list.length === 0 ? (
+                    <p className="font-body text-xs text-slate-300 italic">No classes scheduled</p>
+                  ) : (
+                    <div className="space-y-2">
+                      {group.list.map((c, i) => (
+                        <div key={i} className="flex items-center justify-between p-3 bg-slate-50 border border-slate-100 rounded-xl">
+                          <div className="flex items-center gap-3">
+                            <span className="font-body text-xs text-slate-500 font-semibold w-16">{c.time}</span>
+                            <div>
+                              <p className="font-heading text-xs font-bold text-[#0A1931]">{c.name}</p>
+                              <p className="font-body text-[10px] text-slate-400">{c.subject} · {c.desc}</p>
+                            </div>
+                          </div>
+                          <span className={`px-2 py-0.5 rounded text-[9px] font-bold ${
+                            c.status === "Completed" ? "bg-green-50 text-green-600 border border-green-100" :
+                            c.status === "Urgent" ? "bg-orange-50 text-orange-600 border border-orange-100 animate-pulse" :
+                            "bg-blue-50 text-blue-600 border border-blue-100"
+                          }`}>{c.status}</span>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ── Monthly Performance Report Modal ── */}
+      {showPerfReport && (
+        <div className="fixed inset-0 z-50 bg-[#0A1931]/75 backdrop-blur-sm flex items-center justify-center p-4">
+          <div className="bg-white rounded-2xl border border-gray-100 w-full max-w-2xl shadow-2xl p-6 space-y-5 max-h-[85vh] overflow-y-auto animate-in fade-in zoom-in-95 duration-200">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <BarChart4 size={18} className="text-[#4A7FA7]" />
+                <h3 className="font-heading text-sm font-bold text-[#0A1931]">Performance Report</h3>
+              </div>
+              <button 
+                onClick={() => setShowPerfReport(false)} 
+                className="p-1 rounded-lg hover:bg-slate-100 text-slate-400 hover:text-slate-600 transition-colors border-none bg-transparent cursor-pointer"
+              >
+                <X size={16} />
+              </button>
+            </div>
+
+            <div className="grid grid-cols-3 gap-4 text-center">
+              <div className="bg-slate-50 p-4 rounded-xl border border-slate-100 shadow-sm">
+                <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">Average Rating</span>
+                <span className="font-heading text-2xl font-extrabold text-[#0A1931] mt-1 block">{stats.rating}★</span>
+              </div>
+              <div className="bg-slate-50 p-4 rounded-xl border border-slate-100 shadow-sm">
+                <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">Response Time</span>
+                <span className="font-heading text-2xl font-extrabold text-[#0A1931] mt-1 block">{stats.avg_response}m</span>
+              </div>
+              <div className="bg-slate-50 p-4 rounded-xl border border-slate-100 shadow-sm">
+                <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">Completion Rate</span>
+                <span className="font-heading text-2xl font-extrabold text-[#0A1931] mt-1 block">{stats.completion_rate || 100}%</span>
+              </div>
+            </div>
+
+            <div className="space-y-4 border-t border-slate-100 pt-4">
+              <h4 className="font-heading text-xs font-bold text-slate-500 uppercase tracking-wider">Teaching Metrics Breakdown</h4>
+              <div className="space-y-3.5">
+                {(!stats.metrics_breakdown || stats.metrics_breakdown.length === 0) ? (
+                  <p className="font-body text-xs text-gray-400 italic py-2">No teaching metrics data available yet</p>
+                ) : (
+                  stats.metrics_breakdown.map((item, i) => (
+                    <div key={i} className="space-y-1">
+                      <div className="flex justify-between text-xs font-semibold text-slate-700">
+                        <span>{item.name}</span>
+                        <span>{item.value}% positive</span>
+                      </div>
+                      <div className="w-full bg-slate-100 h-2 rounded-full overflow-hidden">
+                        <div className="h-full bg-green-500 rounded-full" style={{ width: `${item.value}%` }} />
+                      </div>
+                    </div>
+                  ))
+                )}
+              </div>
+            </div>
+
+            <div className="space-y-3 border-t border-slate-100 pt-4">
+              <h4 className="font-heading text-xs font-bold text-slate-500 uppercase tracking-wider">Recent Reviews</h4>
+              <div className="space-y-2">
+                {(!stats.reviews || stats.reviews.length === 0) ? (
+                  <p className="font-body text-xs text-gray-400 italic py-2">No reviews received yet</p>
+                ) : (
+                  stats.reviews.map((rev, i) => (
+                    <div key={i} className="p-3 bg-slate-50 border border-slate-100 rounded-xl">
+                      <div className="flex justify-between items-center text-xs">
+                        <span className="font-bold text-slate-700">{rev.name}</span>
+                        <span className="text-amber-500 font-bold">{parseFloat(rev.rating).toFixed(1)}★</span>
+                      </div>
+                      <p className="font-body text-xs text-slate-500 mt-1 italic">"{rev.comment}"</p>
+                    </div>
+                  ))
+                )}
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ── Create Response Template Modal ── */}
+      {showTemplateModal && (
+        <div className="fixed inset-0 z-50 bg-[#0A1931]/75 backdrop-blur-sm flex items-center justify-center p-4">
+          <div className="bg-white rounded-2xl border border-gray-100 w-full max-w-xl shadow-2xl p-6 space-y-5 animate-in fade-in zoom-in-95 duration-200">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <FileText size={18} className="text-[#4A7FA7]" />
+                <h3 className="font-heading text-sm font-bold text-[#0A1931]">Response Templates</h3>
+              </div>
+              <button 
+                onClick={() => setShowTemplateModal(false)} 
+                className="p-1 rounded-lg hover:bg-slate-100 text-slate-400 hover:text-slate-600 transition-colors border-none bg-transparent cursor-pointer"
+              >
+                <X size={16} />
+              </button>
+            </div>
+
+            <div className="space-y-4 max-h-[250px] overflow-y-auto pr-1">
+              {templates.map((tpl) => (
+                <div key={tpl.id} className="p-3 bg-slate-50 border border-slate-100 rounded-xl space-y-2">
+                  <div className="flex items-center justify-between">
+                    <span className="font-heading text-xs font-bold text-[#0A1931]">{tpl.title}</span>
+                    <button 
+                      onClick={() => {
+                        navigator.clipboard.writeText(tpl.content);
+                        setToastMessage("Template copied!");
+                        setTimeout(() => setToastMessage(""), 2000);
+                      }}
+                      className="flex items-center gap-1 text-[10px] font-semibold text-[#4A7FA7] hover:underline bg-transparent border-none cursor-pointer"
+                    >
+                      <Copy size={11} />
+                      Copy text
+                    </button>
+                  </div>
+                  <p className="font-body text-xs text-slate-500 leading-relaxed">{tpl.content}</p>
+                </div>
+              ))}
+            </div>
+
+            {/* Form to create new template */}
+            <div className="space-y-3 pt-3 border-t border-slate-100">
+              <h4 className="font-heading text-xs font-bold text-slate-500 uppercase tracking-wider">Create New Template</h4>
+              <div className="space-y-2">
+                <input 
+                  type="text" 
+                  placeholder="Template Title" 
+                  value={newTemplateTitle}
+                  onChange={(e) => setNewTemplateTitle(e.target.value)}
+                  className="w-full bg-slate-50 border border-slate-200 rounded-lg px-3 py-2 text-xs font-body focus:outline-none focus:border-[#4A7FA7]"
+                />
+                <textarea 
+                  placeholder="Write template response body..." 
+                  value={newTemplateContent}
+                  onChange={(e) => setNewTemplateContent(e.target.value)}
+                  rows={3}
+                  className="w-full bg-slate-50 border border-slate-200 rounded-lg px-3 py-2 text-xs font-body focus:outline-none focus:border-[#4A7FA7] resize-none"
+                />
+              </div>
+              <button 
+                onClick={() => {
+                  if (newTemplateTitle.trim() && newTemplateContent.trim()) {
+                    setTemplates([...templates, { id: Date.now(), title: newTemplateTitle, content: newTemplateContent }]);
+                    setNewTemplateTitle("");
+                    setNewTemplateContent("");
+                    setToastMessage("Template created!");
+                    setTimeout(() => setToastMessage(""), 2000);
+                  }
+                }}
+                className="w-full bg-[#0A1931] hover:bg-[#1A3D63] text-white font-body text-xs font-bold py-2 rounded-xl transition-all shadow-sm cursor-pointer border-none"
+              >
+                Create Template
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+      {/* ── Ask Support Modal ── */}
+      {showSupportModal && (
+        <div className="fixed inset-0 z-50 bg-[#0A1931]/75 backdrop-blur-sm flex items-center justify-center p-4">
+          <div className="bg-white rounded-2xl border border-gray-100 w-full max-w-md shadow-2xl p-6 space-y-4 animate-in fade-in zoom-in-95 duration-200">
+            <div className="flex items-center justify-between border-b border-slate-100 pb-3">
+              <div className="flex items-center gap-2">
+                <HelpCircle size={18} className="text-rose-500" />
+                <h3 className="font-heading text-sm font-bold text-[#0A1931]">Contact Administrator Support</h3>
+              </div>
+              <button 
+                onClick={() => setShowSupportModal(false)} 
+                className="p-1 rounded-lg hover:bg-slate-100 text-slate-400 hover:text-slate-600 transition-colors border-none bg-transparent cursor-pointer"
+              >
+                <X size={16} />
+              </button>
+            </div>
+
+            <div className="space-y-3 font-body text-xs text-slate-500 leading-relaxed">
+              <p>
+                Have a platform issue or need administrative assistance? Submit a ticket directly to the platform administrators below.
+              </p>
+
+              <div className="space-y-3">
+                <div className="space-y-1">
+                  <label className="font-bold text-slate-700">Ticket Title</label>
+                  <input
+                    type="text"
+                    placeholder="e.g. System glitch on availability slots"
+                    value={supportTitle}
+                    onChange={(e) => setSupportTitle(e.target.value)}
+                    className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-xs font-body focus:outline-none focus:border-rose-500"
+                  />
+                </div>
+
+                <div className="space-y-1">
+                  <label className="font-bold text-slate-700">Problem Description</label>
+                  <textarea
+                    placeholder="Describe your issue in detail..."
+                    value={supportDesc}
+                    onChange={(e) => setSupportDesc(e.target.value)}
+                    rows={4}
+                    className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-xs font-body focus:outline-none focus:border-rose-500 resize-none"
+                  />
+                </div>
+              </div>
+            </div>
+
+            <div className="flex items-center gap-3 pt-3 border-t border-slate-100">
+              <button
+                onClick={() => setShowSupportModal(false)}
+                className="flex-1 bg-slate-50 hover:bg-slate-100 text-slate-600 font-body text-xs font-bold py-2.5 rounded-xl border border-slate-200 cursor-pointer"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleSupportSubmit}
+                disabled={submittingSupport || !supportTitle.trim() || !supportDesc.trim()}
+                className="flex-1 bg-[#0A1931] hover:bg-[#1A3D63] text-white font-body text-xs font-bold py-2.5 rounded-xl transition-all shadow-sm cursor-pointer border-none disabled:opacity-50"
+              >
+                {submittingSupport ? "Submitting..." : "Submit Ticket"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
     </div>
   )

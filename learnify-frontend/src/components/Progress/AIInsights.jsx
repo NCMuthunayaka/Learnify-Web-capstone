@@ -1,4 +1,6 @@
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useState } from "react";
+import { getProgressReport } from "../../api/progressApi";
+
 
 // ── Chart.js loader ──────────────────────────────────────────────────────────
 function loadChartJs(cb) {
@@ -172,7 +174,6 @@ const ACTIVITY = [
 ];
 
 export function RecentActivity({ activities = [] }) {
-  const displayActivities = activities.length > 0 ? activities : ACTIVITY;
   return (
     <div className="flex-1 bg-white rounded-[18px] border border-[#D0E3F0] overflow-hidden shadow-[0_2px_8px_rgba(10,25,49,0.07)] flex flex-col">
       <div className="px-6 py-4 border-b border-[#D0E3F0] shrink-0">
@@ -183,25 +184,37 @@ export function RecentActivity({ activities = [] }) {
           Your latest actions
         </div>
       </div>
-      <div className="px-6 divide-y divide-[#D0E3F0] flex-1 flex flex-col justify-center">
-        {displayActivities.map((a, i) => (
-          <div key={i} className="flex items-start gap-3 py-3">
-            <div className={`w-[34px] h-[34px] rounded-[10px] flex items-center justify-center text-[15px] shrink-0 ${a.color}`}>
-              {a.icon}
-            </div>
-            <div className="flex-1 min-w-0">
-              <div className="text-[13px] font-semibold text-[#0A1931]" style={{ fontFamily: "Inter, sans-serif" }}>
-                {a.title}
+      <div className="px-6 divide-y divide-[#D0E3F0] flex-1 flex flex-col justify-center min-h-[220px]">
+        {activities.length > 0 ? (
+          activities.map((a, i) => (
+            <div key={i} className="flex items-start gap-3 py-3">
+              <div className={`w-[34px] h-[34px] rounded-[10px] flex items-center justify-center text-[15px] shrink-0 ${a.color}`}>
+                {a.icon}
               </div>
-              <div className="text-[12px] text-[#8AAABF] mt-0.5" style={{ fontFamily: "Inter, sans-serif" }}>
-                {a.desc}
+              <div className="flex-1 min-w-0">
+                <div className="text-[13px] font-semibold text-[#0A1931]" style={{ fontFamily: "Inter, sans-serif" }}>
+                  {a.title}
+                </div>
+                <div className="text-[12px] text-[#8AAABF] mt-0.5" style={{ fontFamily: "Inter, sans-serif" }}>
+                  {a.desc}
+                </div>
+              </div>
+              <div className="text-[11px] text-[#8AAABF] whitespace-nowrap mt-0.5" style={{ fontFamily: "Inter, sans-serif" }}>
+                {a.time}
               </div>
             </div>
-            <div className="text-[11px] text-[#8AAABF] whitespace-nowrap mt-0.5" style={{ fontFamily: "Inter, sans-serif" }}>
-              {a.time}
+          ))
+        ) : (
+          <div className="flex flex-col items-center justify-center text-center p-6 text-[#8AAABF]">
+            <span className="text-[28px] mb-2">📭</span>
+            <div className="text-[13px] font-semibold text-[#0A1931] mb-1" style={{ fontFamily: "Inter, sans-serif" }}>
+              No recent activity
+            </div>
+            <div className="text-[11px]" style={{ fontFamily: "Inter, sans-serif" }}>
+              Start studying or complete tasks to see your progress logs!
             </div>
           </div>
-        ))}
+        )}
       </div>
     </div>
   );
@@ -272,10 +285,71 @@ export function ClassLeaderboard({ entries = [] }) {
   );
 }
 
+// Helper to style basic Markdown elements in the AI Study Report
+function formatMarkdown(text) {
+  if (!text) return null;
+  const lines = text.split("\n");
+  return lines.map((line, idx) => {
+    let cleanLine = line.trim();
+    if (cleanLine.startsWith("# ")) {
+      return (
+        <h2 key={idx} className="text-lg font-bold text-[#0A1931] mt-5 mb-2 border-b border-[#D0E3F0] pb-1 font-poppins">
+          {cleanLine.replace("# ", "")}
+        </h2>
+      );
+    }
+    if (cleanLine.startsWith("## ")) {
+      return (
+        <h3 key={idx} className="text-md font-bold text-[#0A1931] mt-4 mb-2 font-poppins">
+          {cleanLine.replace("## ", "")}
+        </h3>
+      );
+    }
+    if (cleanLine.startsWith("### ")) {
+      return (
+        <h4 key={idx} className="text-sm font-bold text-[#0A1931] mt-3 mb-1 font-poppins">
+          {cleanLine.replace("### ", "")}
+        </h4>
+      );
+    }
+    if (cleanLine.startsWith("- ") || cleanLine.startsWith("* ")) {
+      const content = cleanLine.substring(2);
+      return (
+        <li key={idx} className="ml-5 list-disc text-sm text-[#4A6880] mb-1.5 font-body leading-relaxed">
+          {parseBold(content)}
+        </li>
+      );
+    }
+    if (!cleanLine) {
+      return <div key={idx} className="h-2" />;
+    }
+    return (
+      <p key={idx} className="text-sm text-[#4A6880] mb-2 font-body leading-relaxed">
+        {parseBold(cleanLine)}
+      </p>
+    );
+  });
+}
+
+function parseBold(text) {
+  const parts = text.split(/\*\*(.*?)\*\*/g);
+  return parts.map((part, index) => {
+    if (index % 2 === 1) {
+      return <strong key={index} className="font-bold text-[#0A1931]">{part}</strong>;
+    }
+    return part;
+  });
+}
+
 // ── MonthlyScoreChart ──────────────────────────────────────────────────────────
 export function MonthlyScoreChart({ chartData }) {
   const canvasRef = useRef(null);
   const chartRef  = useRef(null);
+  
+  const [showReport, setShowReport]       = useState(false);
+  const [reportText, setReportText]       = useState("");
+  const [reportLoading, setReportLoading] = useState(false);
+  const [reportError, setReportError]     = useState("");
 
   useEffect(() => {
     loadChartJs((Chart) => {
@@ -334,6 +408,22 @@ export function MonthlyScoreChart({ chartData }) {
     return () => chartRef.current?.destroy();
   }, [chartData]);
 
+  const openReport = async () => {
+    setShowReport(true);
+    setReportLoading(true);
+    setReportError("");
+    try {
+      const res = await getProgressReport();
+      setReportText(res.data.report);
+    } catch (err) {
+      setReportError("Failed to generate report. Please try again later.");
+    } finally {
+      setReportLoading(false);
+    }
+  };
+
+  const isEmpty = !chartData || chartData.empty || !chartData.labels || chartData.labels.length === 0;
+
   return (
     <div className="h-full bg-white rounded-[18px] border border-[#D0E3F0] overflow-hidden shadow-[0_2px_8px_rgba(10,25,49,0.07)] flex flex-col">
       <div className="flex items-center justify-between px-6 py-4 border-b border-[#D0E3F0] shrink-0">
@@ -345,15 +435,89 @@ export function MonthlyScoreChart({ chartData }) {
             Assignment &amp; quiz scores across subjects
           </div>
         </div>
-        <button className="text-[12px] font-semibold text-[#4A7FA7] bg-[#deeef8] px-3 py-1.5 rounded-[7px] hover:bg-[#cce3f3] transition-colors cursor-pointer border-none">
-          Full Report
-        </button>
+        {!isEmpty && (
+          <button
+            onClick={openReport}
+            className="text-[12px] font-semibold text-[#4A7FA7] bg-[#deeef8] px-3 py-1.5 rounded-[7px] hover:bg-[#cce3f3] transition-colors cursor-pointer border-none"
+          >
+            Full Report
+          </button>
+        )}
       </div>
       <div className="flex-1 w-full relative min-h-[350px]">
-        <div className="absolute inset-0 px-6 py-5">
-          <canvas ref={canvasRef} />
-        </div>
+        {isEmpty ? (
+          <div className="absolute inset-0 flex flex-col items-center justify-center text-center p-6 text-[#8AAABF]">
+            <span className="text-[36px] mb-2">📊</span>
+            <div className="text-[14px] font-bold text-[#0A1931] mb-1" style={{ fontFamily: "Poppins, sans-serif" }}>
+              No Score Trend Available
+            </div>
+            <div className="text-[12px] max-w-xs leading-relaxed" style={{ fontFamily: "Inter, sans-serif" }}>
+              Enroll in subjects and log tasks or study sessions to start tracking your performance.
+            </div>
+          </div>
+        ) : (
+          <div className="absolute inset-0 px-6 py-5">
+            <canvas ref={canvasRef} />
+          </div>
+        )}
       </div>
+
+      {/* AI Report Modal */}
+      {showReport && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-[#0A1931]/60 backdrop-blur-sm p-4 animate-fade-in">
+          <div className="bg-white w-full max-w-2xl rounded-[20px] shadow-[0_10px_30px_rgba(10,25,49,0.15)] flex flex-col max-h-[85vh] overflow-hidden border border-[#D0E3F0]">
+            
+            {/* Modal Header */}
+            <div className="flex items-center justify-between px-6 py-4 border-b border-[#D0E3F0] bg-[#F6FAFD]">
+              <div>
+                <h3 className="text-base font-bold text-[#0A1931]" style={{ fontFamily: "Poppins, sans-serif" }}>
+                  📊 Personal Study Analysis Report
+                </h3>
+                <p className="text-[11px] text-[#8AAABF] mt-0.5" style={{ fontFamily: "Inter, sans-serif" }}>
+                  AI-generated performance analysis and suggestions
+                </p>
+              </div>
+              <button
+                onClick={() => setShowReport(false)}
+                className="text-gray-400 hover:text-gray-600 focus:outline-none text-[20px] bg-transparent border-none cursor-pointer"
+              >
+                ✕
+              </button>
+            </div>
+
+            {/* Modal Content */}
+            <div className="flex-1 overflow-y-auto p-6 bg-white">
+              {reportLoading ? (
+                <div className="flex flex-col items-center justify-center py-12">
+                  <div className="w-10 h-10 border-4 border-[#4A7FA7] border-t-transparent rounded-full animate-spin mb-4" />
+                  <p className="text-[13px] text-[#8AAABF] animate-pulse" style={{ fontFamily: "Inter, sans-serif" }}>
+                    Analyzing your study data and generating recommendations...
+                  </p>
+                </div>
+              ) : reportError ? (
+                <div className="bg-red-50 border border-red-200 text-red-600 text-sm px-5 py-3 rounded-xl">
+                  {reportError}
+                </div>
+              ) : (
+                <div className="prose prose-blue max-w-none text-left">
+                  {formatMarkdown(reportText)}
+                </div>
+              )}
+            </div>
+
+            {/* Modal Footer */}
+            <div className="px-6 py-4 border-t border-[#D0E3F0] flex justify-end bg-[#F6FAFD]">
+              <button
+                onClick={() => setShowReport(false)}
+                className="text-[13px] font-semibold text-white bg-[#4A7FA7] px-5 py-2 rounded-[10px] hover:bg-[#3b6b90] transition-colors cursor-pointer border-none shadow-sm"
+              >
+                Close Report
+              </button>
+            </div>
+
+          </div>
+        </div>
+      )}
     </div>
   );
 }

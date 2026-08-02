@@ -10,11 +10,16 @@ import {
   uploadResource,
   uploadFile,
   trackDownload,
+  rateResource,
 } from "../api/resourcesApi"
-import { getSubjects } from "../api/subjectsApi"
+import { getSubjects, createSubject } from "../api/subjectsApi"
+import { getStudentsList } from "../api/usersApi"
+import { shareResource } from "../api/resourcesApi"
+import MaterialPreviewModal from "../components/resources/MaterialPreviewModal"
+import StarRating from "../components/common/StarRating"
 
 const typeOptions   = ["All Types", "PDF", "Video", "DOCX", "PPTX"]
-const sortOptions   = ["Newest First", "Oldest First", "A–Z", "Z–A"]
+const sortOptions   = ["Newest First", "Highest Rated", "Oldest First", "A–Z", "Z–A"]
 const fileTypeIdMap = { "PDF": 1, "DOCX": 2, "PPTX": 3, "Video": 4 }
 
 // ── Type Badge ─────────────────────────────────────────────
@@ -37,10 +42,26 @@ function TypeBadge({ type }) {
 function UploadModal({ onClose, onUploadSuccess, subjects }) {
   const [title, setTitle]               = useState("")
   const [subjectId, setSubjectId]       = useState("")
+  const [customSubject, setCustomSubject] = useState("")
   const [selectedFile, setSelectedFile] = useState(null)
   const [uploading, setUploading]       = useState(false)
   const [progress, setProgress]         = useState("")
   const [error, setError]               = useState("")
+  const [isPublic, setIsPublic]         = useState(true)
+  const [students, setStudents]         = useState([])
+  const [selectedStudent, setSelectedStudent] = useState("")
+
+  useEffect(() => {
+    async function loadStudents() {
+      try {
+        const res = await getStudentsList()
+        setStudents(res.data || [])
+      } catch (err) {
+        console.error("Failed to load students list:", err)
+      }
+    }
+    loadStudents()
+  }, [])
 
   function handleFileSelect(e) {
     const file = e.target.files[0]
@@ -65,10 +86,25 @@ function UploadModal({ onClose, onUploadSuccess, subjects }) {
 
     if (!title.trim()) { setError("Please enter a title"); return }
     if (!subjectId)    { setError("Please select a subject"); return }
+    if (subjectId === "NEW_CUSTOM_SUBJECT" && !customSubject.trim()) {
+      setError("Please type the new subject name")
+      return
+    }
     if (!selectedFile) { setError("Please select a file"); return }
+    if (!isPublic && !selectedStudent) {
+      setError("Please select a student to share this private resource with.")
+      return
+    }
 
     try {
       setUploading(true)
+
+      let finalSubjectId = subjectId
+      if (subjectId === "NEW_CUSTOM_SUBJECT") {
+        setProgress("Creating new subject...")
+        const newSubRes = await createSubject(customSubject.trim())
+        finalSubjectId = newSubRes.data.id
+      }
 
       // Step 1 — upload file
       setProgress("Uploading file...")
@@ -78,10 +114,12 @@ function UploadModal({ onClose, onUploadSuccess, subjects }) {
       setProgress("Saving resource...")
       await uploadResource({
         title:        title,
-        subject_id:   parseInt(subjectId),
+        subject_id:   parseInt(finalSubjectId),
         file_type_id: step1.data.file_type_id,
         file_url:     step1.data.file_url,
         file_size_mb: step1.data.file_size_mb,
+        is_public:    isPublic,
+        recipient_id: selectedStudent ? parseInt(selectedStudent) : null
       })
 
       onUploadSuccess()
@@ -137,7 +175,60 @@ function UploadModal({ onClose, onUploadSuccess, subjects }) {
             {subjects.map(s => (
               <option key={s.id} value={s.id}>{s.name}</option>
             ))}
+            <option value="NEW_CUSTOM_SUBJECT">➕ Add New Subject...</option>
           </select>
+
+          {subjectId === "NEW_CUSTOM_SUBJECT" && (
+            <input
+              type="text"
+              placeholder="Type new subject name (e.g. Artificial Intelligence)"
+              value={customSubject}
+              onChange={(e) => setCustomSubject(e.target.value)}
+              className="w-full mt-2 border border-gray-200 rounded-lg px-3 py-2.5 font-body text-xs text-gray-700 focus:outline-none focus:border-[#4A7FA7] bg-blue-50/40"
+            />
+          )}
+        </div>
+
+        {/* Visibility toggle & target student share */}
+        <div className="space-y-3.5 p-3.5 bg-gray-50 border border-gray-100 rounded-2xl">
+          <div className="flex items-center justify-between">
+            <div>
+              <span className="font-body text-xs font-bold text-[#0A1931] block">Make Resource Public</span>
+              <span className="font-body text-[10px] text-gray-400">
+                {isPublic 
+                  ? "Visible in the general library for all students." 
+                  : "Private: Only you and the selected student can view it."}
+              </span>
+            </div>
+            <label className="relative inline-flex items-center cursor-pointer select-none">
+              <input 
+                type="checkbox" 
+                checked={isPublic} 
+                onChange={(e) => {
+                  setIsPublic(e.target.checked)
+                  if (e.target.checked) setSelectedStudent("")
+                }}
+                className="sr-only peer" 
+              />
+              <div className="w-8 h-4.5 bg-gray-200 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-3.5 after:w-3.5 after:transition-all peer-checked:bg-[#4A7FA7]"></div>
+            </label>
+          </div>
+
+          <div className="pt-2.5 border-t border-gray-200/60">
+            <label className="font-body text-xs text-gray-500 mb-1.5 block">
+              {isPublic ? "Share with Student Personally (Optional)" : "Target Student (Required) *"}
+            </label>
+            <select
+              value={selectedStudent}
+              onChange={(e) => setSelectedStudent(e.target.value)}
+              className="w-full border border-gray-200 rounded-lg px-3 py-2 font-body text-xs text-gray-700 focus:outline-none focus:border-[#4A7FA7] bg-white"
+            >
+              <option value="">-- Select Student --</option>
+              {students.map(s => (
+                <option key={s.id} value={s.id}>{s.name}</option>
+              ))}
+            </select>
+          </div>
         </div>
 
         {/* File Picker */}
@@ -234,6 +325,7 @@ function ResourcesPage() {
   const [selectedSubject, setSelectedSubject] = useState(null)
   const [sortBy, setSortBy]                   = useState("Newest First")
   const [showUpload, setShowUpload]           = useState(false)
+  const [previewResource, setPreviewResource]  = useState(null)
   const [currentPage, setCurrentPage]         = useState(1)
   const itemsPerPage = 8
 
@@ -296,6 +388,8 @@ function ResourcesPage() {
   function sortResources(data, sortKey) {
     const sorted = [...data]
     switch (sortKey) {
+      case "Highest Rated":
+        return sorted.sort((a, b) => (b.avg_rating || 0) - (a.avg_rating || 0))
       case "Oldest First":
         return sorted.sort((a, b) =>
           new Date(a.uploaded_at) - new Date(b.uploaded_at))
@@ -310,11 +404,49 @@ function ResourcesPage() {
     }
   }
 
+  // ── Handle rating submission ───────────────────────────
+  async function handleInlineRate(resourceId, rating) {
+    try {
+      const res = await rateResource(resourceId, rating)
+      if (res?.data) {
+        setResources((prev) =>
+          prev.map((r) =>
+            r.id === resourceId
+              ? {
+                  ...r,
+                  avg_rating: res.data.avg_rating,
+                  rating_count: res.data.rating_count,
+                  user_rating: res.data.user_rating,
+                }
+              : r
+          )
+        )
+      }
+    } catch (err) {
+      console.error("Failed to submit rating:", err)
+    }
+  }
+
   // ── Handle download ────────────────────────────────────
   async function handleDownload(resource) {
     try {
       const response = await trackDownload(resource.id)
-      window.open(response.data.file_url, "_blank")
+      let downloadUrl = response?.data?.file_url || resource.file_url
+      if (downloadUrl) {
+        if (!downloadUrl.startsWith("http://") && !downloadUrl.startsWith("https://")) {
+          const backendUrl =
+            import.meta.env.VITE_BACKEND_URL ||
+            import.meta.env.VITE_API_URL?.replace(/\/api\/?$/, "") ||
+            "http://localhost:5000"
+          const cleanBackendUrl = backendUrl.replace(/\/$/, "")
+          const cleanUrl = downloadUrl.startsWith("/") ? downloadUrl : `/${downloadUrl}`
+          downloadUrl = `${cleanBackendUrl}${cleanUrl}`
+        }
+        if (!downloadUrl.includes("download=1")) {
+          downloadUrl += (downloadUrl.includes("?") ? "&" : "?") + "download=1"
+        }
+        window.open(downloadUrl, "_blank")
+      }
     } catch (err) {
       console.error("Download failed:", err)
       setError("Failed to download. Please try again.")
@@ -503,7 +635,7 @@ function ResourcesPage() {
             <table className="w-full">
               <thead>
                 <tr className="border-b border-gray-100">
-                  {["RESOURCE", "SUBJECT", "MENTOR", "TYPE",
+                  {["RESOURCE", "SUBJECT", "MENTOR", "TYPE", "RATING",
                     "UPLOADED", "SIZE", "ACTIONS"].map(h => (
                     <th key={h}
                       className="font-body text-[10px] font-semibold
@@ -526,9 +658,23 @@ function ResourcesPage() {
                            resource.file_type_name?.toLowerCase() === "pptx" ? "📊" :
                            resource.file_type_name?.toLowerCase() === "docx" ? "📝" : "📄"}
                         </div>
-                        <span className="font-body text-sm text-[#0A1931] font-medium">
-                          {resource.title}
-                        </span>
+                        <div className="flex flex-col">
+                          <span
+                            onClick={(e) => {
+                              e.preventDefault()
+                              e.stopPropagation()
+                              setPreviewResource(resource)
+                            }}
+                            className="font-body text-sm text-[#0A1931] font-medium hover:text-[#4A7FA7] cursor-pointer transition-colors"
+                          >
+                            {resource.title}
+                          </span>
+                          {resource.is_shared_personally && (
+                            <span className="font-body text-[9px] text-[#4A7FA7] font-bold mt-0.5 bg-blue-50 px-1.5 py-0.5 rounded border border-blue-100 w-fit">
+                              📎 Shared Personally
+                            </span>
+                          )}
+                        </div>
                       </div>
                     </td>
 
@@ -549,6 +695,17 @@ function ResourcesPage() {
 
                     <td className="px-5 py-3.5">
                       <TypeBadge type={resource.file_type_name} />
+                    </td>
+
+                    <td className="px-5 py-3.5">
+                      <StarRating
+                        rating={resource.avg_rating || 0}
+                        count={resource.rating_count || 0}
+                        userRating={resource.user_rating}
+                        interactive={true}
+                        onRate={(newRating) => handleInlineRate(resource.id, newRating)}
+                        size={13}
+                      />
                     </td>
 
                     <td className="px-5 py-3.5">
@@ -574,14 +731,24 @@ function ResourcesPage() {
                       <div className="flex items-center gap-2">
                         <Tooltip text="Preview">
                           <button
-                            onClick={() => window.open(resource.file_url, "_blank")}
+                            type="button"
+                            onClick={(e) => {
+                              e.preventDefault()
+                              e.stopPropagation()
+                              setPreviewResource(resource)
+                            }}
                             className="p-1.5 text-gray-400 hover:text-[#1A3D63] transition-colors">
                             <Eye size={15} />
                           </button>
                         </Tooltip>
                         <Tooltip text="Download">
                           <button
-                            onClick={() => handleDownload(resource)}
+                            type="button"
+                            onClick={(e) => {
+                              e.preventDefault()
+                              e.stopPropagation()
+                              handleDownload(resource)
+                            }}
                             className="p-1.5 text-gray-400 hover:text-[#1A3D63] transition-colors">
                             <Download size={15} />
                           </button>
@@ -633,6 +800,14 @@ function ResourcesPage() {
         )}
 
       </div>
+
+      {/* Material Preview Modal */}
+      <MaterialPreviewModal
+        resource={previewResource}
+        isOpen={!!previewResource}
+        onClose={() => setPreviewResource(null)}
+        onDownload={handleDownload}
+      />
     </div>
   )
 }

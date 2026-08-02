@@ -21,14 +21,14 @@ function Footer() {
               justify-center">
               <img
                 src={learnify_logo}
-                alt="Learnify Logo"
+                alt="WhisperHive Logo"
                 className="w-6 h-6 object-contain"
               />
             </div>
-            <span className="font-semibold text-lg">Learnify</span>
+            <span className="font-semibold text-lg">WhisperHive</span>
           </div>
           <p className="text-sm text-[#B3CFE5] leading-relaxed">
-            Learnify generates personalized study schedules, connects you
+            WhisperHive generates personalized study schedules, connects you
             with mentors & peers, and tracks your progress — all in one place.
           </p>
         </div>
@@ -57,9 +57,9 @@ function Footer() {
             <li>No: 123/6, Ragammawatta, Kirindiwela</li>
             <li>076 555 6756</li>
             <li>
-              <a href="mailto:learnify@gmail.com"
+              <a href="mailto:whisperhive@gmail.com"
                 className="hover:text-white transition-colors">
-                learnify.official.edu@gmail.com
+                whisperhive.official.edu@gmail.com
               </a>
             </li>
           </ul>
@@ -70,7 +70,7 @@ function Footer() {
       {/* Bottom Bar */}
       <div className="max-w-6xl mx-auto mt-8 pt-6 border-t border-[#1A3D63]
         text-center text-xs text-[#B3CFE5]">
-        © 2026 Learnify. Sabaragamuwa University of Sri Lanka.
+        © 2026 WhisperHive. Sabaragamuwa University of Sri Lanka.
       </div>
 
     </footer>
