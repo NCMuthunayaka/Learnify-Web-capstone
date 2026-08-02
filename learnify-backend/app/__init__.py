@@ -27,10 +27,17 @@ def create_app(config_name="development"):
     app = Flask(__name__)
     app.config.from_object(config[config_name])
 
-    app.config["MAIL_SERVER"]         = os.environ.get("MAIL_SERVER", "smtp.gmail.com")
-    app.config["MAIL_PORT"]           = int(os.environ.get("MAIL_PORT", 587))
-    app.config["MAIL_USE_TLS"]        = os.environ.get("MAIL_USE_TLS", "True").lower() in ("true", "1", "t")
-    app.config["MAIL_USE_SSL"]        = os.environ.get("MAIL_USE_SSL", "False").lower() in ("true", "1", "t")
+    app.config["MAIL_SERVER"] = os.environ.get("MAIL_SERVER", "smtp.gmail.com")
+    port_env = os.environ.get("MAIL_PORT")
+    if port_env and port_env == "587":
+        app.config["MAIL_PORT"]     = 587
+        app.config["MAIL_USE_TLS"]  = True
+        app.config["MAIL_USE_SSL"]  = False
+    else:
+        # Port 465 SSL — compatible with Railway container networking
+        app.config["MAIL_PORT"]     = 465
+        app.config["MAIL_USE_TLS"]  = False
+        app.config["MAIL_USE_SSL"]  = True
     app.config["MAIL_USERNAME"]       = os.environ.get("MAIL_USERNAME")
     app.config["MAIL_PASSWORD"]       = os.environ.get("MAIL_PASSWORD")
     
