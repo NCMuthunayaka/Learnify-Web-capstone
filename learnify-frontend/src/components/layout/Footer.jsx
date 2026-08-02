@@ -17,12 +17,13 @@ function Footer() {
         {/* Brand */}
         <div className="space-y-3">
           <div className="flex items-center gap-2">
-            <div className="w-8 h-8 bg-[#f6fafd] rounded-lg flex items-center
+            <div className="w-9 h-9 bg-[#f6fafd] rounded-[70px] overflow-hidden flex items-center
               justify-center">
               <img
                 src={learnify_logo}
                 alt="WhisperHive Logo"
-                className="w-6 h-6 object-contain"
+                className="w-full h-full object-cover rounded-[70px]"
+                style={{ borderRadius: "70px" }}
               />
             </div>
             <span className="font-semibold text-lg">WhisperHive</span>
