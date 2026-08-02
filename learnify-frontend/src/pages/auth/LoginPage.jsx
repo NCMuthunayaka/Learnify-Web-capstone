@@ -119,7 +119,7 @@ function LoginPage() {
             Welcome Back To
           </p>
           <h1 className="font-heading text-4xl font-bold text-white mb-4">
-            Learnify
+            WhisperHive
           </h1>
           <p className="font-body text-white/60 text-sm leading-relaxed">
             Login to continue your learning journey.

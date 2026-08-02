@@ -250,7 +250,8 @@ function RegisterPage() {
       )
       const { user, access_token, refresh_token } = response.data
       login(user, access_token, refresh_token)
-      navigate("/dashboard")
+      const targetRoute = user?.role === "mentor" ? "/mentor/dashboard" : user?.role === "admin" ? "/admin/dashboard" : "/dashboard"
+      navigate(targetRoute, { replace: true })
     } catch (err) {
       setApiError(
         err.response?.data?.error?.message || "Registration failed. Please try again."
@@ -281,7 +282,8 @@ function RegisterPage() {
           setShowRoleSelect(true)
         } else {
           login(user, access_token, refresh_token)
-          navigate("/dashboard")
+          const targetRoute = user?.role === "mentor" ? "/mentor/dashboard" : user?.role === "admin" ? "/admin/dashboard" : "/dashboard"
+          navigate(targetRoute, { replace: true })
         }
       } catch (err) {
         setApiError(
@@ -317,7 +319,8 @@ function RegisterPage() {
       await api.patch("/users/profile", { name: fullName, role: selectedRole })
       const updatedUser = { ...googleUserData.user, name: fullName, role: selectedRole }
       login(updatedUser, googleUserData.access_token, googleUserData.refresh_token)
-      navigate("/dashboard")
+      const targetRoute = selectedRole === "mentor" ? "/mentor/dashboard" : selectedRole === "admin" ? "/admin/dashboard" : "/dashboard"
+      navigate(targetRoute, { replace: true })
     } catch (err) {
       setApiError("Failed to save profile. Please try again.")
     } finally {
@@ -426,7 +429,7 @@ function RegisterPage() {
               disabled:opacity-50 disabled:cursor-not-allowed">
             {roleLoading
               ? <LoadingSpinner size="sm" color="white" />
-              : "Continue to Learnify"}
+              : "Continue to WhisperHive"}
           </button>
         </div>
       </div>
@@ -447,7 +450,7 @@ function RegisterPage() {
         <div className="hidden md:flex flex-1 flex-col justify-center
           px-10 py-12 bg-transparent space-y-4">
           <h1 className="font-heading text-5xl font-bold text-white">
-            Learnify
+            WhisperHive
           </h1>
           <div className="font-heading text-2xl font-bold text-white space-y-1">
             <p>Plan better.</p>

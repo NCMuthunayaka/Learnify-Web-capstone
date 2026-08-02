@@ -41,7 +41,7 @@ export default function AdminProfilePage() {
             const p = JSON.parse(atob(token.split(".")[1]))
             setUser({
               name:       p.name       || "Admin User",
-              email:      p.email      || "admin@learnify.com",
+              email:      p.email      || "admin@whisperhive.com",
               role:       p.role       || "admin",
               phone:      p.phone      || null,
               created_at: p.created_at || null,
@@ -60,7 +60,7 @@ export default function AdminProfilePage() {
 
   const fields = [
     { icon: User,     label: "Full Name",    value: user?.name  || "Admin User" },
-    { icon: Mail,     label: "Email",         value: user?.email || "admin@learnify.com" },
+    { icon: Mail,     label: "Email",         value: user?.email || "admin@whisperhive.com" },
     { icon: Phone,    label: "Phone Number",  value: user?.phone || "Not set" },
     { icon: Calendar, label: "Joined",        value: formatDate(user?.created_at) },
     { icon: Shield,   label: "Role",          value: (user?.role || "admin").charAt(0).toUpperCase() + (user?.role || "admin").slice(1) },
@@ -120,7 +120,7 @@ export default function AdminProfilePage() {
 
           <div className="mb-2">
             <h2 className="font-heading font-bold text-xl text-[#0A1931]">{user?.name || "Admin User"}</h2>
-            <p className="font-body text-sm text-gray-500 mt-0.5">{user?.email || "admin@learnify.com"}</p>
+            <p className="font-body text-sm text-gray-500 mt-0.5">{user?.email || "admin@whisperhive.com"}</p>
             <div className="flex flex-wrap items-center gap-2 mt-3">
               <span className="inline-flex items-center gap-1.5 px-3 py-1 bg-[#0A1931]
                 text-white rounded-full font-body text-[11px] font-bold uppercase tracking-wider">

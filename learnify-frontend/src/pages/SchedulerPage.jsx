@@ -6,7 +6,7 @@ import Button from "../components/common/Button"
 import Badge from "../components/common/Badge"
 import LoadingSpinner from "../components/common/LoadingSpinner"
 import { getTasks, getSchedulerStats, getTimetable, generateTimetable, createTask, updateTaskStatus } from "../api/schedulerApi"
-import { getSubjects } from "../api/subjectsApi"
+import { getSubjects, createSubject } from "../api/subjectsApi"
 import { startSession, endSession } from "../api/trackingApi"
 
 // ── statsData is now built dynamically from API (see dynamicStats below)
@@ -342,6 +342,7 @@ function SchedulerPage() {
   const [isTaskModalOpen, setIsTaskModalOpen] = useState(false)
   const [taskTitle, setTaskTitle] = useState("")
   const [taskSubjectId, setTaskSubjectId] = useState("")
+  const [customTaskSubject, setCustomTaskSubject] = useState("")
   const [taskDueDate, setTaskDueDate] = useState("")
   const [taskType, setTaskType] = useState("assignment")
   const [taskCreateLoading, setTaskCreateLoading] = useState(false)
@@ -357,19 +358,35 @@ function SchedulerPage() {
       setTaskCreateError("Subject is required.")
       return
     }
+    if (taskSubjectId === "NEW_CUSTOM_SUBJECT" && !customTaskSubject.trim()) {
+      setTaskCreateError("Please type the new subject name.")
+      return
+    }
     try {
       setTaskCreateLoading(true)
       setTaskCreateError(null)
+
+      let finalSubjectId = taskSubjectId
+      if (taskSubjectId === "NEW_CUSTOM_SUBJECT") {
+        const newSubRes = await createSubject(customTaskSubject.trim())
+        finalSubjectId = newSubRes.data.id
+
+        // Refresh subjects dropdown list
+        const refreshedSubs = await getSubjects()
+        setAllSubjects(refreshedSubs.data || [])
+      }
+
       await createTask({
         title: taskTitle.trim(),
-        subject_id: taskSubjectId,
+        subject_id: parseInt(finalSubjectId),
         due_date: taskDueDate,
         type: taskType
       })
       await reloadTimetable()
       setIsTaskModalOpen(false)
+      setCustomTaskSubject("")
     } catch (err) {
-      setTaskCreateError("Failed to create task on server.")
+      setTaskCreateError("Failed to create task or subject on server.")
     } finally {
       setTaskCreateLoading(false)
     }
@@ -1255,7 +1272,18 @@ function SchedulerPage() {
                   {allSubjects.map(s => (
                     <option key={s.id} value={s.id}>{s.name}</option>
                   ))}
+                  <option value="NEW_CUSTOM_SUBJECT">➕ Add New Subject...</option>
                 </select>
+
+                {taskSubjectId === "NEW_CUSTOM_SUBJECT" && (
+                  <input
+                    type="text"
+                    placeholder="Type new subject name (e.g. Artificial Intelligence)"
+                    value={customTaskSubject}
+                    onChange={(e) => setCustomTaskSubject(e.target.value)}
+                    className="w-full mt-2 bg-blue-50/40 text-gray-800 px-3 py-2 rounded-xl border border-gray-200 focus:outline-none focus:border-[#4A7FA7] font-body text-xs"
+                  />
+                )}
               </div>
 
               <div className="grid grid-cols-2 gap-3">

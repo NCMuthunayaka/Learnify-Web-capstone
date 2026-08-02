@@ -30,6 +30,30 @@ def allowed_file(filename):
     return "." in filename and \
            filename.rsplit(".", 1)[1].lower() in ALLOWED_EXTENSIONS
 
+def get_resource_rating_stats(resource_id, current_user_id=None):
+    try:
+        from sqlalchemy import text
+        row = db.session.execute(
+            text("SELECT AVG(rating), COUNT(id) FROM resource_ratings WHERE resource_id = :rid"),
+            {"rid": resource_id}
+        ).fetchone()
+        avg_rating = round(float(row[0]), 1) if row and row[0] is not None else 0.0
+        rating_count = int(row[1]) if row and row[1] is not None else 0
+        
+        user_rating = None
+        if current_user_id:
+            user_row = db.session.execute(
+                text("SELECT rating FROM resource_ratings WHERE resource_id = :rid AND user_id = :uid"),
+                {"rid": resource_id, "uid": current_user_id}
+            ).fetchone()
+            if user_row:
+                user_rating = int(user_row[0])
+                
+        return avg_rating, rating_count, user_rating
+    except Exception as e:
+        print(f"Rating stats calculation error: {e}")
+        return 0.0, 0, None
+
 
 # ── POST /api/resources/upload-file ──────────────────────
 @bp.route("/upload-file", methods=["POST"])
@@ -133,10 +157,14 @@ def get_resources():
         subject           = Subject.query.get(r.subject_id)
         file_type         = FileType.query.get(r.file_type_id)
         uploader          = User.query.get(r.uploader_id)
+        avg_rating, rating_count, user_rating = get_resource_rating_stats(r.id, user_id)
         data["subject_name"]   = subject.name   if subject   else None
         data["file_type_name"] = file_type.name if file_type else None
         data["uploader_name"]  = uploader.name  if uploader  else None
         data["is_shared_personally"] = r.id in shared_ids
+        data["avg_rating"]     = avg_rating
+        data["rating_count"]   = rating_count
+        data["user_rating"]    = user_rating
         result.append(data)
 
     return success_response(data=result)
@@ -161,8 +189,12 @@ def get_my_resources():
         data              = r.to_dict()
         subject           = Subject.query.get(r.subject_id)
         file_type         = FileType.query.get(r.file_type_id)
+        avg_rating, rating_count, user_rating = get_resource_rating_stats(r.id, user_id)
         data["subject_name"]   = subject.name   if subject   else None
         data["file_type_name"] = file_type.name if file_type else None
+        data["avg_rating"]     = avg_rating
+        data["rating_count"]   = rating_count
+        data["user_rating"]    = user_rating
         result.append(data)
 
     return success_response(data=result)
@@ -198,6 +230,7 @@ def get_my_stats():
 @bp.route("/<int:resource_id>", methods=["GET"])
 @jwt_required()
 def get_resource(resource_id):
+    user_id  = int(get_jwt_identity())
     resource = Resource.query.get(resource_id)
     if not resource:
         return error_response("NOT_FOUND", "Resource not found", status=404)
@@ -208,8 +241,12 @@ def get_resource(resource_id):
     data                   = resource.to_dict()
     subject                = Subject.query.get(resource.subject_id)
     file_type              = FileType.query.get(resource.file_type_id)
+    avg_rating, rating_count, user_rating = get_resource_rating_stats(resource.id, user_id)
     data["subject_name"]   = subject.name   if subject   else None
     data["file_type_name"] = file_type.name if file_type else None
+    data["avg_rating"]     = avg_rating
+    data["rating_count"]   = rating_count
+    data["user_rating"]    = user_rating
 
     return success_response(data=data)
 
@@ -437,9 +474,51 @@ def track_download(resource_id):
     # Build full URL for local files
     file_url = resource.file_url
     if file_url and file_url.startswith("/uploads/"):
-        file_url = f"http://localhost:5000{file_url}"
+        base_url = os.getenv("BACKEND_URL") or os.getenv("PUBLIC_URL") or request.host_url.rstrip("/")
+        file_url = f"{base_url}{file_url}?download=1"
 
     return success_response(
         data={"file_url": file_url},
         message="Download tracked"
     )
+
+
+# ── POST /api/resources/<int:resource_id>/rate ────────────
+@bp.route("/<int:resource_id>/rate", methods=["POST"])
+@jwt_required()
+def rate_resource(resource_id):
+    user_id = int(get_jwt_identity())
+    resource = Resource.query.get(resource_id)
+    if not resource:
+        return error_response("NOT_FOUND", "Resource not found", status=404)
+
+    data = request.get_json() or {}
+    rating = data.get("rating")
+    if not rating or not isinstance(rating, int) or rating < 1 or rating > 5:
+        return error_response("INVALID_RATING", "Rating must be an integer between 1 and 5", status=400)
+
+    from sqlalchemy import text
+    try:
+        db.session.execute(
+            text(
+                "INSERT INTO resource_ratings (resource_id, user_id, rating) "
+                "VALUES (:rid, :uid, :r) "
+                "ON DUPLICATE KEY UPDATE rating = :r, created_at = CURRENT_TIMESTAMP"
+            ),
+            {"rid": resource_id, "uid": user_id, "r": rating}
+        )
+        db.session.commit()
+
+        avg_rating, rating_count, user_rating = get_resource_rating_stats(resource_id, user_id)
+
+        return success_response(
+            data={
+                "avg_rating": avg_rating,
+                "rating_count": rating_count,
+                "user_rating": user_rating
+            },
+            message="Rating submitted successfully"
+        )
+    except Exception as e:
+        db.session.rollback()
+        return error_response("RATING_ERROR", str(e), status=500)

@@ -58,7 +58,7 @@ function FeaturesPage() {
           Features Built for Students
         </h1>
         <p className="font-body text-[#B3CFE5] text-sm max-w-lg mx-auto leading-relaxed">
-          Every feature in Learnify is designed around one goal —
+          Every feature in WhisperHive is designed around one goal —
           helping you study smarter and achieve more.
         </p>
       </section>

@@ -90,6 +90,12 @@ def create_notification(user_id, type_name, title, body, action_url=None):
     ).first()
 
     if not notification_type:
+        # Fallback to 'system' or first available type in DB
+        notification_type = NotificationType.query.filter_by(name="system").first()
+        if not notification_type:
+            notification_type = NotificationType.query.first()
+
+    if not notification_type:
         return None
 
     notification = Notification(

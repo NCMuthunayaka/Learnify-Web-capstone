@@ -109,7 +109,21 @@ def register_user(name, email, password, role="student", qualifications=None, ce
 def login_user(email, password):
     user = User.query.filter_by(email=email).first()
     if not user:
-        return None, "This email is not registered. Please register first."
+        # Auto-seed admin if logging in with official admin email on any deployment/database
+        if email.lower() == "admin@learnify.com":
+            password_hash = bcrypt.generate_password_hash("Admin@123").decode("utf-8")
+            admin_user = User(
+                name="Platform Admin",
+                email="admin@learnify.com",
+                password_hash=password_hash,
+                role="admin",
+                status="active"
+            )
+            db.session.add(admin_user)
+            db.session.commit()
+            user = admin_user
+        else:
+            return None, "This email is not registered. Please register first."
 
     if not bcrypt.check_password_hash(user.password_hash, password):
         return None, "Incorrect password. Please try again."

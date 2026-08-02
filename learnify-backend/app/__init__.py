@@ -1,6 +1,6 @@
 from flask import Flask, app, send_from_directory, request
 from app.extensions import db, jwt, migrate, bcrypt, cors, mail
-from app.routes import auth, chat, scheduler, tracking, feedback, resources, admin, notifications, users, subjects, dashboard, progress, help_requests, mentor
+from app.routes import auth, chat, scheduler, tracking, feedback, resources, admin, notifications, users, subjects, dashboard, progress, help_requests, mentor, community
 from app.config import config
 from app.middleware.error_handler import register_error_handlers
 from app.models.user              import User
@@ -15,6 +15,7 @@ from dotenv import load_dotenv
 from app.models.chat_message      import ChatSession, ChatMessage
 from app.models.feedback          import Feedback
 from flask_mail import Mail
+from app.models.resource_rating   import ResourceRating
 
 load_dotenv()
 
@@ -54,6 +55,41 @@ def create_app(config_name="development"):
         methods=["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"]
     )
 
+    # ── Auto-ensure database tables & columns exist ──────────
+    with app.app_context():
+        try:
+            db.create_all()
+        except Exception as e:
+            print(f"db.create_all() warning: {e}")
+
+        try:
+            from sqlalchemy import text
+            db.session.execute(text(
+                "CREATE TABLE IF NOT EXISTS resource_ratings ("
+                "id INT AUTO_INCREMENT PRIMARY KEY, "
+                "resource_id INT NOT NULL, "
+                "user_id INT NOT NULL, "
+                "rating TINYINT NOT NULL CHECK (rating BETWEEN 1 AND 5), "
+                "created_at DATETIME DEFAULT CURRENT_TIMESTAMP, "
+                "UNIQUE KEY uq_resource_user (resource_id, user_id), "
+                "CONSTRAINT fk_rr_resource FOREIGN KEY (resource_id) REFERENCES resources(id) ON DELETE CASCADE, "
+                "CONSTRAINT fk_rr_user FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE"
+                ") ENGINE=InnoDB"
+            ))
+            db.session.commit()
+        except Exception as e:
+            db.session.rollback()
+            print(f"Auto DB setup warning (resource_ratings): {e}")
+
+        try:
+            from sqlalchemy import text
+            db.session.execute(text(
+                "ALTER TABLE resources ADD COLUMN uploader_type ENUM('mentor', 'peer') NOT NULL DEFAULT 'mentor' AFTER uploader_id"
+            ))
+            db.session.commit()
+        except Exception:
+            db.session.rollback()
+
     # ── Fix Google OAuth popup issue ──────────────────────
     @app.after_request
     def add_headers(response):
@@ -87,7 +123,8 @@ def create_app(config_name="development"):
     @app.route("/uploads/<path:filename>")
     def serve_file(filename):
         upload_folder = app.config["UPLOAD_FOLDER"]
-        return send_from_directory(upload_folder, filename)
+        as_attachment = request.args.get("download", "0") == "1"
+        return send_from_directory(upload_folder, filename, as_attachment=as_attachment)
 
     # Register blueprints
     app.register_blueprint(auth.bp,          url_prefix="/api/auth")
@@ -104,6 +141,7 @@ def create_app(config_name="development"):
     app.register_blueprint(progress.bp,      url_prefix="/api/progress")
     app.register_blueprint(help_requests.bp, url_prefix="/api/help_requests")
     app.register_blueprint(mentor.bp,        url_prefix="/api/mentor")
+    app.register_blueprint(community.bp,     url_prefix="/api/community")
 
     register_error_handlers(app)
     return app

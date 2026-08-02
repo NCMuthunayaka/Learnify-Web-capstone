@@ -20,3 +20,15 @@ export async function getAvailableMentors() {
     const response = await api.get("/help_requests/mentors")
     return response.data
 }
+
+// ── Send Help Reply ─────────────────────────────────────────
+export async function sendHelpReply(requestId, content) {
+    const response = await api.post(`/help_requests/${requestId}/reply`, { content })
+    return response.data
+}
+
+// ── Update Help Status ──────────────────────────────────────
+export async function updateHelpStatus(requestId, status) {
+    const response = await api.patch(`/help_requests/${requestId}/status`, { status })
+    return response.data
+}

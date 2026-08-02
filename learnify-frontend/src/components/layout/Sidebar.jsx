@@ -15,15 +15,17 @@ const studentNavItems = [
   { label: "Progress",     icon: TrendingUp,      path: "/progress"   },
   { label: "AI Assistant", icon: Bot,             path: "/ai-chat"    },
   { label: "Materials",    icon: BookOpen,        path: "/resources"  },
-  { label: "Help",         icon: HelpCircle,      path: "/help"       },
+  { label: "Community",    icon: Users,           path: "/community"  },
+  { label: "Feedback",     icon: MessageSquare,   path: "/feedback"   },
 ]
 
 const mentorNavItems = [
   { label: "Dashboard",        icon: LayoutDashboard, path: "/mentor/dashboard" },
-  { label: "Student Requests", icon: MessageSquare,   path: "/mentor/requests"  },
+  { label: "Student Requests", icon: HelpCircle,      path: "/mentor/requests"  },
   { label: "AI Assistant",     icon: Bot,             path: "/ai-chat"          },
   { label: "My Resources",     icon: BookOpen,        path: "/mentor/resources" },
-  { label: "Help",             icon: HelpCircle,      path: "/help"             },
+  { label: "Community",        icon: Users,           path: "/community"        },
+  { label: "Feedback",         icon: MessageSquare,   path: "/feedback"         },
 ]
 
 const adminNavItems = [
@@ -86,11 +88,11 @@ function Sidebar({ isOpen }) {
           border-b border-white/10">
           <img
             src={learnifyLogo}
-            alt="Learnify Logo"
+            alt="WhisperHive Logo"
             className="w-10 h-10 object-contain"
           />
           {isOpen && (
-            <span className="font-semibold text-lg">Learnify</span>
+            <span className="font-semibold text-lg">WhisperHive</span>
           )}
         </div>
 

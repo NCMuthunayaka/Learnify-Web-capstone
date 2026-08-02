@@ -8,7 +8,7 @@ from datetime import datetime
 bp = Blueprint("help_requests", __name__)
 
 # ── GET /api/help_requests ─────────────────────────────────
-# Get all help requests created by the current student user
+# Get all help requests created by OR assigned to the current user
 @bp.route("", methods=["GET"])
 @jwt_required()
 def get_help_requests():
@@ -20,11 +20,12 @@ def get_help_requests():
                 "SELECT hr.id, hr.subject_id, s.name AS subject_name, "
                 "hr.topic_title, hr.description, hr.priority, hr.status, "
                 "hr.assigned_to, u.name AS helper_name, hr.created_at, "
-                "s.color_hex, hr.attachment_url "
+                "s.color_hex, hr.attachment_url, hr.student_id, su.name AS student_name "
                 "FROM help_requests hr "
                 "JOIN subjects s ON hr.subject_id = s.id "
+                "JOIN users su ON hr.student_id = su.id "
                 "LEFT JOIN users u ON hr.assigned_to = u.id "
-                "WHERE hr.student_id = :sid "
+                "WHERE hr.student_id = :sid OR hr.assigned_to = :sid "
                 "ORDER BY hr.created_at DESC"
             ),
             {"sid": user_id}
@@ -33,6 +34,10 @@ def get_help_requests():
         requests_list = []
         for row in rows:
             req_id = row[0]
+            student_id = row[12]
+            student_name = row[13]
+            assigned_to = row[7]
+            is_assigned_to_me = (assigned_to == user_id and student_id != user_id)
             
             # Fetch responses for this request
             resp_rows = db.session.execute(
@@ -56,6 +61,11 @@ def get_help_requests():
                 for r in resp_rows
             ]
 
+            display_helper_name = row[8] or ("You (Peer Helper)" if is_assigned_to_me else "Unassigned")
+
+            raw_st = (row[6] or "pending").lower()
+            formatted_st = "In Progress" if raw_st in ["in_progress", "accepted"] else ("Resolved" if raw_st == "resolved" else "Pending")
+
             requests_list.append({
                 "id": req_id,
                 "subject_id": row[1],
@@ -63,19 +73,22 @@ def get_help_requests():
                 "title": row[3],
                 "description": row[4],
                 "priority": row[5].capitalize() if row[5] else "Medium",
-                "status": row[6].capitalize() if row[6] else "Pending",
-                "assigned_to": row[7],
-                "helper_name": row[8] or "Unassigned",
+                "status": formatted_st,
+                "assigned_to": assigned_to,
+                "student_id": student_id,
+                "student_name": student_name,
+                "helper_name": display_helper_name,
+                "is_assigned_to_me": is_assigned_to_me,
                 "created_at": row[9].isoformat() if row[9] else None,
                 "color_hex": row[10],
                 "attachment_url": row[11],
                 "replies": replies,
-                # For compatibility with mock UI:
+                # For compatibility with frontend UI:
                 "subject": row[2],
                 "desc": row[4],
-                "helperName": row[8] or "Pending Assignment",
-                "helperRole": "Mentor" if row[8] else "Unassigned",
-                "helperInitials": "".join([part[0] for part in (row[8] or "Pending").split()]).upper()[:2],
+                "helperName": f"From: {student_name}" if is_assigned_to_me else display_helper_name,
+                "helperRole": "Assigned Request" if is_assigned_to_me else ("Mentor" if row[8] else "Unassigned"),
+                "helperInitials": "".join([part[0] for part in (student_name if is_assigned_to_me else (row[8] or "Pending")).split()]).upper()[:2],
                 "helperColor": "primary" if row[7] else "gray",
                 "date": row[9].strftime("%b %d, %Y") if row[9] else "",
                 "badgeColor": "success" if row[6] == "resolved" else ("blue" if row[6] == "in_progress" else "warning"),
@@ -134,13 +147,13 @@ def create_help_request():
 
         # Resolve assigned_to_id if sent as a string name or dict
         if isinstance(assigned_to_id, str) and assigned_to_id.strip():
-            # Check if name is sent and look up ID
-            mentor_row = db.session.execute(
-                text("SELECT id FROM users WHERE name = :name AND role = 'mentor' LIMIT 1"),
-                {"name": assigned_to_id.strip()}
+            raw_name = assigned_to_id.strip().replace("Peer: ", "")
+            user_row = db.session.execute(
+                text("SELECT id FROM users WHERE (name = :name OR name = :raw_name) AND status = 'active' LIMIT 1"),
+                {"name": assigned_to_id.strip(), "raw_name": raw_name}
             ).fetchone()
-            if mentor_row:
-                assigned_to_id = mentor_row[0]
+            if user_row:
+                assigned_to_id = user_row[0]
             else:
                 assigned_to_id = None
         elif assigned_to_id:
@@ -167,6 +180,76 @@ def create_help_request():
             }
         )
         db.session.commit()
+
+        # Sync seamlessly into Community Hub tables
+        try:
+            if assigned_to_id:
+                # Insert into direct_requests for private mentor messages
+                db.session.execute(text("""
+                    INSERT INTO direct_requests (sender_id, recipient_id, subject, initial_message, status, created_at)
+                    VALUES (:sid, :rid, :subj, :msg, 'pending', :now)
+                """), {
+                    "sid": user_id,
+                    "rid": assigned_to_id,
+                    "subj": title,
+                    "msg": description,
+                    "now": datetime.utcnow()
+                })
+                db.session.commit()
+
+                dr_id = db.session.execute(text("SELECT LAST_INSERT_ID()")).scalar()
+                db.session.execute(text("""
+                    INSERT INTO direct_messages (request_id, sender_id, body, created_at)
+                    VALUES (:tid, :sid, :msg, :now)
+                """), {"tid": dr_id, "sid": user_id, "msg": description, "now": datetime.utcnow()})
+                db.session.commit()
+
+                if attachment_url:
+                    db.session.execute(text("""
+                        INSERT INTO request_attachments (request_id, request_type, file_url, file_name, file_size, uploaded_by, created_at)
+                        VALUES (:rid, 'direct', :furl, 'Attachment', 0, :uid, :now)
+                    """), {"rid": dr_id, "furl": attachment_url, "uid": user_id, "now": datetime.utcnow()})
+                    db.session.commit()
+            else:
+                # Insert into public_requests for Public Forum Q&A
+                db.session.execute(text("""
+                    INSERT INTO public_requests (requester_id, subject_id, title, description, status, created_at)
+                    VALUES (:uid, :subid, :title, :desc, 'open', :now)
+                """), {
+                    "uid": user_id,
+                    "subid": subject_id,
+                    "title": title,
+                    "desc": description,
+                    "now": datetime.utcnow()
+                })
+                db.session.commit()
+
+                pr_id = db.session.execute(text("SELECT LAST_INSERT_ID()")).scalar()
+                if attachment_url:
+                    db.session.execute(text("""
+                        INSERT INTO request_attachments (request_id, request_type, file_url, file_name, file_size, uploaded_by, created_at)
+                        VALUES (:rid, 'public', :furl, 'Attachment', 0, :uid, :now)
+                    """), {"rid": pr_id, "furl": attachment_url, "uid": user_id, "now": datetime.utcnow()})
+                    db.session.commit()
+        except Exception as sync_err:
+            print(f"Community sync warning: {sync_err}")
+
+        # Send notification to assigned helper if specified
+        if assigned_to_id:
+            try:
+                from app.models.user import User
+                sender = User.query.get(user_id)
+                sender_name = sender.name if sender else "A student"
+                from app.services.notification_service import create_notification
+                create_notification(
+                    user_id=assigned_to_id,
+                    type_name="system",
+                    title="New Direct Request",
+                    body=f"{sender_name} sent you a direct request: '{title}'",
+                    action_url="/community"
+                )
+            except Exception as notif_err:
+                print(f"Error creating notification: {notif_err}")
 
         return success_response(message="Help request submitted successfully", status=201)
     except Exception as e:
@@ -272,3 +355,111 @@ def get_available_mentors():
         return success_response(data={"mentors": helpers})
     except Exception as e:
         return error_response("FETCH_MENTORS_ERROR", str(e), status=500)
+
+
+# ── POST /api/help_requests/<id>/reply ──────────────────────
+# Submit a response reply to a help request
+@bp.route("/<int:request_id>/reply", methods=["POST"])
+@jwt_required()
+def add_help_reply(request_id):
+    user_id = int(get_jwt_identity())
+    data = request.get_json(silent=True) or {}
+    content = data.get("content", "").strip()
+
+    if not content:
+        return error_response("MISSING_FIELD", "Reply content is required", status=400)
+
+    try:
+        req_row = db.session.execute(
+            text("SELECT id, student_id, assigned_to, topic_title FROM help_requests WHERE id = :rid"),
+            {"rid": request_id}
+        ).fetchone()
+
+        if not req_row:
+            return error_response("NOT_FOUND", "Help request not found", status=404)
+
+        student_id, assigned_to, topic_title = req_row[1], req_row[2], req_row[3]
+
+        # Allow student creator or assigned helper to reply
+        if user_id != student_id and user_id != assigned_to:
+            return error_response("FORBIDDEN", "Permission denied", status=403)
+
+        # Insert response
+        db.session.execute(
+            text(
+                "INSERT INTO help_responses (request_id, responder_id, content, created_at) "
+                "VALUES (:rid, :uid, :content, :created)"
+            ),
+            {"rid": request_id, "uid": user_id, "content": content, "created": datetime.utcnow()}
+        )
+        
+        # Update request status to in_progress if pending
+        db.session.execute(
+            text("UPDATE help_requests SET status = 'in_progress' WHERE id = :rid AND status = 'pending'"),
+            {"rid": request_id}
+        )
+        db.session.commit()
+
+        # Send notification to recipient
+        recipient_id = student_id if user_id == assigned_to else assigned_to
+        if recipient_id:
+            try:
+                from app.models.user import User
+                sender = User.query.get(user_id)
+                sender_name = sender.name if sender else "User"
+                from app.services.notification_service import create_notification
+                create_notification(
+                    user_id=recipient_id,
+                    type_name="system",
+                    title="New Reply on Help Request",
+                    body=f"{sender_name} replied to '{topic_title}': '{content[:50]}...'",
+                    action_url="/community"
+                )
+            except Exception as notif_err:
+                print(f"Error creating notification: {notif_err}")
+
+        return success_response(message="Reply added successfully", status=201)
+    except Exception as e:
+        db.session.rollback()
+        return error_response("REPLY_ERROR", str(e), status=500)
+
+
+# ── PATCH /api/help_requests/<id>/status ────────────────────
+# Update help request status (in_progress, resolved, pending)
+@bp.route("/<int:request_id>/status", methods=["PATCH"])
+@jwt_required()
+def update_help_status(request_id):
+    user_id = int(get_jwt_identity())
+    data = request.get_json(silent=True) or {}
+    new_status = data.get("status", "").lower()
+
+    if new_status not in ["pending", "in_progress", "accepted", "resolved"]:
+        return error_response("INVALID_STATUS", "Invalid status value", status=400)
+
+    try:
+        req_row = db.session.execute(
+            text("SELECT id, student_id, assigned_to FROM help_requests WHERE id = :rid"),
+            {"rid": request_id}
+        ).fetchone()
+
+        if not req_row:
+            return error_response("NOT_FOUND", "Help request not found", status=404)
+
+        student_id, assigned_to = req_row[1], req_row[2]
+
+        if user_id != student_id and user_id != assigned_to:
+            return error_response("FORBIDDEN", "Permission denied", status=403)
+
+        # Normalize status string
+        db_status = "resolved" if new_status == "resolved" else ("in_progress" if new_status in ["in_progress", "accepted"] else "pending")
+
+        db.session.execute(
+            text("UPDATE help_requests SET status = :st WHERE id = :rid"),
+            {"st": db_status, "rid": request_id}
+        )
+        db.session.commit()
+
+        return success_response(message=f"Request status updated to {new_status}")
+    except Exception as e:
+        db.session.rollback()
+        return error_response("UPDATE_STATUS_ERROR", str(e), status=500)
