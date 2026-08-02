@@ -197,10 +197,11 @@ def forgot_password():
     if not email:
         return error_response("MISSING_EMAIL", "Email is required", status=400)
 
-    user = User.query.filter_by(email=email).first()
+    user = User.query.filter(db.func.lower(User.email) == email).first()
 
     # Always return success to prevent email enumeration
     if not user:
+        print(f"⚠️ Forgot password requested for '{email}', but NO USER was found in the database.")
         return success_response(
             message="If that email exists, a reset link has been sent"
         )

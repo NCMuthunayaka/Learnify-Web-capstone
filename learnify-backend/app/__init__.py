@@ -16,6 +16,7 @@ from app.models.chat_message      import ChatSession, ChatMessage
 from app.models.feedback          import Feedback
 from flask_mail import Mail
 from app.models.resource_rating   import ResourceRating
+from app.models.password_reset    import PasswordReset
 
 load_dotenv()
 
@@ -83,6 +84,24 @@ def create_app(config_name="development"):
         except Exception as e:
             db.session.rollback()
             print(f"Auto DB setup warning (resource_ratings): {e}")
+
+        try:
+            from sqlalchemy import text
+            db.session.execute(text(
+                "CREATE TABLE IF NOT EXISTS password_resets ("
+                "id INT AUTO_INCREMENT PRIMARY KEY, "
+                "user_id INT NOT NULL, "
+                "token VARCHAR(255) NOT NULL UNIQUE, "
+                "expires_at DATETIME NOT NULL, "
+                "used TINYINT(1) NOT NULL DEFAULT 0, "
+                "created_at DATETIME DEFAULT CURRENT_TIMESTAMP, "
+                "CONSTRAINT fk_pr_user FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE"
+                ") ENGINE=InnoDB"
+            ))
+            db.session.commit()
+        except Exception as e:
+            db.session.rollback()
+            print(f"Auto DB setup warning (password_resets): {e}")
 
         try:
             from sqlalchemy import text
