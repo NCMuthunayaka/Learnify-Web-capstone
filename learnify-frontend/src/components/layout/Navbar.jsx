@@ -22,8 +22,8 @@ function getUserFromToken() {
     if (!token) return null
     const payload = JSON.parse(atob(token.split(".")[1]))
     return {
-      name:  payload.name  || "",
-      role:  payload.role  || "student",
+      name: payload.name || "",
+      role: payload.role || "student",
       email: payload.email || "",
     }
   } catch {
@@ -43,38 +43,38 @@ function getRoleFromToken() {
 
 // ── Page titles — fixed to match actual routes ────────────
 const pageTitles = {
-  "/dashboard":             "Dashboard",
-  "/scheduler":             "Study Scheduler",
-  "/progress":              "Progress",
-  "/ai-chat":               "AI Assistant",
-  "/resources":             "Study Resources",
-  "/feedback":              "Feedback",
-  "/profile":               "My Profile",
-  "/notifications":         "Notifications",
-  "/help":                  "Help",
-  "/community":             "Community Hub",
-  "/mentor/requests":       "Student Requests",
-  "/mentor/resources":      "My Resources",
-  "/mentor/profile":        "My Profile",
-  "/admin/dashboard":       "Admin Dashboard",
-  "/admin/users":           "User Management",
-  "/admin/approvals":       "User Approvals",
-  "/admin/system":          "System Monitoring",
-  "/admin/feedback":        "Feedback Dashboard",
-  "/admin/profile":         "My Profile",
-  "/admin/profile/edit":    "Edit Profile",
+  "/dashboard": "Dashboard",
+  "/scheduler": "Study Scheduler",
+  "/progress": "Progress",
+  "/ai-chat": "AI Assistant",
+  "/resources": "Study Resources",
+  "/feedback": "Feedback",
+  "/profile": "My Profile",
+  "/notifications": "Notifications",
+  "/help": "Help",
+  "/community": "Community Hub",
+  "/mentor/requests": "Student Requests",
+  "/mentor/resources": "My Resources",
+  "/mentor/profile": "My Profile",
+  "/admin/dashboard": "Admin Dashboard",
+  "/admin/users": "User Management",
+  "/admin/approvals": "User Approvals",
+  "/admin/system": "System Monitoring",
+  "/admin/feedback": "Feedback Dashboard",
+  "/admin/profile": "My Profile",
+  "/admin/profile/edit": "Edit Profile",
   "/admin/change-password": "Change Password",
 }
 
 // ── Notification Icon ─────────────────────────────────────
 function NotificationIcon({ type }) {
   const config = {
-    deadline:     { icon: Clock,        bg: "bg-red-100",    color: "text-red-500"    },
-    session:      { icon: BookOpen,     bg: "bg-blue-100",   color: "text-blue-500"   },
-    resource:     { icon: BookOpen,     bg: "bg-green-100",  color: "text-green-500"  },
-    system:       { icon: AlertCircle,  bg: "bg-purple-100", color: "text-purple-500" },
-    mentor_reply: { icon: AlertCircle,  bg: "bg-yellow-100", color: "text-yellow-500" },
-    reminder:     { icon: Clock,        bg: "bg-orange-100", color: "text-orange-500" },
+    deadline: { icon: Clock, bg: "bg-red-100", color: "text-red-500" },
+    session: { icon: BookOpen, bg: "bg-blue-100", color: "text-blue-500" },
+    resource: { icon: BookOpen, bg: "bg-green-100", color: "text-green-500" },
+    system: { icon: AlertCircle, bg: "bg-purple-100", color: "text-purple-500" },
+    mentor_reply: { icon: AlertCircle, bg: "bg-yellow-100", color: "text-yellow-500" },
+    reminder: { icon: Clock, bg: "bg-orange-100", color: "text-orange-500" },
   }
   const { icon: Icon, bg, color } = config[type] || config.system
   return (
@@ -86,35 +86,35 @@ function NotificationIcon({ type }) {
 }
 
 function Navbar({ onToggleSidebar }) {
-  const { logout }  = useAuth()
-  const navigate    = useNavigate()
-  const location    = useLocation()
-  const pageTitle   = pageTitles[location.pathname] || "Dashboard"
-  const dropdownRef        = useRef(null)
+  const { logout } = useAuth()
+  const navigate = useNavigate()
+  const location = useLocation()
+  const pageTitle = pageTitles[location.pathname] || "Dashboard"
+  const dropdownRef = useRef(null)
   const profileDropdownRef = useRef(null)
 
-  const role    = getRoleFromToken()
+  const role = getRoleFromToken()
   const isAdmin = role === "admin"
 
   const [notifications, setNotifications] = useState([])
-  const [unreadCount, setUnreadCount]     = useState(0)
-  const [showDropdown, setShowDropdown]   = useState(false)
+  const [unreadCount, setUnreadCount] = useState(0)
+  const [showDropdown, setShowDropdown] = useState(false)
   const [showProfileCard, setShowProfileCard] = useState(false)
 
   // ── Initialize user from token immediately ────────────
   // This prevents showing "User" while API loads
   const tokenUser = getUserFromToken()
   const [user, setUser] = useState({
-    name:  tokenUser?.name  || "",
-    role:  tokenUser?.role  || "student",
+    name: tokenUser?.name || "",
+    role: tokenUser?.role || "student",
     email: tokenUser?.email || "",
   })
 
   // ── Profile path based on role ─────────────────────────
   const profilePath =
-    role === "admin"  ? "/admin/profile"  :
-    role === "mentor" ? "/mentor/profile" :
-    "/profile"
+    role === "admin" ? "/admin/profile" :
+      role === "mentor" ? "/mentor/profile" :
+        "/profile"
 
   // ── Fetch notifications and user on mount ──────────────
   useEffect(() => {
@@ -131,9 +131,9 @@ function Navbar({ onToggleSidebar }) {
   async function fetchNotifications() {
     try {
       const response = await getNotifications()
-      const data     = response.data
+      const data = response.data
       setNotifications(data.notifications || [])
-      setUnreadCount(data.unread_count   || 0)
+      setUnreadCount(data.unread_count || 0)
     } catch (err) {
       console.error("Failed to fetch notifications:", err)
     }
@@ -163,11 +163,11 @@ function Navbar({ onToggleSidebar }) {
   useEffect(() => {
     function handleClickOutside(e) {
       if (dropdownRef.current &&
-          !dropdownRef.current.contains(e.target)) {
+        !dropdownRef.current.contains(e.target)) {
         setShowDropdown(false)
       }
       if (profileDropdownRef.current &&
-          !profileDropdownRef.current.contains(e.target)) {
+        !profileDropdownRef.current.contains(e.target)) {
         setShowProfileCard(false)
       }
     }
@@ -188,7 +188,7 @@ function Navbar({ onToggleSidebar }) {
   async function handleMarkRead(notification) {
     try {
       if (!notification.is_read) {
-        markAsRead(notification.id).catch(() => {})
+        markAsRead(notification.id).catch(() => { })
         setNotifications(prev => prev.map(n =>
           n.id === notification.id ? { ...n, is_read: true } : n
         ))
@@ -209,9 +209,19 @@ function Navbar({ onToggleSidebar }) {
   // ── Logout — blacklist token then clear ───────────────
   async function handleLogout() {
     try {
-      await api.delete("/auth/logout")
+      const refreshToken = localStorage.getItem("refresh_token")
+      await api.post(
+        "/auth/logout",
+        {},
+        {
+          headers: refreshToken
+            ? { "X-Refresh-Token": refreshToken }
+            : {}
+        }
+      )
     } catch (err) {
       console.error("Logout API failed:", err)
+      // Still logout even if API fails
     } finally {
       logout()
       navigate("/login")

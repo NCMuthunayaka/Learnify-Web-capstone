@@ -1,4 +1,5 @@
 import { useState, useEffect } from "react"
+import { useNavigate } from "react-router-dom"
 import { 
   User, Mail, Phone, BookOpen, GraduationCap, Save, Trash2, AlertTriangle,
   Award, CheckCircle2, Clock, XCircle, Plus, Sparkles, ShieldCheck

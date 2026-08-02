@@ -51,7 +51,7 @@ def create_app(config_name="development"):
     cors.init_app(app,
         resources={r"/api/*": {"origins": allowed_origins}},
         supports_credentials=allowed_origins != "*",
-        allow_headers=["Content-Type", "Authorization"],
+        allow_headers=["Content-Type", "Authorization", "X-Refresh-Token",],
         methods=["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"]
     )
 
@@ -95,6 +95,8 @@ def create_app(config_name="development"):
     def add_headers(response):
         response.headers["Cross-Origin-Opener-Policy"]   = "unsafe-none"
         response.headers["Cross-Origin-Embedder-Policy"] = "unsafe-none"
+        response.headers["Access-Control-Allow-Headers"] = \
+        "Content-Type, Authorization, X-Refresh-Token"
         
         origin = request.headers.get("Origin")
         frontend_url_env = os.getenv("FRONTEND_URL", "*")
@@ -114,7 +116,7 @@ def create_app(config_name="development"):
                 if default_origin != "*":
                     response.headers["Access-Control-Allow-Credentials"] = "true"
                     
-        response.headers["Access-Control-Allow-Headers"] = "Content-Type, Authorization"
+        response.headers["Access-Control-Allow-Headers"] = "Content-Type, Authorization, X-Refresh-Token"
         response.headers["Access-Control-Allow-Methods"] = "GET, POST, PUT, PATCH, DELETE, OPTIONS"
         return response
 
