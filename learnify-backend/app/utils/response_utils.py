@@ -10,7 +10,7 @@ def success_response(data=None, message="Success", status=200):
     }), status
 
 
-def error_response(code, message, field=None, status=400):
+def error_response(code, message, field=None, details=None, status=400):
     # Every error response follows this structure
     error = {
         "code":    code,
@@ -18,6 +18,8 @@ def error_response(code, message, field=None, status=400):
     }
     if field:
         error["field"] = field
+    if details:
+        error["details"] = details
 
     return jsonify({
         "success": False,
