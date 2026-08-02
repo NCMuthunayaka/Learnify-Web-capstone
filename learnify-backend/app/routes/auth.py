@@ -10,6 +10,8 @@ from app.models.user import User
 from app.extensions import db, mail, bcrypt
 from datetime import datetime
 import secrets
+import os
+
 
 bp = Blueprint("auth", __name__)
 
