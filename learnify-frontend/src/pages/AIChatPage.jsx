@@ -1,4 +1,4 @@
-import { useState, useRef, useEffect, useCallback } from "react"
+import React, { useState, useRef, useEffect, useCallback } from "react"
 import {
   Send, Sparkles, Settings, RefreshCw, Bot,
   Mic, MicOff, FileText, ChevronRight, Paperclip, X, FileImage, AlertCircle,
@@ -9,6 +9,118 @@ import Badge from "../components/common/Badge"
 import profileImg from "../assets/icons/profile.png"
 import aiIcon from "../assets/icons/AI.png"
 import { createChatSession, getChatMessages, sendChatMessage, uploadChatFile, getChatSessions } from "../api/chatApi"
+
+// ── Helper: Format Markdown content (tables, headings, bold, lists) ──────────
+function FormattedMarkdown({ content, isUser }) {
+  if (!content) return null
+  if (isUser) return <div className="whitespace-pre-wrap">{content}</div>
+
+  const lines = content.split("\n")
+  const elements = []
+  let tableRows = []
+  let inTable = false
+
+  const formatInlineMarkdown = (textStr) => {
+    if (!textStr) return ""
+    const parts = textStr.split(/<br\s*\/?>/i)
+    return parts.map((part, pIdx) => (
+      <React.Fragment key={pIdx}>
+        {pIdx > 0 && <br />}
+        {renderBoldItalic(part)}
+      </React.Fragment>
+    ))
+  }
+
+  const renderBoldItalic = (textStr) => {
+    const tokens = textStr.split(/(\*\*.*?\*\*)/g)
+    return tokens.map((token, idx) => {
+      if (token.startsWith("**") && token.endsWith("**")) {
+        return <strong key={idx} className="font-bold text-[#0A1931]">{token.slice(2, -2)}</strong>
+      }
+      return token
+    })
+  }
+
+  const renderTable = (rows, keyIndex) => {
+    if (rows.length < 2) return null
+    const headerCols = rows[0].split("|").map(c => c.trim()).filter((c, i, a) => i > 0 && i < a.length - 1)
+    const dataRows = rows.slice(2).map(r => r.split("|").map(c => c.trim()).filter((c, i, a) => i > 0 && i < a.length - 1))
+
+    return (
+      <div key={`table-${keyIndex}`} className="my-3 overflow-x-auto rounded-xl border border-slate-200 shadow-sm bg-white">
+        <table className="w-full text-left text-xs border-collapse">
+          <thead>
+            <tr className="bg-slate-100/90 border-b border-slate-200 text-[#0A1931] font-bold">
+              {headerCols.map((col, idx) => (
+                <th key={idx} className="px-3.5 py-2.5 font-heading">
+                  {formatInlineMarkdown(col)}
+                </th>
+              ))}
+            </tr>
+          </thead>
+          <tbody className="divide-y divide-slate-100">
+            {dataRows.map((row, rIdx) => (
+              <tr key={rIdx} className={rIdx % 2 === 0 ? "bg-white" : "bg-slate-50/60"}>
+                {row.map((cell, cIdx) => (
+                  <td key={cIdx} className="px-3.5 py-2 text-slate-700 leading-relaxed">
+                    {formatInlineMarkdown(cell)}
+                  </td>
+                ))}
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    )
+  }
+
+  lines.forEach((line, idx) => {
+    const trimmed = line.trim()
+    if (trimmed.startsWith("|") && trimmed.endsWith("|")) {
+      inTable = true
+      tableRows.push(trimmed)
+    } else {
+      if (inTable) {
+        elements.push(renderTable(tableRows, idx))
+        tableRows = []
+        inTable = false
+      }
+
+      if (trimmed.startsWith("### ")) {
+        elements.push(
+          <h4 key={idx} className="font-heading font-bold text-sm text-[#0A1931] mt-3 mb-1.5 flex items-center gap-1.5">
+            {formatInlineMarkdown(trimmed.replace(/^###\s+/, ""))}
+          </h4>
+        )
+      } else if (trimmed.startsWith("## ")) {
+        elements.push(
+          <h3 key={idx} className="font-heading font-bold text-base text-[#0A1931] mt-4 mb-2">
+            {formatInlineMarkdown(trimmed.replace(/^##\s+/, ""))}
+          </h3>
+        )
+      } else if (trimmed.startsWith("• ") || trimmed.startsWith("- ") || trimmed.startsWith("* ")) {
+        elements.push(
+          <div key={idx} className="flex items-start gap-1.5 ml-2 my-0.5">
+            <span className="text-[#4A7FA7] font-bold">•</span>
+            <span>{formatInlineMarkdown(trimmed.replace(/^[-•*]\s+/, ""))}</span>
+          </div>
+        )
+      } else if (trimmed.length > 0) {
+        elements.push(
+          <p key={idx} className="my-1 leading-relaxed">
+            {formatInlineMarkdown(trimmed)}
+          </p>
+        )
+      }
+    }
+  })
+
+  if (inTable && tableRows.length > 0) {
+    elements.push(renderTable(tableRows, lines.length))
+  }
+
+  return <div className="space-y-1">{elements}</div>
+}
 
 
 // ── Suggested prompts ─────────────────────────────────────────────────────────
@@ -525,12 +637,12 @@ function AIChatPage() {
                       className="max-w-[200px] rounded-xl mb-1.5 border border-gray-100"
                     />
                   )}
-                  <div className={`rounded-2xl px-4 py-3 shadow-sm font-body text-xs leading-relaxed whitespace-pre-wrap ${
+                  <div className={`rounded-2xl px-4 py-3 shadow-sm font-body text-xs leading-relaxed ${
                     msg.role === "user"
                       ? "bg-[#1A3D63] text-white rounded-tr-none"
                       : "bg-white text-gray-800 border border-gray-100 rounded-tl-none"
                   }`}>
-                    {msg.content}
+                    <FormattedMarkdown content={msg.content} isUser={msg.role === "user"} />
                   </div>
                   <span className={`block font-body text-[9px] text-gray-400 mt-1 ${
                     msg.role === "user" ? "text-right" : "text-left"
