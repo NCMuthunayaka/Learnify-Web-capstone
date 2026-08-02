@@ -226,7 +226,9 @@ def forgot_password():
         db.session.commit()
 
         # Build reset URL
-        reset_url = f"http://localhost:3000/reset-password?token={token}"
+        frontend_url = os.environ.get("FRONTEND_URL", "http://localhost:3000").rstrip("/")
+        reset_url = f"{frontend_url}/reset-password?token={token}"
+
 
         # Send email — mail imported at top, no circular import
         msg = Message(
