@@ -10,8 +10,12 @@ def send_reset_password_email(recipient_email, recipient_name, reset_url):
     Prefers HTTP API (Resend) if RESEND_API_KEY is configured on Railway,
     falling back to Flask-Mail SMTP.
     """
-    resend_api_key = os.environ.get("RESEND_API_KEY")
-    sender_addr    = os.environ.get("MAIL_DEFAULT_SENDER") or os.environ.get("MAIL_USERNAME", "onboarding@resend.dev")
+    resend_api_key = (
+        os.environ.get("RESEND_API_KEY") or 
+        os.environ.get("RESEND_KEY") or 
+        os.environ.get("RESEND_TOKEN") or ""
+    ).strip()
+    sender_addr = os.environ.get("MAIL_DEFAULT_SENDER") or os.environ.get("MAIL_USERNAME", "onboarding@resend.dev")
 
     html_content = f"""
     <div style="font-family: Arial, sans-serif; max-width: 480px; margin: 0 auto; padding: 24px;">
@@ -40,9 +44,8 @@ def send_reset_password_email(recipient_email, recipient_name, reset_url):
     if resend_api_key:
         try:
             print(f"📧 Sending reset email via Resend API to {recipient_email}...")
-            sender_str = sender_addr if "@" in sender_addr else "Learnify <onboarding@resend.dev>"
-            if "resend.dev" in sender_str.lower() and not sender_str.startswith("Learnify"):
-                sender_str = "Learnify <onboarding@resend.dev>"
+            # Resend requires onboarding@resend.dev for unverified domains
+            resend_from = os.environ.get("RESEND_FROM_EMAIL", "Learnify <onboarding@resend.dev>")
 
             resp = requests.post(
                 "https://api.resend.com/emails",
@@ -51,7 +54,7 @@ def send_reset_password_email(recipient_email, recipient_name, reset_url):
                     "Content-Type": "application/json"
                 },
                 json={
-                    "from": sender_str,
+                    "from": resend_from,
                     "to": [recipient_email],
                     "subject": "Reset Your Learnify Password",
                     "html": html_content,
@@ -62,9 +65,12 @@ def send_reset_password_email(recipient_email, recipient_name, reset_url):
                 print(f"✅ Email delivered successfully via Resend API: {resp.json()}")
                 return True, resp.json()
             else:
-                print(f"⚠️ Resend API returned status {resp.status_code}: {resp.text}")
+                err_text = f"Resend API error ({resp.status_code}): {resp.text}"
+                print(f"❌ {err_text}")
+                raise Exception(err_text)
         except Exception as e:
-            print(f"⚠️ Resend HTTP API error: {e}")
+            print(f"❌ Resend HTTP API error: {e}")
+            raise e
 
     # Method 2: Standard Flask-Mail SMTP fallback
     try:
