@@ -277,6 +277,65 @@ def forgot_password():
     )
 
 
+# ── Test Email Endpoint ───────────────────────────────────
+@bp.route("/test-email", methods=["GET", "POST"])
+def test_email():
+    target = request.args.get("to")
+    if not target and request.is_json:
+        target = request.json.get("to")
+
+    username = current_app.config.get("MAIL_USERNAME")
+    password = current_app.config.get("MAIL_PASSWORD")
+    sender   = current_app.config.get("MAIL_DEFAULT_SENDER") or username
+    server   = current_app.config.get("MAIL_SERVER")
+    port     = current_app.config.get("MAIL_PORT")
+
+    recipient = target or username or "test@example.com"
+
+    diag = {
+        "MAIL_SERVER": server,
+        "MAIL_PORT": port,
+        "MAIL_USERNAME_SET": bool(username),
+        "MAIL_USERNAME": username if username else None,
+        "MAIL_PASSWORD_SET": bool(password),
+        "MAIL_PASSWORD_LEN": len(password) if password else 0,
+        "MAIL_DEFAULT_SENDER": sender,
+        "RECIPIENT": recipient,
+    }
+
+    if not username or not password:
+        return error_response(
+            "MAIL_NOT_CONFIGURED",
+            "MAIL_USERNAME or MAIL_PASSWORD environment variables are missing on the server.",
+            details=diag,
+            status=500
+        )
+
+    try:
+        msg = Message(
+            subject="Learnify SMTP Test Email",
+            recipients=[recipient],
+            sender=sender,
+            body="Hello! If you received this email, your Learnify SMTP configuration is working correctly."
+        )
+        mail.send(msg)
+        return success_response(
+            message=f"Test email successfully sent to {recipient}!",
+            data=diag
+        )
+    except Exception as e:
+        import traceback
+        err_msg = str(e)
+        tb = traceback.format_exc()
+        print(f"❌ Test Email Error: {err_msg}\n{tb}")
+        return error_response(
+            "MAIL_SEND_FAILED",
+            f"Failed to send email: {err_msg}",
+            details={"config": diag, "error": err_msg},
+            status=500
+        )
+
+
 # ── Reset Password ────────────────────────────────────────
 @bp.route("/reset-password", methods=["POST"])
 def reset_password():
