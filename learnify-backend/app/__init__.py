@@ -20,7 +20,10 @@ from app.models.password_reset    import PasswordReset
 
 load_dotenv()
 
+_schema_initialized = False
+
 def create_app(config_name="development"):
+    global _schema_initialized
     app = Flask(__name__)
     app.config.from_object(config[config_name])
 
@@ -60,57 +63,59 @@ def create_app(config_name="development"):
     )
 
     # ── Auto-ensure database tables & columns exist ──────────
-    with app.app_context():
-        try:
-            db.create_all()
-        except Exception as e:
-            print(f"db.create_all() warning: {e}")
+    if not _schema_initialized:
+        _schema_initialized = True
+        with app.app_context():
+            try:
+                db.create_all()
+            except Exception as e:
+                print(f"db.create_all() warning: {e}")
 
-        try:
-            from sqlalchemy import text
-            db.session.execute(text(
-                "CREATE TABLE IF NOT EXISTS resource_ratings ("
-                "id INT AUTO_INCREMENT PRIMARY KEY, "
-                "resource_id INT NOT NULL, "
-                "user_id INT NOT NULL, "
-                "rating TINYINT NOT NULL CHECK (rating BETWEEN 1 AND 5), "
-                "created_at DATETIME DEFAULT CURRENT_TIMESTAMP, "
-                "UNIQUE KEY uq_resource_user (resource_id, user_id), "
-                "CONSTRAINT fk_rr_resource FOREIGN KEY (resource_id) REFERENCES resources(id) ON DELETE CASCADE, "
-                "CONSTRAINT fk_rr_user FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE"
-                ") ENGINE=InnoDB"
-            ))
-            db.session.commit()
-        except Exception as e:
-            db.session.rollback()
-            print(f"Auto DB setup warning (resource_ratings): {e}")
+            try:
+                from sqlalchemy import text
+                db.session.execute(text(
+                    "CREATE TABLE IF NOT EXISTS resource_ratings ("
+                    "id INT AUTO_INCREMENT PRIMARY KEY, "
+                    "resource_id INT NOT NULL, "
+                    "user_id INT NOT NULL, "
+                    "rating TINYINT NOT NULL CHECK (rating BETWEEN 1 AND 5), "
+                    "created_at DATETIME DEFAULT CURRENT_TIMESTAMP, "
+                    "UNIQUE KEY uq_resource_user (resource_id, user_id), "
+                    "CONSTRAINT fk_rr_resource FOREIGN KEY (resource_id) REFERENCES resources(id) ON DELETE CASCADE, "
+                    "CONSTRAINT fk_rr_user FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE"
+                    ") ENGINE=InnoDB"
+                ))
+                db.session.commit()
+            except Exception as e:
+                db.session.rollback()
+                print(f"Auto DB setup warning (resource_ratings): {e}")
 
-        try:
-            from sqlalchemy import text
-            db.session.execute(text(
-                "CREATE TABLE IF NOT EXISTS password_resets ("
-                "id INT AUTO_INCREMENT PRIMARY KEY, "
-                "user_id INT NOT NULL, "
-                "token VARCHAR(255) NOT NULL UNIQUE, "
-                "expires_at DATETIME NOT NULL, "
-                "used TINYINT(1) NOT NULL DEFAULT 0, "
-                "created_at DATETIME DEFAULT CURRENT_TIMESTAMP, "
-                "CONSTRAINT fk_pr_user FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE"
-                ") ENGINE=InnoDB"
-            ))
-            db.session.commit()
-        except Exception as e:
-            db.session.rollback()
-            print(f"Auto DB setup warning (password_resets): {e}")
+            try:
+                from sqlalchemy import text
+                db.session.execute(text(
+                    "CREATE TABLE IF NOT EXISTS password_resets ("
+                    "id INT AUTO_INCREMENT PRIMARY KEY, "
+                    "user_id INT NOT NULL, "
+                    "token VARCHAR(255) NOT NULL UNIQUE, "
+                    "expires_at DATETIME NOT NULL, "
+                    "used TINYINT(1) NOT NULL DEFAULT 0, "
+                    "created_at DATETIME DEFAULT CURRENT_TIMESTAMP, "
+                    "CONSTRAINT fk_pr_user FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE"
+                    ") ENGINE=InnoDB"
+                ))
+                db.session.commit()
+            except Exception as e:
+                db.session.rollback()
+                print(f"Auto DB setup warning (password_resets): {e}")
 
-        try:
-            from sqlalchemy import text
-            db.session.execute(text(
-                "ALTER TABLE resources ADD COLUMN uploader_type ENUM('mentor', 'peer') NOT NULL DEFAULT 'mentor' AFTER uploader_id"
-            ))
-            db.session.commit()
-        except Exception:
-            db.session.rollback()
+            try:
+                from sqlalchemy import text
+                db.session.execute(text(
+                    "ALTER TABLE resources ADD COLUMN uploader_type ENUM('mentor', 'peer') NOT NULL DEFAULT 'mentor' AFTER uploader_id"
+                ))
+                db.session.commit()
+            except Exception:
+                db.session.rollback()
 
     # ── Fix Google OAuth popup issue ──────────────────────
     @app.after_request
