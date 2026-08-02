@@ -1,10 +1,14 @@
+import os
 from flask import Blueprint, request
 from flask_jwt_extended import jwt_required, get_jwt
-from sqlalchemy import func, text
+from sqlalchemy import func, text, or_, case
 from datetime import datetime, timedelta
 from app.extensions import db
 from app.models.user import User
 from app.models.feedback import Feedback
+from app.models.resource import Resource
+from app.models.subject import Subject
+from app.models.file_type import FileType
 from app.utils.response_utils import success_response, error_response
 
 bp = Blueprint("admin", __name__)
@@ -668,3 +672,169 @@ def get_feedback_stats():
         "negative":   negative,
         "trend":      trend,
     })
+
+
+# ── GET /api/admin/resources ──────────────────────────────────
+@bp.route("/resources", methods=["GET"])
+@jwt_required()
+def get_admin_resources():
+    err = _require_admin()
+    if err:
+        return err
+
+    search        = request.args.get("search", "")
+    subject_id    = request.args.get("subject_id", type=int)
+    rating_filter = request.args.get("rating_filter", "all") # all, bad (<3.0), top (>=4.0), unrated
+    sort_by       = request.args.get("sort_by", "newest") # newest, rating_asc, rating_desc, downloads, views
+
+    # Fetch all resources and sub-query rating stats
+    rating_stats_sub = (
+        db.session.query(
+            Resource.id.label("resource_id"),
+            func.coalesce(func.avg(text("resource_ratings.rating")), 0.0).label("avg_rating"),
+            func.count(text("resource_ratings.id")).label("rating_count")
+        )
+        .outerjoin(text("resource_ratings"), Resource.id == text("resource_ratings.resource_id"))
+        .group_by(Resource.id)
+        .subquery()
+    )
+
+    query = db.session.query(
+        Resource,
+        User.name.label("uploader_name"),
+        User.email.label("uploader_email"),
+        Subject.name.label("subject_name"),
+        FileType.name.label("file_type_name"),
+        rating_stats_sub.c.avg_rating,
+        rating_stats_sub.c.rating_count
+    ).outerjoin(User, Resource.uploader_id == User.id)\
+     .outerjoin(Subject, Resource.subject_id == Subject.id)\
+     .outerjoin(FileType, Resource.file_type_id == FileType.id)\
+     .outerjoin(rating_stats_sub, Resource.id == rating_stats_sub.c.resource_id)
+
+    # Search filter
+    if search:
+        s = f"%{search}%"
+        query = query.filter(
+            or_(
+                Resource.title.ilike(s),
+                User.name.ilike(s),
+                Subject.name.ilike(s)
+            )
+        )
+
+    # Subject filter
+    if subject_id:
+        query = query.filter(Resource.subject_id == subject_id)
+
+    # Rating filter
+    if rating_filter == "bad":
+        query = query.filter(rating_stats_sub.c.avg_rating < 3.0, rating_stats_sub.c.rating_count > 0)
+    elif rating_filter == "top":
+        query = query.filter(rating_stats_sub.c.avg_rating >= 4.0)
+    elif rating_filter == "unrated":
+        query = query.filter(rating_stats_sub.c.rating_count == 0)
+
+    # Sorting
+    if sort_by == "rating_asc":
+        query = query.order_by(
+            case((rating_stats_sub.c.rating_count > 0, 0), else_=1),
+            rating_stats_sub.c.avg_rating.asc(),
+            Resource.uploaded_at.desc()
+        )
+    elif sort_by == "rating_desc":
+        query = query.order_by(rating_stats_sub.c.avg_rating.desc(), Resource.uploaded_at.desc())
+    elif sort_by == "downloads":
+        query = query.order_by(Resource.download_count.desc(), Resource.uploaded_at.desc())
+    elif sort_by == "views":
+        query = query.order_by(Resource.view_count.desc(), Resource.uploaded_at.desc())
+    else: # newest
+        query = query.order_by(Resource.uploaded_at.desc())
+
+    results = query.all()
+
+    items = []
+    total_downloads = 0
+    total_views = 0
+    bad_rating_count = 0
+    all_ratings = []
+
+    for r, uploader_name, uploader_email, subject_name, file_type_name, avg_rating, rating_count in results:
+        res_dict = r.to_dict()
+        avg_r = round(float(avg_rating), 1) if avg_rating else 0.0
+        r_cnt = int(rating_count) if rating_count else 0
+
+        res_dict["uploader_name"]  = uploader_name or "Unknown"
+        res_dict["uploader_email"] = uploader_email or ""
+        res_dict["subject_name"]   = subject_name or "General"
+        res_dict["file_type_name"] = file_type_name or "File"
+        res_dict["avg_rating"]     = avg_r
+        res_dict["rating_count"]   = r_cnt
+
+        items.append(res_dict)
+
+        total_downloads += r.download_count or 0
+        total_views     += r.view_count or 0
+        if r_cnt > 0 and avg_r < 3.0:
+            bad_rating_count += 1
+        if r_cnt > 0:
+            all_ratings.append(avg_r)
+
+    platform_avg = round(sum(all_ratings) / len(all_ratings), 1) if all_ratings else 0.0
+
+    return success_response(data={
+        "resources": items,
+        "summary": {
+            "total_resources":  len(items),
+            "bad_rating_count": bad_rating_count,
+            "total_downloads":  total_downloads,
+            "total_views":      total_views,
+            "platform_avg":     platform_avg,
+        }
+    })
+
+
+# ── DELETE /api/admin/resources/batch ─────────────────────────
+@bp.route("/resources/batch", methods=["DELETE"])
+@jwt_required()
+def delete_admin_resources_batch():
+    err = _require_admin()
+    if err:
+        return err
+
+    data = request.get_json() or {}
+    resource_ids = data.get("resource_ids", [])
+    if not resource_ids or not isinstance(resource_ids, list):
+        return error_response("MISSING_FIELD", "resource_ids array is required", status=400)
+
+    try:
+        resources = Resource.query.filter(Resource.id.in_(resource_ids)).all()
+        deleted_count = 0
+
+        for r in resources:
+            # Clean up local disk file if present
+            if r.file_url and r.file_url.startswith("/uploads/"):
+                filename = r.file_url.replace("/uploads/", "")
+                upload_folder = os.path.join(
+                    os.path.dirname(os.path.dirname(os.path.dirname(__file__))),
+                    "uploads"
+                )
+                file_path = os.path.join(upload_folder, filename)
+                if os.path.exists(file_path):
+                    try:
+                        os.remove(file_path)
+                    except Exception as fe:
+                        print(f"File delete notice: {fe}")
+
+            db.session.delete(r)
+            deleted_count += 1
+
+        db.session.commit()
+        return success_response(
+            data={"deleted_count": deleted_count},
+            message=f"Successfully deleted {deleted_count} resources"
+        )
+    except Exception as e:
+        db.session.rollback()
+        return error_response("DELETE_ERROR", str(e), status=500)
+

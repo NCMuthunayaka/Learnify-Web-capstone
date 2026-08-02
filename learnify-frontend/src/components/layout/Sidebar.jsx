@@ -32,6 +32,7 @@ const adminNavItems = [
   { label: "Dashboard",        icon: LayoutDashboard, path: "/admin/dashboard" },
   { label: "User Management",  icon: Users,           path: "/admin/users"     },
   { label: "User Approvals",   icon: UserCheck,       path: "/admin/approvals" },
+  { label: "Resource Management", icon: BookOpen,     path: "/admin/resources" },
   { label: "System Monitoring",icon: Monitor,         path: "/admin/system"    },
   { label: "Feedback",         icon: MessageSquare,   path: "/admin/feedback"  },
 ]
