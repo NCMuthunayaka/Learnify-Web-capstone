@@ -19,7 +19,7 @@ from google.genai import types as genai_types
 _gemini_key = os.getenv("GEMINI_API_KEY", "")
 gemini_client = genai.Client(api_key=_gemini_key) if _gemini_key else None
 
-GEMINI_MODEL = "gemini-2.5-flash"
+GEMINI_MODEL = "gemini-flash-latest"
 
 # ── OpenAI (fallback) ─────────────────────────────────────────────────────────
 _openai_key    = os.getenv("OPENAI_API_KEY", "")
