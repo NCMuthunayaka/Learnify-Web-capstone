@@ -23,17 +23,20 @@ def create_app(config_name="development"):
     app = Flask(__name__)
     app.config.from_object(config[config_name])
 
-    app.config["MAIL_SERVER"]         = "smtp.gmail.com"
-    app.config["MAIL_PORT"]           = 587
-    app.config["MAIL_USE_TLS"]        = True
+    app.config["MAIL_SERVER"]         = os.environ.get("MAIL_SERVER", "smtp.gmail.com")
+    app.config["MAIL_PORT"]           = int(os.environ.get("MAIL_PORT", 587))
+    app.config["MAIL_USE_TLS"]        = os.environ.get("MAIL_USE_TLS", "True").lower() in ("true", "1", "t")
+    app.config["MAIL_USE_SSL"]        = os.environ.get("MAIL_USE_SSL", "False").lower() in ("true", "1", "t")
     app.config["MAIL_USERNAME"]       = os.environ.get("MAIL_USERNAME")
     app.config["MAIL_PASSWORD"]       = os.environ.get("MAIL_PASSWORD")
-    app.config["MAIL_DEFAULT_SENDER"] = os.environ.get("MAIL_DEFAULT_SENDER")
+    
+    sender = os.environ.get("MAIL_DEFAULT_SENDER") or os.environ.get("MAIL_USERNAME")
+    app.config["MAIL_DEFAULT_SENDER"] = sender
 
     if not app.config["MAIL_USERNAME"]:
         print("⚠️  WARNING: MAIL_USERNAME not set — forgot password emails will fail")
-
-    mail.init_app(app)
+    if not app.config["MAIL_PASSWORD"]:
+        print("⚠️  WARNING: MAIL_PASSWORD not set — forgot password emails will fail")
 
     # Initialize extensions
     db.init_app(app)

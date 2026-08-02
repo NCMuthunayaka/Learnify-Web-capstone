@@ -1,4 +1,4 @@
-from flask import Blueprint, request
+from flask import Blueprint, request, current_app
 from flask_jwt_extended import (
     create_access_token, create_refresh_token,
     jwt_required, get_jwt_identity, get_jwt
@@ -233,9 +233,11 @@ def forgot_password():
 
 
         # Send email — mail imported at top, no circular import
+        sender_addr = current_app.config.get("MAIL_DEFAULT_SENDER") or current_app.config.get("MAIL_USERNAME")
         msg = Message(
             subject    = "Reset Your Learnify Password",
             recipients = [user.email],
+            sender     = sender_addr,
         )
         msg.html = f"""
         <div style="font-family: Arial, sans-serif; max-width: 480px;
@@ -265,7 +267,9 @@ def forgot_password():
         mail.send(msg)
 
     except Exception as e:
-        print(f"Password reset error: {e}")
+        import traceback
+        print(f"❌ Password reset email failed to send: {e}")
+        traceback.print_exc()
 
     return success_response(
         message="If that email exists, a reset link has been sent"
