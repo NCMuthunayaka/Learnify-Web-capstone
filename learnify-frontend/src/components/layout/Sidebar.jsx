@@ -90,8 +90,8 @@ function Sidebar({ isOpen }) {
           <img
             src={learnifyLogo}
             alt="WhisperHive Logo"
-            className="w-10 h-10 object-cover rounded-[70px] overflow-hidden"
-            style={{ borderRadius: "70px" }}
+            className="w-10 h-10 object-cover rounded-full overflow-hidden"
+            style={{ borderRadius: "50%" }}
           />
           {isOpen && (
             <span className="font-semibold text-lg">WhisperHive</span>

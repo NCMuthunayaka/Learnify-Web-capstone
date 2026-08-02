@@ -8,13 +8,13 @@ function LandingNavbar() {
 
       {/* Logo — with real image */}
       <Link to="/" className="flex items-center gap-2">
-        <div className="w-9 h-9 bg-[#f6fafd] rounded-[70px] overflow-hidden flex items-center
+        <div className="w-9 h-9 bg-[#f6fafd] rounded-full overflow-hidden flex items-center
           justify-center">
           <img
             src={learnify_logo}
             alt="WhisperHive Logo"
-            className="w-full h-full object-cover rounded-[70px]"
-            style={{ borderRadius: "70px" }}
+            className="w-full h-full object-cover rounded-full"
+            style={{ borderRadius: "50%" }}
           />
         </div>
         <span className="font-semibold text-lg text-[#1A3D63]">WhisperHive</span>
