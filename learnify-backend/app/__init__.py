@@ -1,5 +1,5 @@
-from flask import Flask, send_from_directory, request
-from app.extensions import db, jwt, migrate, bcrypt, cors
+from flask import Flask, app, send_from_directory, request
+from app.extensions import db, jwt, migrate, bcrypt, cors, mail
 from app.routes import auth, chat, scheduler, tracking, feedback, resources, admin, notifications, users, subjects, dashboard, progress, help_requests, mentor
 from app.config import config
 from app.middleware.error_handler import register_error_handlers
@@ -11,19 +11,35 @@ from app.models.subject           import Subject
 from app.models.file_type         import FileType
 from app.models.token_blocklist   import TokenBlocklist
 import os
+from dotenv import load_dotenv
 from app.models.chat_message      import ChatSession, ChatMessage
 from app.models.feedback          import Feedback
+from flask_mail import Mail
 
+load_dotenv()
 
 def create_app(config_name="development"):
     app = Flask(__name__)
     app.config.from_object(config[config_name])
+
+    app.config["MAIL_SERVER"]         = "smtp.gmail.com"
+    app.config["MAIL_PORT"]           = 587
+    app.config["MAIL_USE_TLS"]        = True
+    app.config["MAIL_USERNAME"]       = os.environ.get("MAIL_USERNAME")
+    app.config["MAIL_PASSWORD"]       = os.environ.get("MAIL_PASSWORD")
+    app.config["MAIL_DEFAULT_SENDER"] = os.environ.get("MAIL_DEFAULT_SENDER")
+
+    if not app.config["MAIL_USERNAME"]:
+        print("⚠️  WARNING: MAIL_USERNAME not set — forgot password emails will fail")
+
+    mail.init_app(app)
 
     # Initialize extensions
     db.init_app(app)
     jwt.init_app(app)
     migrate.init_app(app, db)
     bcrypt.init_app(app)
+    mail.init_app(app)  
     
     frontend_url_env = os.getenv("FRONTEND_URL", "*")
     if frontend_url_env == "*":

@@ -26,6 +26,7 @@ class User(db.Model):
     subject       = db.Column(db.String(100),  nullable=True)
     experience    = db.Column(db.String(50),   nullable=True)
 
+
     created_at    = db.Column(db.DateTime,     default=datetime.utcnow)
     last_login    = db.Column(db.DateTime,     nullable=True)
 

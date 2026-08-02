@@ -32,6 +32,8 @@ import AdminSystemMonitoringPage from "../pages/admin/AdminSystemMonitoringPage"
 import AdminProfilePage from "../pages/admin/AdminProfilePage"
 import AdminEditProfilePage from "../pages/admin/AdminEditProfilePage"
 import AdminChangePasswordPage from "../pages/admin/AdminChangePasswordPage"
+import ForgotPasswordPage from "../pages/ForgotPasswordPage"
+import ResetPasswordPage  from "../pages/ResetPasswordPage"
 
 function DashboardDispatcher() {
   const token = localStorage.getItem("access_token")
@@ -68,6 +70,8 @@ function AppRoutes() {
         </Route>
         <Route path="/login" element={<LoginPage />} />
         <Route path="/register" element={<RegisterPage />} />
+        <Route path="/forgot-password" element={<ForgotPasswordPage />} />
+        <Route path="/reset-password"  element={<ResetPasswordPage />}  />    
 
         {/* ── All logged in users ── */}
         <Route element={
