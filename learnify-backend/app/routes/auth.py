@@ -5,6 +5,7 @@ from flask_jwt_extended import (
 )
 from flask_mail import Message
 from app.services.auth_service import register_user, login_user, google_auth_user
+from app.services.email_service import send_reset_password_email
 from app.utils.response_utils import success_response, error_response
 from app.models.user import User
 from app.extensions import db, mail, bcrypt
@@ -233,39 +234,8 @@ def forgot_password():
         reset_url = f"{frontend_url}/reset-password?token={token}"
 
 
-        # Send email — mail imported at top, no circular import
-        sender_addr = current_app.config.get("MAIL_DEFAULT_SENDER") or current_app.config.get("MAIL_USERNAME")
-        msg = Message(
-            subject    = "Reset Your Learnify Password",
-            recipients = [user.email],
-            sender     = sender_addr,
-        )
-        msg.html = f"""
-        <div style="font-family: Arial, sans-serif; max-width: 480px;
-          margin: 0 auto; padding: 24px;">
-          <h2 style="color: #0A1931;">Reset Your Password</h2>
-          <p style="color: #555;">Hi {user.name or 'there'},</p>
-          <p style="color: #555;">
-            You requested a password reset for your Learnify account.
-            Click the button below to reset your password.
-            This link expires in <strong>1 hour</strong>.
-          </p>
-          <a href="{reset_url}"
-            style="display: inline-block; background: #1A3D63;
-              color: white; padding: 12px 24px; border-radius: 8px;
-              text-decoration: none; font-weight: bold; margin: 16px 0;">
-            Reset Password
-          </a>
-          <p style="color: #999; font-size: 12px;">
-            If you didn't request this, you can safely ignore this email.
-          </p>
-          <hr style="border: none; border-top: 1px solid #eee;" />
-          <p style="color: #999; font-size: 11px;">
-            © 2026 Learnify · Sabaragamuwa University of Sri Lanka
-          </p>
-        </div>
-        """
-        mail.send(msg)
+        # Send email via HTTP API (Resend) or SMTP fallback
+        send_reset_password_email(user.email, user.name, reset_url)
 
     except Exception as e:
         import traceback
@@ -290,9 +260,11 @@ def test_email():
     server   = current_app.config.get("MAIL_SERVER")
     port     = current_app.config.get("MAIL_PORT")
 
+    resend_key = os.environ.get("RESEND_API_KEY")
     recipient = target or username or "test@example.com"
 
     diag = {
+        "RESEND_API_KEY_SET": bool(resend_key),
         "MAIL_SERVER": server,
         "MAIL_PORT": port,
         "MAIL_USERNAME_SET": bool(username),
@@ -303,22 +275,8 @@ def test_email():
         "RECIPIENT": recipient,
     }
 
-    if not username or not password:
-        return error_response(
-            "MAIL_NOT_CONFIGURED",
-            "MAIL_USERNAME or MAIL_PASSWORD environment variables are missing on the server.",
-            details=diag,
-            status=200
-        )
-
     try:
-        msg = Message(
-            subject="Learnify SMTP Test Email",
-            recipients=[recipient],
-            sender=sender,
-            body="Hello! If you received this email, your Learnify SMTP configuration is working correctly."
-        )
-        mail.send(msg)
+        send_reset_password_email(recipient, "Test User", "https://example.com/test-reset")
         return success_response(
             message=f"Test email successfully sent to {recipient}!",
             data=diag
