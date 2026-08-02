@@ -1,4 +1,5 @@
 import { useState, useEffect } from "react"
+import { useNavigate } from "react-router-dom"
 import { 
   User, Mail, Phone, BookOpen, GraduationCap, Save, Trash2, AlertTriangle,
   Award, CheckCircle2, Clock, XCircle, Plus, Sparkles, ShieldCheck
@@ -52,7 +53,16 @@ function InputField({ label, icon: Icon, type = "text", value,
   )
 }
 
+function getInitials(name = "") {
+  const parts = name.trim().split(/\s+/).filter(Boolean)
+  if (!parts.length) return "S"
+  if (parts.length === 1) return parts[0][0].toUpperCase()
+  return (parts[0][0] + parts[parts.length - 1][0]).toUpperCase()
+}
+
 function ProfilePage() {
+  const navigate = useNavigate()
+
   const [formData, setFormData] = useState({
     firstName:      "",
     lastName:       "",
@@ -69,13 +79,13 @@ function ProfilePage() {
     bio:            "",
   })
   const [originalData, setOriginalData] = useState({})
+  const [loading, setLoading]           = useState(true)
+  const [saving, setSaving]             = useState(false)
+  const [saved, setSaved]               = useState(false)
+  const [error, setError]               = useState("")
+  const [fieldErrors, setFieldErrors]   = useState({})
+  const [activeTab, setActiveTab]       = useState("personal")
 
-  const [loading, setLoading]     = useState(true)
-  const [saving, setSaving]       = useState(false)
-  const [saved, setSaved]         = useState(false)
-  const [error, setError]         = useState("")
-  const [fieldErrors, setFieldErrors] = useState({})
-  const [activeTab, setActiveTab] = useState("personal")
 
   // ── Mentor Application States ────────────────────────────
   const [eligibility, setEligibility]         = useState(null)
@@ -110,9 +120,8 @@ function ProfilePage() {
     async function fetchProfile() {
       try {
         setLoading(true)
-        const response = await getProfile()
-        const user     = response.data
-
+        const response  = await getProfile()
+        const user      = response.data
         const nameParts = (user.name || "").split(" ")
         const firstName = nameParts[0] || ""
         const lastName  = nameParts.slice(1).join(" ") || ""
@@ -132,7 +141,6 @@ function ProfilePage() {
           studentId:      user.student_id      || "",
           bio:            user.bio             || "",
         }
-
         setFormData(data)
         setOriginalData(data)
         loadEligibility()
@@ -174,28 +182,19 @@ function ProfilePage() {
   function handleChange(e) {
     const { name, value } = e.target
     setFormData(prev => ({ ...prev, [name]: value }))
-    // Clear field error on change
     if (fieldErrors[name]) {
       setFieldErrors(prev => ({ ...prev, [name]: "" }))
     }
   }
 
-  // ── Validate before save ───────────────────────────────
   function validate() {
     const errors = {}
-
-    if (!formData.firstName.trim())
-      errors.firstName = "First name is required"
-
-    if (!formData.lastName.trim())
-      errors.lastName = "Last name is required"
-
+    if (!formData.firstName.trim()) errors.firstName = "First name is required"
+    if (!formData.lastName.trim())  errors.lastName  = "Last name is required"
     if (formData.phone && !/^[\d\s\+\-\(\)]{7,15}$/.test(formData.phone))
       errors.phone = "Please enter a valid phone number"
-
     if (formData.bio && formData.bio.length > MAX_BIO)
       errors.bio = `Bio must be under ${MAX_BIO} characters`
-
     setFieldErrors(errors)
     return Object.keys(errors).length === 0
   }
@@ -203,14 +202,11 @@ function ProfilePage() {
   async function handleSave() {
     setError("")
     setSaved(false)
-
     if (!validate()) return
 
     try {
       setSaving(true)
-
       const fullName = `${formData.firstName} ${formData.lastName}`.trim()
-
       await updateProfile({
         name:            fullName,
         phone:           formData.phone,
@@ -224,12 +220,9 @@ function ProfilePage() {
         faculty:         formData.faculty,
         year:            formData.year,
       })
-
-      // Update original to reflect saved state
       setOriginalData({ ...formData })
       setSaved(true)
       setTimeout(() => setSaved(false), 4000)
-
     } catch (err) {
       setError(
         err.response?.data?.error?.message ||
@@ -273,6 +266,7 @@ function ProfilePage() {
   }
 
   const fullName = `${formData.firstName} ${formData.lastName}`.trim() || "Student"
+  const initials = getInitials(fullName)
 
   return (
     <div className="max-w-5xl mx-auto space-y-6 pb-12">
@@ -567,42 +561,20 @@ function ProfilePage() {
             Personal Information
           </h3>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <InputField
-              label="First Name *"
-              icon={User}
-              name="firstName"
-              value={formData.firstName}
-              onChange={handleChange}
-              error={fieldErrors.firstName}
-            />
-            <InputField
-              label="Last Name *"
-              icon={User}
-              name="lastName"
-              value={formData.lastName}
-              onChange={handleChange}
-              error={fieldErrors.lastName}
-            />
-            <InputField
-              label="Email Address"
-              icon={Mail}
-              type="email"
-              name="email"
-              value={formData.email}
-              onChange={handleChange}
-              disabled
-            />
-            <InputField
-              label="Phone Number"
-              icon={Phone}
-              name="phone"
-              value={formData.phone}
-              onChange={handleChange}
-              error={fieldErrors.phone}
-            />
+            <InputField label="First Name *" icon={User}
+              name="firstName" value={formData.firstName}
+              onChange={handleChange} error={fieldErrors.firstName} />
+            <InputField label="Last Name *" icon={User}
+              name="lastName" value={formData.lastName}
+              onChange={handleChange} error={fieldErrors.lastName} />
+            <InputField label="Email Address" icon={Mail}
+              type="email" name="email" value={formData.email}
+              onChange={handleChange} disabled />
+            <InputField label="Phone Number" icon={Phone}
+              name="phone" value={formData.phone}
+              onChange={handleChange} error={fieldErrors.phone} />
           </div>
 
-          {/* Bio with character count */}
           <div className="mt-4">
             <div className="flex items-center justify-between mb-1.5">
               <label className="font-body text-xs font-semibold text-slate-600">
@@ -614,11 +586,8 @@ function ProfilePage() {
                 {formData.bio?.length || 0}/{MAX_BIO}
               </span>
             </div>
-            <textarea
-              name="bio"
-              value={formData.bio}
-              onChange={handleChange}
-              rows={3}
+            <textarea name="bio" value={formData.bio}
+              onChange={handleChange} rows={3}
               maxLength={MAX_BIO + 10}
               placeholder="Tell us a bit about yourself..."
               className={`w-full px-3.5 py-2.5 border rounded-xl shadow-xs font-body text-sm text-slate-800 focus:outline-none resize-none transition-all duration-200 ${

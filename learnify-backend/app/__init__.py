@@ -1,5 +1,5 @@
-from flask import Flask, send_from_directory, request
-from app.extensions import db, jwt, migrate, bcrypt, cors
+from flask import Flask, app, send_from_directory, request
+from app.extensions import db, jwt, migrate, bcrypt, cors, mail
 from app.routes import auth, chat, scheduler, tracking, feedback, resources, admin, notifications, users, subjects, dashboard, progress, help_requests, mentor, community
 from app.config import config
 from app.middleware.error_handler import register_error_handlers
@@ -11,20 +11,36 @@ from app.models.subject           import Subject
 from app.models.file_type         import FileType
 from app.models.token_blocklist   import TokenBlocklist
 import os
+from dotenv import load_dotenv
 from app.models.chat_message      import ChatSession, ChatMessage
 from app.models.feedback          import Feedback
+from flask_mail import Mail
 from app.models.resource_rating   import ResourceRating
 
+load_dotenv()
 
 def create_app(config_name="development"):
     app = Flask(__name__)
     app.config.from_object(config[config_name])
+
+    app.config["MAIL_SERVER"]         = "smtp.gmail.com"
+    app.config["MAIL_PORT"]           = 587
+    app.config["MAIL_USE_TLS"]        = True
+    app.config["MAIL_USERNAME"]       = os.environ.get("MAIL_USERNAME")
+    app.config["MAIL_PASSWORD"]       = os.environ.get("MAIL_PASSWORD")
+    app.config["MAIL_DEFAULT_SENDER"] = os.environ.get("MAIL_DEFAULT_SENDER")
+
+    if not app.config["MAIL_USERNAME"]:
+        print("⚠️  WARNING: MAIL_USERNAME not set — forgot password emails will fail")
+
+    mail.init_app(app)
 
     # Initialize extensions
     db.init_app(app)
     jwt.init_app(app)
     migrate.init_app(app, db)
     bcrypt.init_app(app)
+    mail.init_app(app)  
     
     frontend_url_env = os.getenv("FRONTEND_URL", "*")
     if frontend_url_env == "*":
@@ -35,7 +51,7 @@ def create_app(config_name="development"):
     cors.init_app(app,
         resources={r"/api/*": {"origins": allowed_origins}},
         supports_credentials=allowed_origins != "*",
-        allow_headers=["Content-Type", "Authorization"],
+        allow_headers=["Content-Type", "Authorization", "X-Refresh-Token",],
         methods=["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"]
     )
 
@@ -79,6 +95,8 @@ def create_app(config_name="development"):
     def add_headers(response):
         response.headers["Cross-Origin-Opener-Policy"]   = "unsafe-none"
         response.headers["Cross-Origin-Embedder-Policy"] = "unsafe-none"
+        response.headers["Access-Control-Allow-Headers"] = \
+        "Content-Type, Authorization, X-Refresh-Token"
         
         origin = request.headers.get("Origin")
         frontend_url_env = os.getenv("FRONTEND_URL", "*")
@@ -98,7 +116,7 @@ def create_app(config_name="development"):
                 if default_origin != "*":
                     response.headers["Access-Control-Allow-Credentials"] = "true"
                     
-        response.headers["Access-Control-Allow-Headers"] = "Content-Type, Authorization"
+        response.headers["Access-Control-Allow-Headers"] = "Content-Type, Authorization, X-Refresh-Token"
         response.headers["Access-Control-Allow-Methods"] = "GET, POST, PUT, PATCH, DELETE, OPTIONS"
         return response
 
