@@ -200,11 +200,13 @@ def forgot_password():
 
     user = User.query.filter(db.func.lower(User.email) == email).first()
 
-    # Always return success to prevent email enumeration
+    # Return error if user is not registered in database so user knows why email wasn't sent
     if not user:
         print(f"⚠️ Forgot password requested for '{email}', but NO USER was found in the database.")
-        return success_response(
-            message="If that email exists, a reset link has been sent"
+        return error_response(
+            "USER_NOT_FOUND",
+            f"No registered account found with email '{email}'. Please check your email address or register first.",
+            status=400
         )
 
     try:
@@ -262,6 +264,7 @@ def test_email():
 
     resend_key = os.environ.get("RESEND_API_KEY")
     recipient = target or username or "test@example.com"
+    db_user = User.query.filter(db.func.lower(User.email) == recipient.lower()).first()
 
     diag = {
         "RESEND_API_KEY_SET": bool(resend_key),
@@ -273,6 +276,8 @@ def test_email():
         "MAIL_PASSWORD_LEN": len(password) if password else 0,
         "MAIL_DEFAULT_SENDER": sender,
         "RECIPIENT": recipient,
+        "RECIPIENT_EXISTS_IN_DB": bool(db_user),
+        "RECIPIENT_DB_EMAIL": db_user.email if db_user else None,
     }
 
     try:
