@@ -11,7 +11,7 @@ function MaterialPreviewModal({ resource, isOpen, onClose, onDownload }) {
 
   // Determine full backend URL for relative paths
   const getFullUrl = (url) => {
-    if (!url) return ""
+    if (!url || typeof url !== "string") return ""
     if (url.startsWith("http://") || url.startsWith("https://")) return url
     const backendUrl =
       import.meta.env.VITE_BACKEND_URL ||
@@ -22,7 +22,7 @@ function MaterialPreviewModal({ resource, isOpen, onClose, onDownload }) {
     return `${cleanBackendUrl}${cleanUrl}`
   }
 
-  const currentResource = detailedResource || resource
+  const currentResource = detailedResource || resource || {}
   const fullUrl = getFullUrl(currentResource?.file_url)
 
   // Check file availability on backend server
@@ -38,7 +38,6 @@ function MaterialPreviewModal({ resource, isOpen, onClose, onDownload }) {
           }
         })
         .catch(() => {
-          // If CORS or network prevents HEAD, fallback to false
           setFileNotFound(false)
         })
     } else {
@@ -67,13 +66,13 @@ function MaterialPreviewModal({ resource, isOpen, onClose, onDownload }) {
 
   // Get extension
   const getExtension = () => {
-    if (!currentResource?.file_url) return ""
+    if (!currentResource?.file_url || typeof currentResource.file_url !== "string") return ""
     const parts = currentResource.file_url.split("?")[0].split(".")
     return parts.length > 1 ? parts.pop().toLowerCase() : ""
   }
 
   const ext = getExtension()
-  const typeName = currentResource?.file_type_name?.toLowerCase() || ""
+  const typeName = typeof currentResource?.file_type_name === "string" ? currentResource.file_type_name.toLowerCase() : ""
 
   const isPdf = ext === "pdf" || typeName === "pdf"
   const isImage = ["png", "jpg", "jpeg", "gif", "webp", "svg"].includes(ext) || typeName === "image"
@@ -102,7 +101,7 @@ function MaterialPreviewModal({ resource, isOpen, onClose, onDownload }) {
   // Close on escape
   useEffect(() => {
     const handleEsc = (e) => {
-      if (e.key === "Escape") onClose()
+      if (e.key === "Escape" && typeof onClose === "function") onClose()
     }
     if (isOpen) window.addEventListener("keydown", handleEsc)
     return () => window.removeEventListener("keydown", handleEsc)
@@ -119,17 +118,33 @@ function MaterialPreviewModal({ resource, isOpen, onClose, onDownload }) {
 
   if (!isOpen || !resource) return null
 
-  const handleDownloadClick = () => {
+  const handleClose = (e) => {
+    if (e && e.preventDefault) e.preventDefault()
+    if (e && e.stopPropagation) e.stopPropagation()
+    if (typeof onClose === "function") onClose()
+  }
+
+  const handleOpenTab = (e) => {
+    if (e && e.preventDefault) e.preventDefault()
+    if (e && e.stopPropagation) e.stopPropagation()
+    if (fullUrl) {
+      window.open(fullUrl, "_blank", "noopener,noreferrer")
+    }
+  }
+
+  const handleDownloadClick = (e) => {
+    if (e && e.preventDefault) e.preventDefault()
+    if (e && e.stopPropagation) e.stopPropagation()
     if (onDownload) {
       onDownload(currentResource)
       return
     }
     let targetUrl = fullUrl
-    if (targetUrl && !targetUrl.includes("download=1")) {
+    if (!targetUrl) return
+    if (!targetUrl.includes("download=1")) {
       targetUrl += (targetUrl.includes("?") ? "&" : "?") + "download=1"
     }
 
-    // Direct anchor element click to bypass browser popup blockers
     const link = document.createElement("a")
     link.href = targetUrl
     link.target = "_blank"
@@ -141,10 +156,9 @@ function MaterialPreviewModal({ resource, isOpen, onClose, onDownload }) {
     link.click()
     document.body.removeChild(link)
 
-    // Track download count in background
     if (currentResource?.id) {
-      trackDownload(currentResource.id).catch((e) =>
-        console.error("Track download warning:", e)
+      trackDownload(currentResource.id).catch((err) =>
+        console.error("Track download warning:", err)
       )
     }
   }
@@ -166,10 +180,25 @@ function MaterialPreviewModal({ resource, isOpen, onClose, onDownload }) {
     }
   }
 
+  const formatDate = (dateStr) => {
+    if (!dateStr) return ""
+    try {
+      const d = new Date(dateStr)
+      if (isNaN(d.getTime())) return ""
+      return d.toLocaleDateString("en-GB", {
+        day: "2-digit",
+        month: "short",
+        year: "numeric",
+      })
+    } catch {
+      return ""
+    }
+  }
+
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-6 bg-black/60 backdrop-blur-sm animate-fadeIn">
       {/* Backdrop */}
-      <div className="absolute inset-0" onClick={onClose} />
+      <div className="absolute inset-0" onClick={handleClose} />
 
       {/* Main Container */}
       <div className="relative bg-white rounded-2xl shadow-2xl w-full max-w-5xl max-h-[92vh] flex flex-col z-10 overflow-hidden border border-slate-200">
@@ -207,11 +236,7 @@ function MaterialPreviewModal({ resource, isOpen, onClose, onDownload }) {
           <div className="flex items-center gap-2 flex-shrink-0 ml-4">
             <button
               type="button"
-              onClick={(e) => {
-                e.preventDefault()
-                e.stopPropagation()
-                window.open(fullUrl, "_blank")
-              }}
+              onClick={handleOpenTab}
               className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-slate-700 bg-white border border-slate-200 rounded-lg hover:bg-slate-50 hover:text-[#1A3D63] transition-colors shadow-sm"
               title="Open in new window"
             >
@@ -220,11 +245,7 @@ function MaterialPreviewModal({ resource, isOpen, onClose, onDownload }) {
             </button>
             <button
               type="button"
-              onClick={(e) => {
-                e.preventDefault()
-                e.stopPropagation()
-                handleDownloadClick()
-              }}
+              onClick={handleDownloadClick}
               className="flex items-center gap-1.5 px-3.5 py-1.5 text-xs font-medium text-white bg-[#1A3D63] rounded-lg hover:bg-[#0A1931] transition-colors shadow-sm"
               title="Download file"
             >
@@ -233,11 +254,7 @@ function MaterialPreviewModal({ resource, isOpen, onClose, onDownload }) {
             </button>
             <button
               type="button"
-              onClick={(e) => {
-                e.preventDefault()
-                e.stopPropagation()
-                onClose()
-              }}
+              onClick={handleClose}
               className="p-1.5 text-slate-400 hover:text-slate-700 hover:bg-slate-200/60 rounded-lg transition-colors ml-1"
               title="Close preview"
             >
@@ -261,7 +278,7 @@ function MaterialPreviewModal({ resource, isOpen, onClose, onDownload }) {
               </p>
               <button
                 type="button"
-                onClick={onClose}
+                onClick={handleClose}
                 className="px-4 py-2 text-xs font-semibold text-white bg-[#1A3D63] rounded-lg hover:bg-[#0A1931] transition-colors"
               >
                 Close Preview
@@ -271,13 +288,13 @@ function MaterialPreviewModal({ resource, isOpen, onClose, onDownload }) {
             <iframe
               src={`${fullUrl}#toolbar=1&navpanes=0`}
               className="w-full h-[65vh] rounded-xl border border-slate-200 shadow-sm bg-white"
-              title={currentResource.title}
+              title={currentResource.title || "PDF Preview"}
             />
           ) : isImage ? (
             <div className="flex items-center justify-center w-full h-full max-h-[65vh] bg-white rounded-xl p-4 shadow-sm border border-slate-200 overflow-hidden">
               <img
                 src={fullUrl}
-                alt={currentResource.title}
+                alt={currentResource.title || "Image Material"}
                 className="max-h-[60vh] max-w-full object-contain rounded-lg shadow-sm"
               />
             </div>
@@ -298,7 +315,7 @@ function MaterialPreviewModal({ resource, isOpen, onClose, onDownload }) {
                 <Music size={32} />
               </div>
               <h4 className="font-heading font-semibold text-slate-800 text-base mb-1">
-                {currentResource.title}
+                {currentResource.title || "Audio Material"}
               </h4>
               <p className="text-xs text-slate-500 mb-6">Audio Material</p>
               <audio src={fullUrl} controls className="w-full">
@@ -320,7 +337,7 @@ function MaterialPreviewModal({ resource, isOpen, onClose, onDownload }) {
               <iframe
                 src={`https://docs.google.com/viewer?url=${encodeURIComponent(fullUrl)}&embedded=true`}
                 className="w-full h-full border-none"
-                title={currentResource.title}
+                title={currentResource.title || "Document Preview"}
               />
             </div>
           ) : (
@@ -329,7 +346,7 @@ function MaterialPreviewModal({ resource, isOpen, onClose, onDownload }) {
                 <FileText size={28} />
               </div>
               <h4 className="font-heading font-semibold text-slate-800 text-base mb-1">
-                {currentResource.title}
+                {currentResource.title || "Study Material"}
               </h4>
               <p className="text-xs text-slate-500 mb-6">
                 Preview is not available for standard direct view. You can open or download the file to view its contents.
@@ -337,22 +354,14 @@ function MaterialPreviewModal({ resource, isOpen, onClose, onDownload }) {
               <div className="flex items-center justify-center gap-3">
                 <button
                   type="button"
-                  onClick={(e) => {
-                    e.preventDefault()
-                    e.stopPropagation()
-                    window.open(fullUrl, "_blank")
-                  }}
+                  onClick={handleOpenTab}
                   className="px-4 py-2 text-xs font-semibold text-[#1A3D63] bg-blue-50 rounded-lg hover:bg-blue-100 transition-colors"
                 >
                   Open in New Tab
                 </button>
                 <button
                   type="button"
-                  onClick={(e) => {
-                    e.preventDefault()
-                    e.stopPropagation()
-                    handleDownloadClick()
-                  }}
+                  onClick={handleDownloadClick}
                   className="px-4 py-2 text-xs font-semibold text-white bg-[#1A3D63] rounded-lg hover:bg-[#0A1931] transition-colors"
                 >
                   Download File
@@ -394,16 +403,10 @@ function MaterialPreviewModal({ resource, isOpen, onClose, onDownload }) {
             )}
           </div>
 
-          {currentResource.uploaded_at && (
+          {currentResource.uploaded_at && formatDate(currentResource.uploaded_at) && (
             <span className="flex items-center gap-1 text-slate-400">
               <Calendar size={12} />
-              <span>
-                {new Date(currentResource.uploaded_at).toLocaleDateString("en-GB", {
-                  day: "2-digit",
-                  month: "short",
-                  year: "numeric",
-                })}
-              </span>
+              <span>{formatDate(currentResource.uploaded_at)}</span>
             </span>
           )}
         </div>
