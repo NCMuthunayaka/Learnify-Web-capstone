@@ -497,11 +497,6 @@ def reject_user(user_id):
         db.session.commit()
 
     return success_response(data=user.to_dict(), message="User rejected")
-    else:
-        user.status = "inactive"
-        db.session.commit()
-
-    return success_response(data=user.to_dict(), message="User rejected")
 
 
 # ── GET /api/admin/analytics ─────────────────────────────────
