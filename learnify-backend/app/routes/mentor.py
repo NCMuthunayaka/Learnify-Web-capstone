@@ -374,7 +374,7 @@ def get_dashboard_stats():
         user_row = db.session.execute(text("SELECT email FROM users WHERE id = :uid"), {"uid": user_id}).fetchone()
         user_email = (user_row[0] or "").lower() if user_row else ""
 
-        if user_email in ["ncmuthunayaka@gmail.com", "rashmika@gmail.com", "rashmika@gamil.com"]:
+        if user_email == "ncmuthunayaka@gmail.com":
             sessions = [
                 {
                     "id": 901,
