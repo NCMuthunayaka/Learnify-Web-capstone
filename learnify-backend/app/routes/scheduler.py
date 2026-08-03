@@ -197,6 +197,13 @@ def create_task():
                 "due_date":   due_date,
             }
         )
+        # Ensure student_subjects association exists
+        sp_id = _get_student_profile_id(user_id)
+        if sp_id:
+            db.session.execute(
+                text("INSERT IGNORE INTO student_subjects (student_id, subject_id) VALUES (:sp_id, :sub_id)"),
+                {"sp_id": sp_id, "sub_id": subject_id}
+            )
         db.session.commit()
 
         # Fetch the newly created task
@@ -630,6 +637,12 @@ def generate_timetable():
                     "type":  sess_type,
                 }
             )
+            sp_id = _get_student_profile_id(user_id)
+            if sp_id:
+                db.session.execute(
+                    text("INSERT IGNORE INTO student_subjects (student_id, subject_id) VALUES (:sp_id, :sub_id)"),
+                    {"sp_id": sp_id, "sub_id": subject_id}
+                )
             saved_sessions.append({
                 "day":          session.get("day"),
                 "start_time":   start_str,

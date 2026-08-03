@@ -2,6 +2,7 @@ import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom"
 import MainLayout from "../components/layout/MainLayout"
 import LandingLayout from "../components/layout/LandingLayout"
 import PrivateRoute from "./PrivateRoute"
+import { useAuth } from "../hooks/useAuth"
 
 // Pages
 import FeaturesPage from "../pages/FeaturesPage"
@@ -37,21 +38,27 @@ import ForgotPasswordPage from "../pages/ForgotPasswordPage"
 import ResetPasswordPage  from "../pages/ResetPasswordPage"
 
 function DashboardDispatcher() {
+  const { user } = useAuth()
   const token = localStorage.getItem("access_token")
   if (!token) {
     return <Navigate to="/login" replace />
   }
-  try {
-    const payload = JSON.parse(atob(token.split(".")[1]))
-    const role = payload.role
-    if (role === "mentor") {
-      return <MentorDashboardPage />
+
+  let role = user?.role
+  if (!role) {
+    try {
+      const payload = JSON.parse(atob(token.split(".")[1]))
+      role = payload.role
+    } catch (err) {
+      console.error("Failed to parse token in dispatcher:", err)
     }
-    if (role === "admin") {
-      return <AdminAnalyticsPage />
-    }
-  } catch (err) {
-    console.error("Failed to parse token in dispatcher:", err)
+  }
+
+  if (role === "mentor") {
+    return <MentorDashboardPage />
+  }
+  if (role === "admin") {
+    return <AdminAnalyticsPage />
   }
   return <DashboardPage />
 }

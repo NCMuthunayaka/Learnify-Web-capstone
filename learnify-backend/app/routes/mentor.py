@@ -94,15 +94,22 @@ def ensure_mentor_profile(user_id: int):
             )
             db.session.commit()
 
+# Helper to check mentor or admin permission against DB
+def check_mentor_permission(user_id: int):
+    user = User.query.get(user_id)
+    if not user or user.role not in ["mentor", "admin"]:
+        return error_response("FORBIDDEN", "Mentor access required", status=403)
+    return None
+
 # ── GET /api/mentor/dashboard/stats ────────────────────────
 # Returns all actual stats and details for the mentor dashboard
 @bp.route("/dashboard/stats", methods=["GET"])
 @jwt_required()
 def get_dashboard_stats():
     user_id = int(get_jwt_identity())
-    claims = get_jwt()
-    if claims.get("role") not in ["mentor", "admin"]:
-        return error_response("FORBIDDEN", "Mentor access required", status=403)
+    perm_err = check_mentor_permission(user_id)
+    if perm_err:
+        return perm_err
 
     ensure_mentor_profile(user_id)
 
@@ -498,9 +505,9 @@ def get_dashboard_stats():
 @jwt_required()
 def update_settings():
     user_id = int(get_jwt_identity())
-    claims = get_jwt()
-    if claims.get("role") not in ["mentor", "admin"]:
-        return error_response("FORBIDDEN", "Mentor access required", status=403)
+    perm_err = check_mentor_permission(user_id)
+    if perm_err:
+        return perm_err
 
     data = request.get_json(silent=True) or {}
     
@@ -591,9 +598,9 @@ def update_settings():
 @jwt_required()
 def get_mentor_requests():
     user_id = int(get_jwt_identity())
-    claims = get_jwt()
-    if claims.get("role") not in ["mentor", "admin"]:
-        return error_response("FORBIDDEN", "Mentor access required", status=403)
+    perm_err = check_mentor_permission(user_id)
+    if perm_err:
+        return perm_err
 
     try:
         # Fetch requests (assigned to this mentor OR pending with no assignment)
@@ -675,9 +682,9 @@ def get_mentor_requests():
 @jwt_required()
 def accept_request(req_id):
     user_id = int(get_jwt_identity())
-    claims = get_jwt()
-    if claims.get("role") not in ["mentor", "admin"]:
-        return error_response("FORBIDDEN", "Mentor access required", status=403)
+    perm_err = check_mentor_permission(user_id)
+    if perm_err:
+        return perm_err
 
     try:
         db.session.execute(
@@ -698,9 +705,10 @@ def accept_request(req_id):
 @bp.route("/requests/<int:req_id>/decline", methods=["POST"])
 @jwt_required()
 def decline_request(req_id):
-    claims = get_jwt()
-    if claims.get("role") not in ["mentor", "admin"]:
-        return error_response("FORBIDDEN", "Mentor access required", status=403)
+    user_id = int(get_jwt_identity())
+    perm_err = check_mentor_permission(user_id)
+    if perm_err:
+        return perm_err
 
     try:
         db.session.execute(
@@ -721,9 +729,10 @@ def decline_request(req_id):
 @bp.route("/requests/<int:req_id>/resolve", methods=["POST"])
 @jwt_required()
 def resolve_request(req_id):
-    claims = get_jwt()
-    if claims.get("role") not in ["mentor", "admin"]:
-        return error_response("FORBIDDEN", "Mentor access required", status=403)
+    user_id = int(get_jwt_identity())
+    perm_err = check_mentor_permission(user_id)
+    if perm_err:
+        return perm_err
 
     try:
         db.session.execute(
@@ -745,9 +754,9 @@ def resolve_request(req_id):
 @jwt_required()
 def post_reply(req_id):
     user_id = int(get_jwt_identity())
-    claims = get_jwt()
-    if claims.get("role") not in ["mentor", "admin"]:
-        return error_response("FORBIDDEN", "Mentor access required", status=403)
+    perm_err = check_mentor_permission(user_id)
+    if perm_err:
+        return perm_err
 
     data = request.get_json(silent=True) or {}
     content = data.get("content", "").strip()
@@ -801,9 +810,9 @@ def post_reply(req_id):
 @jwt_required()
 def create_support_ticket():
     user_id = int(get_jwt_identity())
-    claims = get_jwt()
-    if claims.get("role") not in ["mentor", "admin"]:
-        return error_response("FORBIDDEN", "Mentor access required", status=403)
+    perm_err = check_mentor_permission(user_id)
+    if perm_err:
+        return perm_err
 
     data = request.get_json(silent=True) or {}
     title = data.get("title", "").strip()
@@ -839,9 +848,9 @@ def create_support_ticket():
 @jwt_required()
 def log_work_session():
     user_id = int(get_jwt_identity())
-    claims = get_jwt()
-    if claims.get("role") not in ["mentor", "admin"]:
-        return error_response("FORBIDDEN", "Mentor access required", status=403)
+    perm_err = check_mentor_permission(user_id)
+    if perm_err:
+        return perm_err
 
     data = request.get_json(silent=True) or {}
     duration = int(data.get("duration", 25))

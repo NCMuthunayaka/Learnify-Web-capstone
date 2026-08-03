@@ -20,14 +20,47 @@ def get_dashboard_stats():
         return error_response("NOT_FOUND", "User not found", status=404)
 
     # ── Get subjects count ────────────────────────────────
-    # Count subjects enrolled by this student
+    # Count subjects enrolled by this student or referenced in study sessions / tasks
     from app.models.subject import Subject
     try:
         from sqlalchemy import text
+        # Ensure student profile exists and sync student_subjects
+        sp_row = db.session.execute(
+            text("SELECT id FROM student_profiles WHERE user_id = :user_id"),
+            {"user_id": user_id}
+        ).fetchone()
+        sp_id = sp_row[0] if sp_row else None
+        
+        if not sp_id:
+            db.session.execute(
+                text("INSERT INTO student_profiles (user_id, available_hours_per_week, study_streak_days, total_points, semester_goal_pct) "
+                     "VALUES (:user_id, 0, 0, 0, 0.0)"),
+                {"user_id": user_id}
+            )
+            db.session.commit()
+            sp_id = db.session.execute(
+                text("SELECT id FROM student_profiles WHERE user_id = :user_id"),
+                {"user_id": user_id}
+            ).scalar()
+
+        if sp_id:
+            db.session.execute(
+                text("INSERT IGNORE INTO student_subjects (student_id, subject_id) "
+                     "SELECT DISTINCT :sp_id, subject_id FROM study_sessions WHERE student_id = :user_id "
+                     "UNION "
+                     "SELECT DISTINCT :sp_id, subject_id FROM tasks WHERE student_id = :user_id"),
+                {"sp_id": sp_id, "user_id": user_id}
+            )
+            db.session.commit()
+
         subjects_count = db.session.execute(
-            text("SELECT COUNT(*) FROM student_subjects ss "
-                 "JOIN student_profiles sp ON ss.student_id = sp.id "
-                 "WHERE sp.user_id = :user_id"),
+            text("SELECT COUNT(DISTINCT subject_id) FROM ("
+                 "  SELECT subject_id FROM student_subjects ss JOIN student_profiles sp ON ss.student_id = sp.id WHERE sp.user_id = :user_id "
+                 "  UNION "
+                 "  SELECT subject_id FROM study_sessions WHERE student_id = :user_id "
+                 "  UNION "
+                 "  SELECT subject_id FROM tasks WHERE student_id = :user_id"
+                 ") AS sub_combined"),
             {"user_id": user_id}
         ).scalar() or 0
     except Exception:
@@ -70,7 +103,6 @@ def get_dashboard_stats():
                  "FROM study_sessions "
                  "WHERE student_id = :user_id "
                  "AND start_time >= :week_ago "
-                 "AND completed = 1 "
                  "GROUP BY DAYNAME(start_time), DAYOFWEEK(start_time) "
                  "ORDER BY DAYOFWEEK(start_time)"),
             {"user_id": user_id, "week_ago": week_ago}
@@ -142,12 +174,15 @@ def get_dashboard_stats():
     try:
         from sqlalchemy import text
         scheduled = db.session.execute(
-            text("SELECT s.name, s.color_hex "
-                 "FROM student_subjects ss "
-                 "JOIN student_profiles sp ON ss.student_id = sp.id "
-                 "JOIN subjects s ON ss.subject_id = s.id "
-                 "WHERE sp.user_id = :user_id "
-                 "LIMIT 5"),
+            text("SELECT DISTINCT s.name, s.color_hex "
+                 "FROM subjects s "
+                 "WHERE s.id IN ("
+                 "  SELECT subject_id FROM student_subjects ss JOIN student_profiles sp ON ss.student_id = sp.id WHERE sp.user_id = :user_id "
+                 "  UNION "
+                 "  SELECT subject_id FROM study_sessions WHERE student_id = :user_id "
+                 "  UNION "
+                 "  SELECT subject_id FROM tasks WHERE student_id = :user_id"
+                 ") LIMIT 5"),
             {"user_id": user_id}
         ).fetchall()
 

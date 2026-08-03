@@ -18,7 +18,6 @@ def _build_study_hours_chart(user_id):
                 "ROUND(SUM(ss.duration_min) / 60.0, 2) as hrs "
                 "FROM study_sessions ss "
                 "WHERE ss.student_id = :uid "
-                "AND ss.completed = 1 "
                 "AND DATE(ss.start_time) >= :since "
                 "GROUP BY DATE(ss.start_time) "
                 "ORDER BY DATE(ss.start_time)"
@@ -51,7 +50,6 @@ def _build_subject_time_allocation(user_id):
                 "FROM study_sessions ss "
                 "JOIN subjects s ON ss.subject_id = s.id "
                 "WHERE ss.student_id = :uid "
-                "AND ss.completed = 1 "
                 "AND DATE(ss.start_time) >= :since "
                 "GROUP BY s.id, s.name "
                 "ORDER BY hrs DESC "
@@ -74,35 +72,60 @@ def _build_subject_time_allocation(user_id):
 
 
 def _build_subject_progress(user_id):
-    """Task completion % per subject."""
+    """Task completion % per subject across student_subjects, tasks, or study_sessions."""
     BAR_COLORS = ["green", "blue", "amber", "red", "green", "blue"]
     try:
-        rows = db.session.execute(
+        subj_rows = db.session.execute(
             text(
-                "SELECT s.name, "
-                "COUNT(t.id) as total, "
-                "SUM(CASE WHEN t.status = 'done' THEN 1 ELSE 0 END) as done "
-                "FROM tasks t "
-                "JOIN subjects s ON t.subject_id = s.id "
-                "WHERE t.student_id = :uid "
-                "GROUP BY s.id, s.name "
-                "ORDER BY s.name"
+                "SELECT DISTINCT s.id, s.name "
+                "FROM subjects s "
+                "WHERE s.id IN ("
+                "  SELECT subject_id FROM student_subjects ss JOIN student_profiles sp ON ss.student_id = sp.id WHERE sp.user_id = :uid "
+                "  UNION "
+                "  SELECT subject_id FROM study_sessions WHERE student_id = :uid "
+                "  UNION "
+                "  SELECT subject_id FROM tasks WHERE student_id = :uid"
+                ") ORDER BY s.name"
             ),
-            {"uid": user_id},
+            {"uid": user_id}
         ).fetchall()
 
         result = []
-        for i, r in enumerate(rows):
-            total = int(r[1]) or 1
-            done = int(r[2])
-            pct = round(done / total * 100)
+        for i, s_row in enumerate(subj_rows):
+            sub_id, sub_name = s_row
+            task_stat = db.session.execute(
+                text(
+                    "SELECT COUNT(id), SUM(CASE WHEN status = 'done' THEN 1 ELSE 0 END) "
+                    "FROM tasks WHERE student_id = :uid AND subject_id = :sid"
+                ),
+                {"uid": user_id, "sid": sub_id}
+            ).fetchone()
+            
+            total_tasks = task_stat[0] if task_stat else 0
+            done_tasks = int(task_stat[1]) if task_stat and task_stat[1] is not None else 0
+            
+            if total_tasks > 0:
+                pct = round(done_tasks / total_tasks * 100)
+            else:
+                sess_stat = db.session.execute(
+                    text(
+                        "SELECT COUNT(id), SUM(CASE WHEN completed = 1 THEN 1 ELSE 0 END) "
+                        "FROM study_sessions WHERE student_id = :uid AND subject_id = :sid"
+                    ),
+                    {"uid": user_id, "sid": sub_id}
+                ).fetchone()
+                tot_sess = sess_stat[0] if sess_stat else 0
+                done_sess = int(sess_stat[1]) if sess_stat and sess_stat[1] is not None else 0
+                pct = round(done_sess / tot_sess * 100) if tot_sess > 0 else 0
+
             result.append({
-                "name": r[0],
+                "name": sub_name,
                 "pct": pct,
                 "color": BAR_COLORS[i % len(BAR_COLORS)],
             })
         return result
-    except Exception:
+    except Exception as e:
+        print(f"Error in _build_subject_progress: {e}")
         return []
 
 
@@ -110,7 +133,6 @@ def _build_streak_heatmap(user_id):
     """4-week heatmap grid (Mon-Sun, intensity 0-5)."""
     try:
         today = date.today()
-        # Start from Monday 4 weeks ago
         monday = today - timedelta(days=today.weekday())
         start = monday - timedelta(weeks=3)
 
@@ -120,7 +142,6 @@ def _build_streak_heatmap(user_id):
                 "ROUND(SUM(duration_min) / 60.0, 1) as hrs "
                 "FROM study_sessions "
                 "WHERE student_id = :uid "
-                "AND completed = 1 "
                 "AND DATE(start_time) >= :start "
                 "GROUP BY DATE(start_time)"
             ),
@@ -151,7 +172,7 @@ def _build_streak_heatmap(user_id):
 
 
 def _build_streak_count(user_id):
-    """Count of consecutive days with any completed study session up to today."""
+    """Count of consecutive days with any study session up to today."""
     try:
         today = date.today()
         streak = 0
@@ -161,8 +182,7 @@ def _build_streak_count(user_id):
                 text(
                     "SELECT COUNT(*) FROM study_sessions "
                     "WHERE student_id = :uid "
-                    "AND DATE(start_time) = :d "
-                    "AND completed = 1"
+                    "AND DATE(start_time) = :d"
                 ),
                 {"uid": user_id, "d": d},
             ).scalar()
@@ -233,7 +253,7 @@ def _build_top_stats(user_id):
             text(
                 "SELECT ROUND(SUM(duration_min) / 60.0, 1) "
                 "FROM study_sessions "
-                "WHERE student_id = :uid AND completed = 1 "
+                "WHERE student_id = :uid "
                 "AND DATE(start_time) >= :ms"
             ),
             {"uid": user_id, "ms": month_start},
@@ -248,8 +268,8 @@ def _build_top_stats(user_id):
             ),
             {"uid": user_id},
         ).fetchone()
-        total_tasks = int(task_counts[0]) if task_counts else 0
-        done_tasks = int(task_counts[1]) if task_counts else 0
+        total_tasks = int(task_counts[0]) if task_counts and task_counts[0] else 0
+        done_tasks = int(task_counts[1]) if task_counts and task_counts[1] is not None else 0
         due_week = db.session.execute(
             text(
                 "SELECT COUNT(*) FROM tasks "
@@ -317,14 +337,13 @@ def _build_recent_activity(user_id):
         activities = []
         now_dt = datetime.now()
 
-        # 1. Completed study sessions
+        # 1. Study sessions (completed or scheduled)
         sessions = db.session.execute(
             text(
-                "SELECT ss.start_time, s.name, ss.duration_min, ss.ai_suggested, ss.session_type "
+                "SELECT ss.start_time, s.name, ss.duration_min, ss.ai_suggested, ss.session_type, ss.completed "
                 "FROM study_sessions ss "
                 "JOIN subjects s ON ss.subject_id = s.id "
                 "WHERE ss.student_id = :uid "
-                "AND ss.completed = 1 "
                 "ORDER BY ss.start_time DESC "
                 "LIMIT 5"
             ),
@@ -332,11 +351,11 @@ def _build_recent_activity(user_id):
         ).fetchall()
 
         for s in sessions:
-            st_time, subj, dur, ai_sugg, s_type = s
-            title = f"AI Session — {dur} min" if ai_sugg else "Completed Study Session"
+            st_time, subj, dur, ai_sugg, s_type, comp = s
+            title = f"AI Session — {dur} min" if ai_sugg else ("Completed Study Session" if comp else "Scheduled Study Session")
             desc = f"{subj} · {dur} min"
-            icon = "🤖" if ai_sugg else "📚"
-            color = "bg-[#fff3e0]" if ai_sugg else "bg-[#deeef8]"
+            icon = "🤖" if ai_sugg else ("📚" if comp else "📅")
+            color = "bg-[#fff3e0]" if ai_sugg else ("bg-[#deeef8]" if comp else "bg-[#eef4f8]")
             
             activities.append({
                 "timestamp": st_time,

@@ -1,16 +1,12 @@
 import { Navigate } from "react-router-dom"
+import { useAuth } from "../hooks/useAuth"
 
 // ── PrivateRoute ──────────────────────────────────────────
 // Protects pages from unauthenticated users
 // Optionally checks user role for role-based access
-//
-// Usage:
-// <PrivateRoute>                    → any logged in user
-// <PrivateRoute roles={["mentor"]}> → mentor only
-// <PrivateRoute roles={["admin"]}>  → admin only
 
 function PrivateRoute({ children, roles }) {
-  // Get token from localStorage
+  const { user } = useAuth()
   const token = localStorage.getItem("access_token")
 
   // No token — not logged in — redirect to login
@@ -28,9 +24,9 @@ function PrivateRoute({ children, roles }) {
       return <Navigate to="/login" replace />
     }
 
-    // If roles are specified, check user's role
+    // If roles are specified, check user's role (prefer live user object from auth context)
     if (roles && roles.length > 0) {
-      const userRole = payload.role
+      const userRole = user?.role || payload.role
       if (!roles.includes(userRole)) {
         return <Navigate to="/dashboard" replace />
       }

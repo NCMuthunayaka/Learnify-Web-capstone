@@ -2,8 +2,9 @@ import { NavLink, useNavigate } from "react-router-dom"
 import {
   LayoutDashboard, CalendarDays, TrendingUp,
   Bot, BookOpen, HelpCircle, User, LogOut,
-  Users, UserCheck, Monitor, MessageSquare, Settings
+  Users, UserCheck, Monitor, MessageSquare, Settings, FileText
 } from "lucide-react"
+import { useAuth } from "../../hooks/useAuth"
 import sidebarBg from "../../assets/images/sidebar_img.jpg"
 import learnifyLogo from "../../assets/images/learnify_logo.png"
 
@@ -23,7 +24,8 @@ const mentorNavItems = [
   { label: "Dashboard",        icon: LayoutDashboard, path: "/mentor/dashboard" },
   { label: "Direct Requests",  icon: HelpCircle,      path: "/community?tab=direct" },
   { label: "AI Assistant",     icon: Bot,             path: "/ai-chat"          },
-  { label: "My Resources",     icon: BookOpen,        path: "/mentor/resources" },
+  { label: "Study Materials",  icon: BookOpen,        path: "/resources"        },
+  { label: "My Resources",     icon: FileText,        path: "/mentor/resources" },
   { label: "Community",        icon: Users,           path: "/community"        },
   { label: "Feedback",         icon: MessageSquare,   path: "/feedback"         },
 ]
@@ -51,7 +53,20 @@ function getRoleFromToken() {
 
 function Sidebar({ isOpen }) {
   const navigate = useNavigate()
-  const role     = getRoleFromToken()
+  const { user }  = useAuth()
+
+  let role = "student"
+  if (user?.role) {
+    role = user.role
+  } else {
+    try {
+      const token = localStorage.getItem("access_token")
+      if (token) {
+        const payload = JSON.parse(atob(token.split(".")[1]))
+        role = payload.role || "student"
+      }
+    } catch {}
+  }
 
   // Pick correct nav items based on role
   const navItems =
