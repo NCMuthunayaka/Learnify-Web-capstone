@@ -61,6 +61,6 @@ class User(db.Model):
             "department":      self.department,
             "subject":         self.subject,
             "experience":      self.experience,
-            "created_at":      self.created_at.isoformat(),
+            "created_at":      (self.created_at.isoformat() + "Z") if self.created_at and not self.created_at.isoformat().endswith("Z") else (self.created_at.isoformat() if self.created_at else None),
             "last_login":      self.last_login.isoformat() if self.last_login else None,
         }

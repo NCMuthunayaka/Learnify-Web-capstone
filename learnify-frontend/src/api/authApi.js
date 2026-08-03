@@ -14,7 +14,7 @@ export async function loginUser(email, password) {
 // ── Register ──────────────────────────────────────────────
 // Sends user details to backend to create a new account
 // Returns user data and tokens on success
-export async function registerUser(name, email, password, role, qualifications = "", certifications = "") {
+export async function registerUser(name, email, password, role, qualifications = "", certifications = "", cv_url = "") {
     const response = await api.post("/auth/register", {
         name,
         email,
@@ -22,6 +22,16 @@ export async function registerUser(name, email, password, role, qualifications =
         role,
         qualifications,
         certifications,
+        cv_url,
+    })
+    return response.data
+}
+
+export async function uploadCV(file) {
+    const formData = new FormData()
+    formData.append("cv", file)
+    const response = await api.post("/auth/upload-cv", formData, {
+        headers: { "Content-Type": "multipart/form-data" }
     })
     return response.data
 }

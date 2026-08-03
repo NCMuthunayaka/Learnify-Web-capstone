@@ -17,10 +17,48 @@ import os
 bp = Blueprint("auth", __name__)
 
 
+import uuid
+from werkzeug.utils import secure_filename
+
+ALLOWED_CV_EXTENSIONS = {"pdf", "doc", "docx", "png", "jpg", "jpeg"}
+
+def allowed_cv_file(filename):
+    return "." in filename and filename.rsplit(".", 1)[1].lower() in ALLOWED_CV_EXTENSIONS
+
+# ── Upload CV / Resume ─────────────────────────────────────
+@bp.route("/upload-cv", methods=["POST"])
+def upload_cv():
+    if "cv" not in request.files and "file" not in request.files:
+        return error_response("MISSING_FILE", "CV file is required", status=400)
+
+    file = request.files.get("cv") or request.files.get("file")
+    if not file or file.filename == "":
+        return error_response("MISSING_FILE", "No CV file selected", status=400)
+
+    if not allowed_cv_file(file.filename):
+        return error_response("INVALID_FILE", "Allowed CV formats: PDF, DOC, DOCX, PNG, JPG, JPEG", status=400)
+
+    ext = file.filename.rsplit(".", 1)[1].lower()
+    filename = f"cv_{uuid.uuid4().hex[:12]}.{ext}"
+
+    upload_folder = os.path.join(
+        os.path.dirname(os.path.dirname(os.path.dirname(__file__))),
+        "uploads",
+        "cvs"
+    )
+    os.makedirs(upload_folder, exist_ok=True)
+
+    file_path = os.path.join(upload_folder, filename)
+    file.save(file_path)
+
+    cv_url = f"/uploads/cvs/{filename}"
+    return success_response(data={"cv_url": cv_url}, message="CV uploaded successfully")
+
+
 # ── Register ──────────────────────────────────────────────
 @bp.route("/register", methods=["POST"])
 def register():
-    data     = request.get_json()
+    data     = request.get_json() or {}
     required = ["name", "email", "password", "role"]
 
     for field in required:
@@ -37,6 +75,7 @@ def register():
         role           = data["role"],
         qualifications = data.get("qualifications"),
         certifications = data.get("certifications"),
+        cv_url         = data.get("cv_url"),
     )
 
     if err:

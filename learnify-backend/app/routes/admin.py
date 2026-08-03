@@ -305,7 +305,7 @@ def get_pending_approvals():
 
         rows = db.session.execute(
             text(
-                "SELECT ma.id, u.id as user_id, u.name, u.email, ma.qualifications, ma.certifications, ma.created_at "
+                "SELECT ma.id, u.id as user_id, u.name, u.email, ma.qualifications, ma.certifications, ma.created_at, ma.cv_url, ma.request_type "
                 "FROM mentor_applications ma "
                 "JOIN users u ON ma.user_id = u.id "
                 "WHERE ma.status = 'pending' "
@@ -319,6 +319,10 @@ def get_pending_approvals():
         for r in rows:
             uid = r[1]
             perf = get_user_platform_performance(uid)
+            dt_str = r[6].isoformat() if r[6] else None
+            if dt_str and not dt_str.endswith("Z") and "+" not in dt_str:
+                dt_str += "Z"
+
             users.append({
                 "application_id": r[0],
                 "id": r[1],
@@ -326,7 +330,9 @@ def get_pending_approvals():
                 "email": r[3],
                 "qualifications": r[4],
                 "certifications": r[5],
-                "created_at": r[6].isoformat() if r[6] else None,
+                "created_at": dt_str,
+                "cv_url": r[7] if len(r) > 7 else None,
+                "request_type": r[8] if (len(r) > 8 and r[8]) else "registration",
                 "role": "mentor",
                 "status": "pending",
                 "total_points": perf["total_points"],
@@ -345,19 +351,23 @@ def get_pending_approvals():
                  .limit(PAGE_SIZE)
                  .all()
         )
-        users = [
-            {
+        users = []
+        for u in db_users:
+            u_dt = u.created_at.isoformat() if u.created_at else None
+            if u_dt and not u_dt.endswith("Z") and "+" not in u_dt:
+                u_dt += "Z"
+            users.append({
                 "id": u.id,
                 "name": u.name,
                 "email": u.email,
                 "qualifications": "Standard Registration",
                 "certifications": "Standard Registration",
-                "created_at": u.created_at.isoformat() if u.created_at else None,
+                "created_at": u_dt,
+                "cv_url": None,
+                "request_type": "registration",
                 "role": u.role,
                 "status": u.status
-            }
-            for u in db_users
-        ]
+            })
 
     return success_response(data={
         "users":       users,
@@ -386,20 +396,35 @@ def approve_user(user_id):
 
     try:
         app_row = db.session.execute(
-            text("SELECT id FROM mentor_applications WHERE user_id = :uid AND status = 'pending'"),
+            text("SELECT id, cv_url FROM mentor_applications WHERE user_id = :uid AND status = 'pending'"),
             {"uid": user_id}
         ).fetchone()
     except Exception:
         app_row = None
 
     if app_row:
+        # Auto-delete physical CV file from disk upon approval
+        cv_url = app_row[1] if (app_row and len(app_row) > 1) else None
+        if cv_url and cv_url.startswith("/uploads/"):
+            try:
+                rel_path = cv_url.lstrip("/")
+                abs_cv_path = os.path.join(
+                    os.path.dirname(os.path.dirname(os.path.dirname(__file__))),
+                    rel_path
+                )
+                if os.path.exists(abs_cv_path):
+                    os.remove(abs_cv_path)
+                    print(f"Auto-deleted CV file upon approval: {abs_cv_path}")
+            except Exception as fe:
+                print(f"Notice: Failed to auto-delete CV file: {fe}")
+
         # Transition student to mentor
         user.role = "mentor"
         user.status = "active"
 
-        # Update application status
+        # Update application status and clear cv_url
         db.session.execute(
-            text("UPDATE mentor_applications SET status = 'approved' WHERE user_id = :uid"),
+            text("UPDATE mentor_applications SET status = 'approved', cv_url = NULL WHERE user_id = :uid"),
             {"uid": user_id}
         )
 
@@ -413,11 +438,11 @@ def approve_user(user_id):
         from app.routes.mentor import ensure_mentor_profile
         ensure_mentor_profile(user_id)
 
-        # Insert system notification
+        # Insert system notification for user
         db.session.execute(
             text(
                 "INSERT INTO notifications (user_id, type_id, title, body, is_read, created_at) "
-                "VALUES (:uid, 4, 'Mentor Account Approved', 'Your application to register as a mentor has been approved! You now have mentor access.', 0, :now)"
+                "VALUES (:uid, 4, 'Mentor Application Approved!', 'Congratulations! Your mentor application has been reviewed and approved by Admin. You now have full Mentor access.', 0, :now)"
             ),
             {"uid": user_id, "now": datetime.utcnow()}
         )
@@ -426,7 +451,7 @@ def approve_user(user_id):
         user.status = "active"
         db.session.commit()
 
-    return success_response(data=user.to_dict(), message="User approved")
+    return success_response(data=user.to_dict(), message="User approved successfully")
 
 
 # ── POST /api/admin/approvals/<id>/reject ────────────────────
@@ -462,11 +487,16 @@ def reject_user(user_id):
         db.session.execute(
             text(
                 "INSERT INTO notifications (user_id, type_id, title, body, is_read, created_at) "
-                "VALUES (:uid, 6, 'Mentor Application Declined', 'Your application to register as a mentor has been declined by the system administrators. You will retain student access.', 0, :now)"
+                "VALUES (:uid, 6, 'Mentor Application Declined', 'Your mentor application was reviewed by Admin and declined at this time. You will retain Student access.', 0, :now)"
             ),
             {"uid": user_id, "now": datetime.utcnow()}
         )
         db.session.commit()
+    else:
+        user.status = "inactive"
+        db.session.commit()
+
+    return success_response(data=user.to_dict(), message="User rejected")
     else:
         user.status = "inactive"
         db.session.commit()

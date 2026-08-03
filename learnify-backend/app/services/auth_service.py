@@ -7,6 +7,18 @@ def ensure_mentor_applications_table():
     from sqlalchemy import text
     try:
         db.session.execute(text("SELECT 1 FROM mentor_applications LIMIT 1"))
+        # Dynamically add cv_url and request_type columns if missing
+        try:
+            db.session.execute(text("ALTER TABLE mentor_applications ADD COLUMN cv_url VARCHAR(500) NULL"))
+            db.session.commit()
+        except Exception:
+            db.session.rollback()
+
+        try:
+            db.session.execute(text("ALTER TABLE mentor_applications ADD COLUMN request_type VARCHAR(50) NOT NULL DEFAULT 'registration'"))
+            db.session.commit()
+        except Exception:
+            db.session.rollback()
     except Exception:
         db.session.rollback()
         try:
@@ -17,6 +29,8 @@ def ensure_mentor_applications_table():
                     "user_id INT NOT NULL,"
                     "qualifications TEXT NOT NULL,"
                     "certifications TEXT NOT NULL,"
+                    "cv_url VARCHAR(500) NULL,"
+                    "request_type VARCHAR(50) NOT NULL DEFAULT 'registration',"
                     "status VARCHAR(20) NOT NULL DEFAULT 'pending',"
                     "created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,"
                     "PRIMARY KEY (id),"
@@ -36,6 +50,8 @@ def ensure_mentor_applications_table():
                         "user_id INTEGER NOT NULL UNIQUE,"
                         "qualifications TEXT NOT NULL,"
                         "certifications TEXT NOT NULL,"
+                        "cv_url VARCHAR(500) NULL,"
+                        "request_type VARCHAR(50) NOT NULL DEFAULT 'registration',"
                         "status VARCHAR(20) NOT NULL DEFAULT 'pending',"
                         "created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,"
                         "FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE"
@@ -48,7 +64,7 @@ def ensure_mentor_applications_table():
                 print(f"Failed to create mentor_applications table: {ex}")
 
 
-def register_user(name, email, password, role="student", qualifications=None, certifications=None):
+def register_user(name, email, password, role="student", qualifications=None, certifications=None, cv_url=None):
     existing = User.query.filter_by(email=email).first()
     if existing:
         return None, "Email already registered"
@@ -90,13 +106,14 @@ def register_user(name, email, password, role="student", qualifications=None, ce
         try:
             db.session.execute(
                 text(
-                    "INSERT INTO mentor_applications (user_id, qualifications, certifications, status) "
-                    "VALUES (:uid, :qual, :cert, 'pending')"
+                    "INSERT INTO mentor_applications (user_id, qualifications, certifications, cv_url, request_type, status) "
+                    "VALUES (:uid, :qual, :cert, :cv, 'registration', 'pending')"
                 ),
                 {
                     "uid": user.id,
                     "qual": qualifications or "Not provided",
-                    "cert": certifications or "Not provided"
+                    "cert": certifications or "Not provided",
+                    "cv": cv_url or None
                 }
             )
             db.session.commit()

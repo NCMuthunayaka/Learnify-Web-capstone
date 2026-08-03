@@ -1,8 +1,8 @@
 import { useState } from "react"
 import { Link, useNavigate } from "react-router-dom"
 import backgroundImage from "../../assets/images/background.jpg"
-import { GraduationCap, Users, Check, X } from "lucide-react"
-import { registerUser, googleAuth } from "../../api/authApi"
+import { GraduationCap, Users, Check, X, Clock, Info, ArrowRight, Upload, FileText } from "lucide-react"
+import { registerUser, googleAuth, uploadCV } from "../../api/authApi"
 import { useAuth } from "../../hooks/useAuth"
 import { useGoogleLogin } from "@react-oauth/google"
 import LoadingSpinner from "../../components/common/LoadingSpinner"
@@ -139,6 +139,11 @@ function RegisterPage() {
   const [errors, setErrors]     = useState({})
   const [apiError, setApiError] = useState("")
 
+  // Mentor registration notice modal & CV upload state
+  const [showMentorNoticeModal, setShowMentorNoticeModal] = useState(false)
+  const [noticePendingAction, setNoticePendingAction]     = useState("normal") // "normal" or "google"
+  const [cvFile, setCvFile]                               = useState(null)
+
   // Google role selection state
   const [showRoleSelect, setShowRoleSelect]   = useState(false)
   const [googleUserData, setGoogleUserData]   = useState(null)
@@ -230,15 +235,22 @@ function RegisterPage() {
     return Object.keys(newErrors).length === 0
   }
 
-  // ── Normal Register ────────────────────────────────────
-  async function handleSubmit(e) {
-    e.preventDefault()
-    setApiError("")
-
-    if (!validate()) return
-
+  // ── Execute Normal Register ────────────────────────────
+  async function executeRegister() {
     try {
       setLoading(true)
+      setShowMentorNoticeModal(false)
+      
+      let uploadedCvUrl = null
+      if (formData.role === "mentor" && cvFile) {
+        try {
+          const cvRes = await uploadCV(cvFile)
+          uploadedCvUrl = cvRes?.data?.cv_url || null
+        } catch (cvErr) {
+          console.error("CV Upload error:", cvErr)
+        }
+      }
+
       const fullName = `${formData.firstName} ${formData.lastName}`
       const response = await registerUser(
         fullName,
@@ -246,11 +258,19 @@ function RegisterPage() {
         formData.password,
         formData.role,
         formData.qualifications,
-        formData.certifications
+        formData.certifications,
+        uploadedCvUrl
       )
       const { user, access_token, refresh_token } = response.data
       login(user, access_token, refresh_token)
-      const targetRoute = user?.role === "mentor" ? "/mentor/dashboard" : user?.role === "admin" ? "/admin/dashboard" : "/dashboard"
+
+      // Direct mentor applicants to student dashboard /dashboard initially while application is pending
+      const targetRoute = (user?.role === "mentor" || formData.role === "mentor")
+        ? "/dashboard"
+        : user?.role === "admin"
+        ? "/admin/dashboard"
+        : "/dashboard"
+
       navigate(targetRoute, { replace: true })
     } catch (err) {
       setApiError(
@@ -259,6 +279,23 @@ function RegisterPage() {
     } finally {
       setLoading(false)
     }
+  }
+
+  // ── Form Submit Handler ────────────────────────────────
+  async function handleSubmit(e) {
+    e.preventDefault()
+    setApiError("")
+
+    if (!validate()) return
+
+    // Open mentor notice popup when registering as mentor
+    if (formData.role === "mentor") {
+      setNoticePendingAction("normal")
+      setShowMentorNoticeModal(true)
+      return
+    }
+
+    await executeRegister()
   }
 
   // ── Google Register ────────────────────────────────────
@@ -300,6 +337,32 @@ function RegisterPage() {
     )
   })
 
+  // ── Execute Google Role Confirmation ────────────────────
+  async function executeGoogleRoleConfirm() {
+    try {
+      setRoleLoading(true)
+      setShowMentorNoticeModal(false)
+      setApiError("")
+      localStorage.setItem("access_token", googleUserData.access_token)
+      const fullName = `${googleFirstName} ${googleLastName}`.trim()
+      await api.patch("/users/profile", { name: fullName, role: selectedRole })
+      const updatedUser = { ...googleUserData.user, name: fullName, role: selectedRole }
+      login(updatedUser, googleUserData.access_token, googleUserData.refresh_token)
+
+      const targetRoute = selectedRole === "mentor"
+        ? "/dashboard"
+        : selectedRole === "admin"
+        ? "/admin/dashboard"
+        : "/dashboard"
+
+      navigate(targetRoute, { replace: true })
+    } catch (err) {
+      setApiError("Failed to save profile. Please try again.")
+    } finally {
+      setRoleLoading(false)
+    }
+  }
+
   // ── Confirm Role After Google Auth ─────────────────────
   async function handleRoleConfirm() {
     if (!selectedRole) {
@@ -311,20 +374,21 @@ function RegisterPage() {
       return
     }
 
-    try {
-      setRoleLoading(true)
-      setApiError("")
-      localStorage.setItem("access_token", googleUserData.access_token)
-      const fullName = `${googleFirstName} ${googleLastName}`.trim()
-      await api.patch("/users/profile", { name: fullName, role: selectedRole })
-      const updatedUser = { ...googleUserData.user, name: fullName, role: selectedRole }
-      login(updatedUser, googleUserData.access_token, googleUserData.refresh_token)
-      const targetRoute = selectedRole === "mentor" ? "/mentor/dashboard" : selectedRole === "admin" ? "/admin/dashboard" : "/dashboard"
-      navigate(targetRoute, { replace: true })
-    } catch (err) {
-      setApiError("Failed to save profile. Please try again.")
-    } finally {
-      setRoleLoading(false)
+    if (selectedRole === "mentor") {
+      setNoticePendingAction("google")
+      setShowMentorNoticeModal(true)
+      return
+    }
+
+    await executeGoogleRoleConfirm()
+  }
+
+  // ── Modal Proceed Handler ─────────────────────────────
+  function handleModalProceed() {
+    if (noticePendingAction === "google") {
+      executeGoogleRoleConfirm()
+    } else {
+      executeRegister()
     }
   }
 
@@ -731,6 +795,36 @@ function RegisterPage() {
                     </p>
                   )}
                 </div>
+
+                {/* CV / Resume Upload */}
+                <div className="space-y-1">
+                  <label className="font-body text-xs text-[#B3CFE5] block">
+                    Upload CV / Resume (Optional - PDF, DOCX, PNG, JPG)
+                  </label>
+                  <div className="relative border border-dashed border-[#4A7FA7]/60 hover:border-[#4A7FA7] rounded-lg p-3 bg-[#1A3D63]/40 transition-colors text-center cursor-pointer">
+                    <input
+                      type="file"
+                      accept=".pdf,.doc,.docx,.png,.jpg,.jpeg"
+                      onChange={(e) => setCvFile(e.target.files[0] || null)}
+                      className="absolute inset-0 opacity-0 cursor-pointer w-full h-full"
+                    />
+                    <div className="flex items-center justify-center gap-2 text-[#B3CFE5]">
+                      {cvFile ? (
+                        <>
+                          <FileText size={18} className="text-emerald-400" />
+                          <span className="font-body text-xs font-semibold text-white truncate max-w-[220px]">
+                            {cvFile.name}
+                          </span>
+                        </>
+                      ) : (
+                        <>
+                          <Upload size={18} className="text-[#4A7FA7]" />
+                          <span className="font-body text-xs">Choose CV File</span>
+                        </>
+                      )}
+                    </div>
+                  </div>
+                </div>
               </div>
             )}
 
@@ -762,6 +856,71 @@ function RegisterPage() {
 
         </div>
       </div>
+
+      {/* ── Mentor Notice Modal ─────────────────────────────── */}
+      {showMentorNoticeModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/70 backdrop-blur-sm">
+          <div className="relative w-full max-w-md bg-[#0A1931] border border-[#4A7FA7] border-opacity-40 rounded-2xl p-6 md:p-8 shadow-[0_0_50px_rgba(0,0,0,0.8)] space-y-6 text-white">
+            
+            {/* Modal Header */}
+            <div className="flex items-start gap-4">
+              <div className="w-12 h-12 rounded-xl bg-[#4A7FA7]/20 border border-[#4A7FA7]/40 flex items-center justify-center text-[#4A7FA7] flex-shrink-0">
+                <Info size={28} />
+              </div>
+              <div>
+                <h3 className="font-heading text-xl font-bold text-white">
+                  Mentor Access Notice
+                </h3>
+                <p className="font-body text-xs text-[#B3CFE5] mt-1">
+                  Please review the access policy below before completing your registration.
+                </p>
+              </div>
+            </div>
+
+            {/* Modal Body Message */}
+            <div className="space-y-3 bg-[#1A3D63]/50 border border-[#4A7FA7]/30 rounded-xl p-4 text-sm font-body leading-relaxed text-[#B3CFE5]">
+              <div className="flex items-center gap-2 text-yellow-400 font-semibold text-xs uppercase tracking-wider">
+                <Clock size={16} />
+                <span>Pending Admin Approval</span>
+              </div>
+              <p>
+                When registering as a mentor, you will initially receive <strong className="text-white font-semibold">Student access</strong> to explore the platform.
+              </p>
+              <p>
+                Your submitted credentials (qualifications and certifications) will be reviewed by an administrator. Once approved by an admin, your account access will be upgraded to <strong className="text-white font-semibold">Mentor access</strong>.
+              </p>
+            </div>
+
+            {/* Modal Action Buttons */}
+            <div className="flex items-center gap-3 pt-2">
+              <button
+                type="button"
+                onClick={() => setShowMentorNoticeModal(false)}
+                disabled={loading || roleLoading}
+                className="w-1/3 px-4 py-3 rounded-lg border border-white/20 hover:bg-white/10 text-white font-body text-sm font-medium transition-colors text-center disabled:opacity-50"
+              >
+                Back
+              </button>
+              <button
+                type="button"
+                onClick={handleModalProceed}
+                disabled={loading || roleLoading}
+                className="w-2/3 px-4 py-3 rounded-lg bg-[#4A7FA7] hover:bg-[#1A3D63] text-white font-body text-sm font-semibold transition-all shadow-lg flex items-center justify-center gap-2 disabled:opacity-50"
+              >
+                {(loading || roleLoading) ? (
+                  <LoadingSpinner size="sm" color="white" />
+                ) : (
+                  <>
+                    <span>Click to Proceed</span>
+                    <ArrowRight size={16} />
+                  </>
+                )}
+              </button>
+            </div>
+
+          </div>
+        </div>
+      )}
     </div>
   )
 }
