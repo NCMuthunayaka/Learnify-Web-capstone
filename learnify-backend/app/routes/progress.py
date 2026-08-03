@@ -246,7 +246,7 @@ def _build_tasks(user_id):
 
 
 def _build_top_stats(user_id):
-    """Overall stats: total study hours this month, tasks done/total, streak."""
+    """Overall stats: total study hours this month, tasks & study sessions done/total, streak."""
     try:
         month_start = date.today().replace(day=1)
         total_hrs = db.session.execute(
@@ -259,28 +259,34 @@ def _build_top_stats(user_id):
             {"uid": user_id, "ms": month_start},
         ).scalar() or 0
 
-        task_counts = db.session.execute(
+        # Combine tasks and study sessions for overall academic progress
+        counts = db.session.execute(
             text(
                 "SELECT "
-                "COUNT(*) as total, "
-                "SUM(CASE WHEN status='done' THEN 1 ELSE 0 END) as done "
-                "FROM tasks WHERE student_id = :uid"
+                "(SELECT COUNT(*) FROM tasks WHERE student_id = :uid) + "
+                "(SELECT COUNT(*) FROM study_sessions WHERE student_id = :uid) as total, "
+                "(SELECT COUNT(*) FROM tasks WHERE student_id = :uid AND status = 'done') + "
+                "(SELECT COUNT(*) FROM study_sessions WHERE student_id = :uid AND completed = 1) as done"
             ),
             {"uid": user_id},
         ).fetchone()
-        total_tasks = int(task_counts[0]) if task_counts and task_counts[0] else 0
-        done_tasks = int(task_counts[1]) if task_counts and task_counts[1] is not None else 0
+
+        total_tasks = int(counts[0]) if counts and counts[0] else 0
+        done_tasks = int(counts[1]) if counts and counts[1] is not None else 0
+
+        today = date.today()
+        week_end = today + timedelta(days=7)
+
         due_week = db.session.execute(
             text(
-                "SELECT COUNT(*) FROM tasks "
-                "WHERE student_id = :uid AND status != 'done' "
-                "AND due_date BETWEEN :today AND :week_end"
+                "SELECT "
+                "(SELECT COUNT(*) FROM tasks WHERE student_id = :uid AND status != 'done' AND due_date BETWEEN :today AND :week_end) + "
+                "(SELECT COUNT(*) FROM study_sessions WHERE student_id = :uid AND completed = 0 AND DATE(start_time) BETWEEN :today AND :week_end)"
             ),
-            {"uid": user_id, "today": date.today(),
-             "week_end": date.today() + timedelta(days=7)},
+            {"uid": user_id, "today": today, "week_end": week_end},
         ).scalar() or 0
 
-        overall_pct = round(done_tasks / total_tasks * 100) if total_tasks else 0
+        overall_pct = round(done_tasks / total_tasks * 100) if total_tasks > 0 else 0
 
         return {
             "study_hours_month": float(total_hrs),
@@ -289,7 +295,8 @@ def _build_top_stats(user_id):
             "tasks_due_week": int(due_week),
             "overall_pct": overall_pct,
         }
-    except Exception:
+    except Exception as e:
+        print(f"Error in _build_top_stats: {e}")
         return {
             "study_hours_month": 0,
             "tasks_done": 0,
