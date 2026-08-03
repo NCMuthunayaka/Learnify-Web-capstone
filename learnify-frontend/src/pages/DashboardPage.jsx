@@ -134,28 +134,21 @@ export default function DashboardPage() {
   }
 
   // ── Stats cards ────────────────────────────────────────
-  // Show dash instead of 00 for empty data
   const statsData = [
     {
       label: "Subjects",
-      value: stats.subjects > 0
-        ? String(stats.subjects).padStart(2, "0")
-        : "—",
-      hint: stats.subjects === 0 ? "No subjects enrolled" : null
+      value: String(stats.subjects || 0).padStart(2, "0"),
+      hint: (stats.subjects || 0) === 0 ? "No subjects enrolled" : null
     },
     {
       label: "Tasks Today",
-      value: stats.tasks_today > 0
-        ? String(stats.tasks_today).padStart(2, "0")
-        : "—",
-      hint: stats.tasks_today === 0 ? "No tasks today" : null
+      value: String(stats.tasks_today || 0).padStart(2, "0"),
+      hint: (stats.tasks_today || 0) === 0 ? "No tasks today" : null
     },
     {
       label: "Completed",
-      value: stats.completed > 0
-        ? String(stats.completed).padStart(2, "0")
-        : "—",
-      hint: stats.completed === 0 ? "No tasks completed yet" : null
+      value: String(stats.completed || 0).padStart(2, "0"),
+      hint: (stats.completed || 0) === 0 ? "No tasks completed yet" : null
     },
   ]
 

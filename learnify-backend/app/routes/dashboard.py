@@ -71,9 +71,9 @@ def get_dashboard_stats():
     try:
         from sqlalchemy import text
         tasks_today = db.session.execute(
-            text("SELECT COUNT(*) FROM tasks "
-                 "WHERE student_id = :user_id "
-                 "AND due_date = :today"),
+            text("SELECT "
+                 "(SELECT COUNT(*) FROM tasks WHERE student_id = :user_id AND due_date = :today) + "
+                 "(SELECT COUNT(*) FROM study_sessions WHERE student_id = :user_id AND DATE(start_time) = :today)"),
             {"user_id": user_id, "today": date.today()}
         ).scalar() or 0
     except Exception:
@@ -83,9 +83,9 @@ def get_dashboard_stats():
     try:
         from sqlalchemy import text
         completed = db.session.execute(
-            text("SELECT COUNT(*) FROM tasks "
-                 "WHERE student_id = :user_id "
-                 "AND status = 'done'"),
+            text("SELECT "
+                 "(SELECT COUNT(*) FROM tasks WHERE student_id = :user_id AND status = 'done') + "
+                 "(SELECT COUNT(*) FROM study_sessions WHERE student_id = :user_id AND completed = 1)"),
             {"user_id": user_id}
         ).scalar() or 0
     except Exception:
