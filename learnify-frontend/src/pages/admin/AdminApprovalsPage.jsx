@@ -17,10 +17,28 @@ function getInitials(name) {
   return name.split(" ").filter(Boolean).map(w => w[0]).join("").slice(0, 2).toUpperCase() || "?"
 }
 
+function parseUTCDate(dateInput) {
+  if (!dateInput) return null
+  if (dateInput instanceof Date) return dateInput
+
+  let str = String(dateInput).trim().replace(" ", "T")
+  if (!str.endsWith("Z") && !/[+-]\d{2}:?\d{2}$/.test(str)) {
+    str += "Z"
+  }
+  const parsed = new Date(str)
+  return isNaN(parsed.getTime()) ? new Date(dateInput) : parsed
+}
+
 function timeAgo(isoString) {
   if (!isoString) return "Recently"
-  const diff = Date.now() - new Date(isoString).getTime()
+  const date = parseUTCDate(isoString)
+  if (!date || isNaN(date.getTime())) return "Recently"
+
+  const diff = Date.now() - date.getTime()
+  if (diff < 0) return "Just now"
+
   const mins = Math.floor(diff / 60000)
+  if (mins < 1) return "Just now"
   if (mins < 60) return `${mins}m ago`
   const hrs = Math.floor(mins / 60)
   if (hrs < 24) return `${hrs}h ago`
@@ -144,11 +162,39 @@ function CandidateDetailModal({ candidate, onClose, onApprove, onReject, actione
                     {candidate.certifications || "Not specified"}
                   </p>
                 </div>
+
+                {/* CV Attachment & Auto-Delete Notice */}
+                {candidate.cv_url ? (
+                  <div className="pt-2 border-t border-slate-200/60 flex items-center justify-between flex-wrap gap-2">
+                    <div className="flex items-center gap-2">
+                      <FileText size={16} className="text-[#3b719f]" />
+                      <span className="text-xs font-semibold text-slate-700">Submitted CV / Resume:</span>
+                    </div>
+                    <a
+                      href={candidate.cv_url.startsWith("http") ? candidate.cv_url : `http://localhost:5000${candidate.cv_url}`}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="px-3 py-1.5 bg-emerald-50 hover:bg-emerald-100 text-emerald-700 border border-emerald-200 rounded-lg text-xs font-bold transition-all flex items-center gap-1.5 text-decoration-none"
+                    >
+                      <Eye size={13} /> View CV Document
+                    </a>
+                  </div>
+                ) : (
+                  <div className="pt-2 border-t border-slate-200/60">
+                    <span className="text-xs text-slate-400 italic">No CV document attached</span>
+                  </div>
+                )}
               </div>
 
             </div>
 
           </div>
+
+          {candidate.cv_url && !isDone && (
+            <p className="text-[11px] text-slate-400 italic text-center bg-slate-50 py-1.5 rounded-lg border border-slate-100">
+              Note: Approving this candidate will automatically delete the CV file from storage for privacy compliance.
+            </p>
+          )}
 
           {/* Action Buttons */}
           <div className="flex items-center gap-3 pt-2">
@@ -156,7 +202,7 @@ function CandidateDetailModal({ candidate, onClose, onApprove, onReject, actione
               <div className={`w-full text-center py-3 rounded-xl font-body text-xs font-bold ${
                 isDone === "approved" ? "bg-emerald-50 text-emerald-700" : "bg-red-50 text-red-600"
               }`}>
-                Application {isDone === "approved" ? "Approved & Mentor Activated" : "Rejected"}
+                Application {isDone === "approved" ? "Approved & Mentor Activated (CV Auto-Deleted)" : "Rejected"}
               </div>
             ) : (
               <>
@@ -241,6 +287,7 @@ export default function AdminApprovalsPage() {
   const [selectedCandidate, setSelectedCandidate] = useState(null)
   const [confirmModal, setConfirmModal]   = useState(null)
   const [actioned, setActioned]           = useState({})
+  const [filterTab, setFilterTab]         = useState("all") // "all", "registration", "upgrade"
 
   const fetchApprovals = useCallback(() => {
     setLoading(true)
@@ -273,6 +320,15 @@ export default function AdminApprovalsPage() {
       setConfirmModal(null)
     }
   }
+
+  const filteredUsers = users.filter(u => {
+    if (filterTab === "registration") return u.request_type === "registration"
+    if (filterTab === "upgrade")      return u.request_type === "upgrade"
+    return true
+  })
+
+  const regCount     = users.filter(u => u.request_type === "registration").length
+  const upgradeCount = users.filter(u => u.request_type === "upgrade").length
 
   return (
     <div className="space-y-6 max-w-7xl mx-auto pb-12 text-[#0A1931]">
@@ -327,15 +383,40 @@ export default function AdminApprovalsPage() {
       {/* Main Approvals List Container */}
       <div className="bg-white rounded-3xl border border-slate-200/80 shadow-md overflow-hidden">
         
-        {/* Table/List Header */}
-        <div className="flex items-center justify-between px-6 py-4 bg-[#F8FAFC] border-b border-slate-100">
+        {/* Categorization Header & Tabs */}
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between px-6 py-4 bg-[#F8FAFC] border-b border-slate-100 gap-4">
           <div>
             <h3 className="font-heading text-base font-bold text-[#0A1931]">Pending Mentor Applications</h3>
-            <p className="font-body text-xs text-slate-500 mt-0.5">Click any request item to view full qualifications & approve</p>
+            <p className="font-body text-xs text-slate-500 mt-0.5">Click any request item to view full qualifications, inspect CV & approve</p>
           </div>
-          <span className="bg-blue-50 text-[#3b719f] font-body text-xs font-bold px-3 py-1 rounded-full border border-blue-100">
-            {total} Pending
-          </span>
+
+          {/* Category Tabs */}
+          <div className="flex items-center gap-1.5 bg-slate-200/60 p-1 rounded-xl">
+            <button
+              onClick={() => setFilterTab("all")}
+              className={`px-3 py-1.5 rounded-lg text-xs font-bold font-body transition-all border-none cursor-pointer ${
+                filterTab === "all" ? "bg-white text-[#0A1931] shadow-xs" : "text-slate-500 hover:text-slate-700 bg-transparent"
+              }`}
+            >
+              All ({users.length})
+            </button>
+            <button
+              onClick={() => setFilterTab("registration")}
+              className={`px-3 py-1.5 rounded-lg text-xs font-bold font-body transition-all border-none cursor-pointer ${
+                filterTab === "registration" ? "bg-white text-blue-700 shadow-xs" : "text-slate-500 hover:text-slate-700 bg-transparent"
+              }`}
+            >
+              Registrations ({regCount})
+            </button>
+            <button
+              onClick={() => setFilterTab("upgrade")}
+              className={`px-3 py-1.5 rounded-lg text-xs font-bold font-body transition-all border-none cursor-pointer ${
+                filterTab === "upgrade" ? "bg-white text-purple-700 shadow-xs" : "text-slate-500 hover:text-slate-700 bg-transparent"
+              }`}
+            >
+              Student Upgrades ({upgradeCount})
+            </button>
+          </div>
         </div>
 
         {loading ? (
@@ -343,16 +424,17 @@ export default function AdminApprovalsPage() {
             <div className="w-8 h-8 border-3 border-[#3b719f] border-t-transparent rounded-full animate-spin mx-auto" />
             <p className="font-body text-xs text-slate-400 mt-3 font-semibold">Loading mentor applications...</p>
           </div>
-        ) : users.length === 0 ? (
+        ) : filteredUsers.length === 0 ? (
           <div className="py-16 text-center space-y-2">
             <CheckCircle2 size={40} className="mx-auto text-emerald-500 mb-2" />
-            <p className="font-heading text-base font-bold text-[#0A1931]">All Caught Up!</p>
-            <p className="font-body text-xs text-slate-400">There are no pending mentor applications requiring approval at this time.</p>
+            <p className="font-heading text-base font-bold text-[#0A1931]">No Requests Found</p>
+            <p className="font-body text-xs text-slate-400">There are no pending applications matching the selected category filter.</p>
           </div>
         ) : (
           <div className="divide-y divide-slate-100">
-            {users.map((u, i) => {
+            {filteredUsers.map((u, i) => {
               const done = actioned[u.id]
+              const isUpgrade = u.request_type === "upgrade"
               return (
                 <div
                   key={u.id}
@@ -365,11 +447,26 @@ export default function AdminApprovalsPage() {
                       {getInitials(u.name)}
                     </div>
                     <div className="min-w-0">
-                      <div className="flex items-center gap-2">
+                      <div className="flex items-center gap-2 flex-wrap">
                         <p className="font-heading text-sm font-bold text-[#0A1931] group-hover:text-[#3b719f] transition-colors">{u.name}</p>
-                        <span className="bg-amber-50 text-amber-600 border border-amber-200 font-body text-[9px] font-bold px-1.5 py-0.5 rounded-md uppercase">
-                          NEW
-                        </span>
+
+                        {/* Categorization Request Tag */}
+                        {isUpgrade ? (
+                          <span className="bg-purple-50 text-purple-700 border border-purple-200 font-body text-[9px] font-bold px-1.5 py-0.5 rounded-md uppercase">
+                            Student Upgrade
+                          </span>
+                        ) : (
+                          <span className="bg-blue-50 text-blue-700 border border-blue-200 font-body text-[9px] font-bold px-1.5 py-0.5 rounded-md uppercase">
+                            New Registration
+                          </span>
+                        )}
+
+                        {/* CV Badge */}
+                        {u.cv_url && (
+                          <span className="bg-emerald-50 text-emerald-700 border border-emerald-200 font-body text-[9px] font-bold px-1.5 py-0.5 rounded-md uppercase flex items-center gap-1">
+                            <FileText size={10} /> CV Attached
+                          </span>
+                        )}
                       </div>
                       <p className="font-body text-xs text-slate-500 truncate">{u.email}</p>
                     </div>
@@ -380,6 +477,18 @@ export default function AdminApprovalsPage() {
                     <span className="font-body text-xs text-slate-400 font-medium hidden sm:inline-block">
                       {timeAgo(u.created_at)}
                     </span>
+
+                    {/* View CV Quick Link */}
+                    {u.cv_url && (
+                      <a
+                        href={u.cv_url.startsWith("http") ? u.cv_url : `http://localhost:5000${u.cv_url}`}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="px-2.5 py-1.5 bg-emerald-50 hover:bg-emerald-100 text-emerald-700 border border-emerald-200 rounded-xl font-body text-xs font-bold transition-all flex items-center gap-1 text-decoration-none hidden md:flex"
+                      >
+                        <FileText size={13} /> View CV
+                      </a>
+                    )}
 
                     {done ? (
                       <span className={`font-body text-xs font-bold px-3 py-1 rounded-xl uppercase ${

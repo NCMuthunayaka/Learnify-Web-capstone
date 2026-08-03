@@ -52,13 +52,13 @@ function ResetPasswordPage() {
   const [searchParams] = useSearchParams()
   const token = searchParams.get("token")
 
-  const [password, setPassword] = useState("")
-  const [confirmPassword, setConfirm] = useState("")
+  const [password, setPassword]         = useState("")
+  const [confirmPassword, setConfirm]   = useState("")
   const [showPassword, setShowPassword] = useState(false)
-  const [showConfirmPassword, setShowConfirm] = useState(false)
-  const [loading, setLoading] = useState(false)
-  const [success, setSuccess] = useState(false)
-  const [error, setError] = useState("")
+  const [showConfirmPassword, setShowConfirmPassword] = useState(false)
+  const [loading, setLoading]           = useState(false)
+  const [success, setSuccess]           = useState(false)
+  const [error, setError]               = useState("")
 
   // Redirect if no token in URL
   useEffect(() => {

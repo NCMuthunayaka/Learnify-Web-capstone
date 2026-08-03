@@ -47,7 +47,7 @@ const pageTitles = {
   "/scheduler": "Study Scheduler",
   "/progress": "Progress",
   "/ai-chat": "AI Assistant",
-  "/resources": "Study Resources",
+  "/resources": "Study Materials",
   "/feedback": "Feedback",
   "/profile": "My Profile",
   "/notifications": "Notifications",

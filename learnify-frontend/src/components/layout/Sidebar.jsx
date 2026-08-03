@@ -14,7 +14,7 @@ const studentNavItems = [
   { label: "Scheduler",    icon: CalendarDays,    path: "/scheduler"  },
   { label: "Progress",     icon: TrendingUp,      path: "/progress"   },
   { label: "AI Assistant", icon: Bot,             path: "/ai-chat"    },
-  { label: "Materials",    icon: BookOpen,        path: "/resources"  },
+  { label: "Study Materials", icon: BookOpen,        path: "/resources"  },
   { label: "Community",    icon: Users,           path: "/community"  },
   { label: "Feedback",     icon: MessageSquare,   path: "/feedback"   },
 ]
@@ -32,6 +32,7 @@ const adminNavItems = [
   { label: "Dashboard",        icon: LayoutDashboard, path: "/admin/dashboard" },
   { label: "User Management",  icon: Users,           path: "/admin/users"     },
   { label: "User Approvals",   icon: UserCheck,       path: "/admin/approvals" },
+  { label: "Resource Management", icon: BookOpen,     path: "/admin/resources" },
   { label: "System Monitoring",icon: Monitor,         path: "/admin/system"    },
   { label: "Feedback",         icon: MessageSquare,   path: "/admin/feedback"  },
 ]
@@ -89,7 +90,8 @@ function Sidebar({ isOpen }) {
           <img
             src={learnifyLogo}
             alt="WhisperHive Logo"
-            className="w-10 h-10 object-contain"
+            className="w-10 h-10 object-cover rounded-full overflow-hidden"
+            style={{ borderRadius: "50%" }}
           />
           {isOpen && (
             <span className="font-semibold text-lg">WhisperHive</span>
