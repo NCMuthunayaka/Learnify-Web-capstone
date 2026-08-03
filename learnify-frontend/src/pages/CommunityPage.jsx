@@ -52,188 +52,7 @@ function formatFileSize(bytes) {
   return parseFloat((bytes / Math.pow(k, i)).toFixed(1)) + " " + sizes[i]
 }
 
-// Mock Direct Threads from Fake Users for demonstration
-const MOCK_DIRECT_THREADS = [
-  {
-    id: "mock-thread-1",
-    other_user_id: "mock-user-1",
-    other_user_name: "Dr. Sarah Jenkins",
-    other_user_role: "mentor",
-    subject: "Guidance on Binary Search Tree Balancing & AVL Rotations",
-    initial_message: "Hello! I reviewed your attempt on the AVL Tree balancing problem. Notice how the height difference exceeds 1 during the right rotation step.",
-    status: "in_progress",
-    created_at: "2026-08-01T14:30:00Z",
-    unread_count: 1,
-    messages: [
-      {
-        id: "m-101",
-        sender_id: "mock-user-1",
-        sender_name: "Dr. Sarah Jenkins",
-        sender_role: "mentor",
-        body: "Hello! I reviewed your attempt on the AVL Tree balancing problem. Notice how the height difference exceeds 1 during the right rotation step.",
-        created_at: "2026-08-01T14:30:00Z"
-      },
-      {
-        id: "m-102",
-        sender_id: "current-user",
-        sender_name: "You",
-        sender_role: "student",
-        body: "Thank you Dr. Sarah! Should I apply a double rotation (LR) when the left subtree is right-heavy?",
-        created_at: "2026-08-01T14:35:00Z"
-      },
-      {
-        id: "m-103",
-        sender_id: "mock-user-1",
-        sender_name: "Dr. Sarah Jenkins",
-        sender_role: "mentor",
-        body: "Yes, exactly! Perform a left rotation on the left child first, followed by a right rotation on the root node to restore balance.",
-        created_at: "2026-08-01T14:40:00Z"
-      }
-    ]
-  },
-  {
-    id: "mock-thread-2",
-    other_user_id: "mock-user-1",
-    other_user_name: "Dr. Sarah Jenkins",
-    other_user_role: "mentor",
-    subject: "Feedback on Graph Dijkstra Algorithm Priority Queue Implementation",
-    initial_message: "Your priority queue implementation looks solid, but check line 45 for potential infinite loops when the distance array is not updated properly.",
-    status: "resolved",
-    created_at: "2026-07-29T10:15:00Z",
-    unread_count: 0,
-    messages: [
-      {
-        id: "m-104",
-        sender_id: "mock-user-1",
-        sender_name: "Dr. Sarah Jenkins",
-        sender_role: "mentor",
-        body: "Your priority queue implementation looks solid, but check line 45 for potential infinite loops when the distance array is not updated properly.",
-        created_at: "2026-07-29T10:15:00Z"
-      },
-      {
-        id: "m-105",
-        sender_id: "current-user",
-        sender_name: "You",
-        sender_role: "student",
-        body: "Fixed it by adding the skip condition `if (d > dist[u]) continue`. Thank you!",
-        created_at: "2026-07-29T11:00:00Z"
-      }
-    ]
-  },
-  {
-    id: "mock-thread-3",
-    other_user_id: "mock-user-2",
-    other_user_name: "Alex Rivera",
-    other_user_role: "student",
-    subject: "Question on React UseEffect Clean-up Functions & AbortController",
-    initial_message: "Hi! Could you explain why a memory leak warning occurs when unmounting a component before async fetch completes?",
-    status: "pending",
-    created_at: "2026-08-01T18:20:00Z",
-    unread_count: 2,
-    messages: [
-      {
-        id: "m-201",
-        sender_id: "mock-user-2",
-        sender_name: "Alex Rivera",
-        sender_role: "student",
-        body: "Hi! Could you explain why a memory leak warning occurs when unmounting a component before async fetch completes?",
-        created_at: "2026-08-01T18:20:00Z"
-      },
-      {
-        id: "m-202",
-        sender_id: "mock-user-2",
-        sender_name: "Alex Rivera",
-        sender_role: "student",
-        body: "Also, is AbortController the best standard practice for cancelling HTTP requests in React 18?",
-        created_at: "2026-08-01T18:22:00Z"
-      }
-    ]
-  },
-  {
-    id: "mock-thread-4",
-    other_user_id: "mock-user-2",
-    other_user_name: "Alex Rivera",
-    other_user_role: "student",
-    subject: "State Management: React Context API vs Redux Toolkit Comparison",
-    initial_message: "When building medium-scale Learnify modules, should we prefer Redux Toolkit over React Context for performance?",
-    status: "in_progress",
-    created_at: "2026-07-30T11:00:00Z",
-    unread_count: 0,
-    messages: [
-      {
-        id: "m-203",
-        sender_id: "mock-user-2",
-        sender_name: "Alex Rivera",
-        sender_role: "student",
-        body: "When building medium-scale Learnify modules, should we prefer Redux Toolkit over React Context for performance?",
-        created_at: "2026-07-30T11:00:00Z"
-      }
-    ]
-  },
-  {
-    id: "mock-thread-5",
-    other_user_id: "mock-user-3",
-    other_user_name: "Prof. Michael Vance",
-    other_user_role: "mentor",
-    subject: "Database Normalization (3NF vs BCNF) Schema Examples",
-    initial_message: "Here are the sample relational schemas for Boyce-Codd Normal Form. Notice every determinant X -> Y must have X as a candidate key.",
-    status: "accepted",
-    created_at: "2026-07-31T09:45:00Z",
-    unread_count: 1,
-    messages: [
-      {
-        id: "m-301",
-        sender_id: "mock-user-3",
-        sender_name: "Prof. Michael Vance",
-        sender_role: "mentor",
-        body: "Here are the sample relational schemas for Boyce-Codd Normal Form. Notice every determinant X -> Y must have X as a candidate key.",
-        created_at: "2026-07-31T09:45:00Z"
-      }
-    ]
-  },
-  {
-    id: "mock-thread-6",
-    other_user_id: "mock-user-3",
-    other_user_name: "Prof. Michael Vance",
-    other_user_role: "mentor",
-    subject: "SQL Query Indexing & Optimization for Large Tables",
-    initial_message: "Make sure you add composite indexes on (user_id, created_at) to speed up community query execution times by 10x.",
-    status: "resolved",
-    created_at: "2026-07-25T16:00:00Z",
-    unread_count: 0,
-    messages: [
-      {
-        id: "m-302",
-        sender_id: "mock-user-3",
-        sender_name: "Prof. Michael Vance",
-        sender_role: "mentor",
-        body: "Make sure you add composite indexes on (user_id, created_at) to speed up community query execution times by 10x.",
-        created_at: "2026-07-25T16:00:00Z"
-      }
-    ]
-  },
-  {
-    id: "mock-thread-7",
-    other_user_id: "mock-user-4",
-    other_user_name: "Elena Rostova",
-    other_user_role: "student",
-    subject: "Python Asyncio Event Loop & Task Cancellation Best Practices",
-    initial_message: "How do task cancellations work when using asyncio.gather with return_exceptions=True?",
-    status: "pending",
-    created_at: "2026-08-01T11:10:00Z",
-    unread_count: 0,
-    messages: [
-      {
-        id: "m-401",
-        sender_id: "mock-user-4",
-        sender_name: "Elena Rostova",
-        sender_role: "student",
-        body: "How do task cancellations work when using asyncio.gather with return_exceptions=True?",
-        created_at: "2026-08-01T11:10:00Z"
-      }
-    ]
-  }
-]
+
 
 function CommunityPage() {
   const navigate = useNavigate()
@@ -541,18 +360,10 @@ function CommunityPage() {
       if (showLoading) setDirectLoading(true)
       const res = await getDirectRequests(directTab).catch(() => null)
       const apiThreads = res?.data?.threads || []
-      const combined = [...apiThreads]
-
-      // Merge mock threads from fake users so demonstration functionality is always available
-      MOCK_DIRECT_THREADS.forEach(mock => {
-        if (!combined.some(t => String(t.id) === String(mock.id))) {
-          combined.push(mock)
-        }
-      })
-      setDirectThreads(combined)
+      setDirectThreads(apiThreads)
     } catch (err) {
       console.error("Failed to load direct requests:", err)
-      setDirectThreads(MOCK_DIRECT_THREADS)
+      setDirectThreads([])
     } finally {
       setDirectLoading(false)
     }
@@ -577,18 +388,6 @@ function CommunityPage() {
 
   // Open Direct Thread & Mark Read
   const openDirectThread = async (threadId) => {
-    // Handle mock thread if threadId starts with 'mock-'
-    if (String(threadId).startsWith("mock-")) {
-      const targetMock = MOCK_DIRECT_THREADS.find(m => m.id === threadId)
-      if (targetMock) {
-        targetMock.unread_count = 0
-        setActiveDirectThread(targetMock)
-        setDirectMessages(targetMock.messages || [])
-        setDirectThreads(prev => prev.map(t => t.id === threadId ? { ...t, unread_count: 0 } : t))
-        return
-      }
-    }
-
     try {
       const res = await getDirectThread(threadId)
       setActiveDirectThread(res.data.thread)
@@ -599,9 +398,9 @@ function CommunityPage() {
     }
   }
 
-  // Poll active direct thread messages if open (skip for mock threads)
+  // Poll active direct thread messages if open
   useEffect(() => {
-    if (activeDirectThread && !String(activeDirectThread.id).startsWith("mock-")) {
+    if (activeDirectThread) {
       const interval = setInterval(async () => {
         const res = await getDirectThread(activeDirectThread.id).catch(() => null)
         if (res && res.data) {
@@ -727,43 +526,6 @@ function CommunityPage() {
   // ── Actions: Send Direct Message ──────────────────────────
   const handleSendDirectMessage = async () => {
     if (!directMessageBody.trim() || !activeDirectThread) return
-
-    // Handle mock threads demo messaging
-    if (String(activeDirectThread.id).startsWith("mock-")) {
-      const userMsg = {
-        id: `m-user-${Date.now()}`,
-        sender_id: "current-user",
-        sender_name: "You",
-        sender_role: "student",
-        body: directMessageBody.trim(),
-        attachments: directMessageAttachments,
-        created_at: new Date().toISOString()
-      }
-
-      const updatedMsgs = [...directMessages, userMsg]
-      setDirectMessages(updatedMsgs)
-
-      const targetMock = MOCK_DIRECT_THREADS.find(m => m.id === activeDirectThread.id)
-      if (targetMock) targetMock.messages = updatedMsgs
-
-      setDirectMessageBody("")
-      setDirectMessageAttachments([])
-
-      // Simulate a live reply from the fake user after 1 second!
-      setTimeout(() => {
-        const fakeReply = {
-          id: `m-reply-${Date.now()}`,
-          sender_id: activeDirectThread.other_user_id,
-          sender_name: activeDirectThread.other_user_name,
-          sender_role: activeDirectThread.other_user_role,
-          body: `Thanks for your response regarding "${activeDirectThread.subject}"! I've updated the question card status. Let me know if you have any more questions!`,
-          created_at: new Date().toISOString()
-        }
-        setDirectMessages(prev => [...prev, fakeReply])
-        if (targetMock) targetMock.messages = [...(targetMock.messages || []), fakeReply]
-      }, 1000)
-      return
-    }
 
     try {
       setSendingDirectMsg(true)
