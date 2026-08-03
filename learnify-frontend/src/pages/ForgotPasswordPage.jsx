@@ -30,8 +30,10 @@ function ForgotPasswordPage() {
       await api.post("/auth/forgot-password", { email })
       setSubmitted(true)
     } catch (err) {
-      // Still show success — don't reveal if email exists
-      setSubmitted(true)
+      const msg = err.response?.data?.error?.message
+      setError(
+        msg || "This email is not registered with WhisperHive. Please check your email or sign up for an account."
+      )
     } finally {
       setLoading(false)
     }

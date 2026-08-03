@@ -280,17 +280,23 @@ def get_mentor_eligibility():
     application_data = None
     try:
         row = db.session.execute(
-            text("SELECT id, qualifications, certifications, status, created_at FROM mentor_applications WHERE user_id = :uid ORDER BY created_at DESC LIMIT 1"),
+            text("SELECT id, qualifications, certifications, status, created_at, cv_url, request_type FROM mentor_applications WHERE user_id = :uid ORDER BY created_at DESC LIMIT 1"),
             {"uid": user_id}
         ).fetchone()
 
         if row:
+            dt_str = row[4].isoformat() if row[4] else None
+            if dt_str and not dt_str.endswith("Z") and "+" not in dt_str:
+                dt_str += "Z"
+
             application_data = {
                 "id": row[0],
                 "qualifications": row[1],
                 "certifications": row[2],
                 "status": row[3],
-                "created_at": row[4].isoformat() if row[4] else None
+                "created_at": dt_str,
+                "cv_url": row[5] if len(row) > 5 else None,
+                "request_type": row[6] if len(row) > 6 else "upgrade"
             }
     except Exception as e:
         print("Error fetching mentor_applications:", e)
@@ -345,6 +351,7 @@ def apply_mentor():
     data = request.get_json(silent=True) or {}
     qualifications = (data.get("qualifications") or "").strip()
     certifications = (data.get("certifications") or "").strip()
+    cv_url         = (data.get("cv_url") or "").strip() or None
 
     if not qualifications or not certifications:
         return error_response("MISSING_FIELD", "Educational qualifications and certifications are required", status=400)
@@ -360,18 +367,18 @@ def apply_mentor():
             db.session.execute(
                 text(
                     "UPDATE mentor_applications "
-                    "SET qualifications = :qual, certifications = :cert, status = 'pending', created_at = CURRENT_TIMESTAMP "
+                    "SET qualifications = :qual, certifications = :cert, cv_url = :cv, request_type = 'upgrade', status = 'pending', created_at = CURRENT_TIMESTAMP "
                     "WHERE user_id = :uid"
                 ),
-                {"qual": qualifications, "cert": certifications, "uid": user_id}
+                {"qual": qualifications, "cert": certifications, "cv": cv_url, "uid": user_id}
             )
         else:
             db.session.execute(
                 text(
-                    "INSERT INTO mentor_applications (user_id, qualifications, certifications, status) "
-                    "VALUES (:uid, :qual, :cert, 'pending')"
+                    "INSERT INTO mentor_applications (user_id, qualifications, certifications, cv_url, request_type, status) "
+                    "VALUES (:uid, :qual, :cert, :cv, 'upgrade', 'pending')"
                 ),
-                {"uid": user_id, "qual": qualifications, "cert": certifications}
+                {"uid": user_id, "qual": qualifications, "cert": certifications, "cv": cv_url}
             )
         db.session.commit()
 

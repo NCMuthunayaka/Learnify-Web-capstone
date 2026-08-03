@@ -29,6 +29,7 @@ import AdminAnalyticsPage from "../pages/admin/AdminAnalyticsPage"
 import AdminFeedbackDashboard from "../pages/admin/AdminFeedbackDashboard"
 import AdminUsersPage from "../pages/admin/AdminUsersPage"
 import AdminApprovalsPage from "../pages/admin/AdminApprovalsPage"
+import AdminResourcesPage from "../pages/admin/AdminResourcesPage"
 import AdminSystemMonitoringPage from "../pages/admin/AdminSystemMonitoringPage"
 import AdminProfilePage from "../pages/admin/AdminProfilePage"
 import AdminEditProfilePage from "../pages/admin/AdminEditProfilePage"
@@ -192,6 +193,7 @@ function AppRoutes() {
               <AdminApprovalsPage />
             </PrivateRoute>
           } />
+          <Route path="/admin/resources" element={<PrivateRoute roles={["admin"]}><AdminResourcesPage /></PrivateRoute>} />
           <Route path="/admin/system" element={<PrivateRoute roles={["admin"]}><AdminSystemMonitoringPage /></PrivateRoute>} />
 
           <Route path="/admin/profile" element={<PrivateRoute roles={["admin"]}><AdminProfilePage /></PrivateRoute>} />

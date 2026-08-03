@@ -430,22 +430,55 @@ function ResourcesPage() {
   // ── Handle download ────────────────────────────────────
   async function handleDownload(resource) {
     try {
-      const response = await trackDownload(resource.id)
-      let downloadUrl = response?.data?.file_url || resource.file_url
+      let downloadUrl = resource?.file_url
       if (downloadUrl) {
         if (!downloadUrl.startsWith("http://") && !downloadUrl.startsWith("https://")) {
-          const backendUrl =
+          const rawBackend =
             import.meta.env.VITE_BACKEND_URL ||
-            import.meta.env.VITE_API_URL?.replace(/\/api\/?$/, "") ||
+            import.meta.env.VITE_API_URL ||
             "http://localhost:5000"
-          const cleanBackendUrl = backendUrl.replace(/\/$/, "")
+          const cleanBackendUrl = rawBackend.replace(/\/api\/?$/, "").replace(/\/$/, "")
           const cleanUrl = downloadUrl.startsWith("/") ? downloadUrl : `/${downloadUrl}`
           downloadUrl = `${cleanBackendUrl}${cleanUrl}`
         }
         if (!downloadUrl.includes("download=1")) {
           downloadUrl += (downloadUrl.includes("?") ? "&" : "?") + "download=1"
         }
-        window.open(downloadUrl, "_blank")
+
+        // Fetch file as blob with auth token to avoid browser error windows
+        const token = localStorage.getItem("access_token")
+        const response = await fetch(downloadUrl, {
+          headers: token ? { Authorization: `Bearer ${token}` } : {},
+        })
+
+        if (!response.ok) {
+          throw new Error(`Download failed: ${response.status}`)
+        }
+
+        const blob = await response.blob()
+        const blobUrl = URL.createObjectURL(blob)
+
+        // Determine filename from resource title + extension
+        const ext = resource.file_url?.split("?")[0].split(".").pop() || ""
+        const title = resource.title || "download"
+        const fileName = title.includes(".") ? title : `${title}.${ext}`
+
+        const link = document.createElement("a")
+        link.href = blobUrl
+        link.download = fileName
+        document.body.appendChild(link)
+        link.click()
+        document.body.removeChild(link)
+
+        // Clean up blob URL
+        setTimeout(() => URL.revokeObjectURL(blobUrl), 1000)
+
+        // Track download count in background
+        if (resource.id) {
+          trackDownload(resource.id).catch((err) =>
+            console.error("Track download warning:", err)
+          )
+        }
       }
     } catch (err) {
       console.error("Download failed:", err)

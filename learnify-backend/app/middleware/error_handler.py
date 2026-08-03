@@ -20,4 +20,5 @@ def register_error_handlers(app):
 
     @app.errorhandler(500)
     def internal_error(e):
-        return jsonify({"success": False, "error": {"code": "SERVER_ERROR", "message": "Internal server error"}}), 500
+        err_msg = str(getattr(e, 'original_exception', e))
+        return jsonify({"success": False, "error": {"code": "SERVER_ERROR", "message": err_msg}}), 500

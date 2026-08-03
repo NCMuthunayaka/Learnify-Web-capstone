@@ -1,8 +1,8 @@
 import { useState } from "react"
 import { Link, useNavigate } from "react-router-dom"
 import backgroundImage from "../../assets/images/background.jpg"
-import { GraduationCap, Users, Check, X } from "lucide-react"
-import { registerUser, googleAuth } from "../../api/authApi"
+import { GraduationCap, Users, Check, X,Eye, EyeOff, Clock, Info, ArrowRight, Upload, FileText } from "lucide-react"
+import { registerUser, googleAuth, uploadCV } from "../../api/authApi"
 import { useAuth } from "../../hooks/useAuth"
 import { useGoogleLogin } from "@react-oauth/google"
 import LoadingSpinner from "../../components/common/LoadingSpinner"
@@ -13,108 +13,54 @@ function PasswordCriteria({ password }) {
   if (!password) return null
 
   const criteria = [
-    {
-      label: "At least 8 characters",
-      met:   password.length >= 8,
-    },
-    {
-      label: "At least one uppercase letter (A–Z)",
-      met:   /[A-Z]/.test(password),
-    },
-    {
-      label: "At least one lowercase letter (a–z)",
-      met:   /[a-z]/.test(password),
-    },
-    {
-      label: "At least one number (0–9)",
-      met:   /[0-9]/.test(password),
-    },
-    {
-      label: "At least one special character (@, #, $, etc.)",
-      met:   /[^A-Za-z0-9]/.test(password),
-    },
+    { label: "At least 8 characters",                    met: password.length >= 8          },
+    { label: "At least one uppercase letter (A–Z)",      met: /[A-Z]/.test(password)        },
+    { label: "At least one lowercase letter (a–z)",      met: /[a-z]/.test(password)        },
+    { label: "At least one number (0–9)",                met: /[0-9]/.test(password)        },
+    { label: "At least one special character (@, #, $)", met: /[^A-Za-z0-9]/.test(password) },
   ]
 
-  const passedCount = criteria.filter(c => c.met).length
-  const allPassed   = passedCount === criteria.length
-
-  // Strength label
-  const strengthLabel =
-    passedCount <= 1 ? "Very Weak"  :
-    passedCount === 2 ? "Weak"      :
-    passedCount === 3 ? "Fair"      :
-    passedCount === 4 ? "Good"      : "Strong"
-
-  const strengthColor =
-    passedCount <= 1 ? "bg-red-500"    :
-    passedCount === 2 ? "bg-orange-500" :
-    passedCount === 3 ? "bg-yellow-400" :
-    passedCount === 4 ? "bg-blue-400"   : "bg-green-500"
-
-  const strengthWidth =
-    passedCount <= 1 ? "w-1/5"  :
-    passedCount === 2 ? "w-2/5" :
-    passedCount === 3 ? "w-3/5" :
-    passedCount === 4 ? "w-4/5" : "w-full"
-
-  const strengthTextColor =
-    passedCount <= 1 ? "text-red-400"    :
-    passedCount === 2 ? "text-orange-400" :
-    passedCount === 3 ? "text-yellow-400" :
-    passedCount === 4 ? "text-blue-400"   : "text-green-400"
+  const passedCount      = criteria.filter(c => c.met).length
+  const strengthLabel    = passedCount <= 1 ? "Very Weak" : passedCount === 2 ? "Weak" : passedCount === 3 ? "Fair" : passedCount === 4 ? "Good" : "Strong"
+  const strengthColor    = passedCount <= 1 ? "bg-red-500" : passedCount === 2 ? "bg-orange-500" : passedCount === 3 ? "bg-yellow-400" : passedCount === 4 ? "bg-blue-400" : "bg-green-500"
+  const strengthWidth    = passedCount <= 1 ? "w-1/5" : passedCount === 2 ? "w-2/5" : passedCount === 3 ? "w-3/5" : passedCount === 4 ? "w-4/5" : "w-full"
+  const strengthTextColor = passedCount <= 1 ? "text-red-400" : passedCount === 2 ? "text-orange-400" : passedCount === 3 ? "text-yellow-400" : passedCount === 4 ? "text-blue-400" : "text-green-400"
 
   return (
     <div className="mt-2 space-y-2">
-
-      {/* Strength Bar */}
       <div className="space-y-1">
         <div className="flex items-center justify-between">
-          <span className="font-body text-[10px] text-white/40">
-            Password strength
-          </span>
-          <span className={`font-body text-[10px] font-semibold ${strengthTextColor}`}>
-            {strengthLabel}
-          </span>
+          <span className="font-body text-[10px] text-white/40">Password strength</span>
+          <span className={`font-body text-[10px] font-semibold ${strengthTextColor}`}>{strengthLabel}</span>
         </div>
         <div className="w-full h-1 bg-white/10 rounded-full overflow-hidden">
-          <div className={`h-full rounded-full transition-all duration-300
-            ${strengthColor} ${strengthWidth}`} />
+          <div className={`h-full rounded-full transition-all duration-300 ${strengthColor} ${strengthWidth}`} />
         </div>
       </div>
-
-      {/* Criteria List — shows live as user types */}
       <div className="bg-white/5 rounded-lg px-3 py-2.5 space-y-1.5">
         {criteria.map((criterion, i) => (
           <div key={i} className="flex items-center gap-2">
-            <div className={`w-4 h-4 rounded-full flex items-center
-              justify-center flex-shrink-0 transition-colors duration-200
-              ${criterion.met
-                ? "bg-green-500"
-                : "bg-white/10 border border-white/20"}`}>
+            <div className={`w-4 h-4 rounded-full flex items-center justify-center flex-shrink-0 transition-colors duration-200 ${criterion.met ? "bg-green-500" : "bg-white/10 border border-white/20"}`}>
               {criterion.met
                 ? <Check size={9} className="text-white" strokeWidth={3} />
-                : <X size={9} className="text-white/30" strokeWidth={3} />
+                : <X     size={9} className="text-white/30" strokeWidth={3} />
               }
             </div>
-            <span className={`font-body text-[10px] transition-colors
-              duration-200
-              ${criterion.met ? "text-green-400" : "text-white/40"}`}>
+            <span className={`font-body text-[10px] transition-colors duration-200 ${criterion.met ? "text-green-400" : "text-white/40"}`}>
               {criterion.label}
             </span>
           </div>
         ))}
       </div>
-
     </div>
   )
 }
 
-// ── Email Validator ────────────────────────────────────────
+// ── Validators ─────────────────────────────────────────────
 function validateEmail(email) {
   return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)
 }
 
-// ── Password Validator ─────────────────────────────────────
 function validatePassword(password) {
   return (
     password.length >= 8 &&
@@ -139,6 +85,16 @@ function RegisterPage() {
   const [errors, setErrors]     = useState({})
   const [apiError, setApiError] = useState("")
 
+  // ── Password visibility toggles ────────────────────────
+  const [showPassword, setShowPassword]       = useState(false)
+  const [showConfirmPassword, setShowConfirm] = useState(false)
+
+  // ── Google role selection state ────────────────────────
+  // Mentor registration notice modal & CV upload state
+  const [showMentorNoticeModal, setShowMentorNoticeModal] = useState(false)
+  const [noticePendingAction, setNoticePendingAction]     = useState("normal") // "normal" or "google"
+  const [cvFile, setCvFile]                               = useState(null)
+
   // Google role selection state
   const [showRoleSelect, setShowRoleSelect]   = useState(false)
   const [googleUserData, setGoogleUserData]   = useState(null)
@@ -151,19 +107,14 @@ function RegisterPage() {
     const { name, value } = e.target
     setFormData({ ...formData, [name]: value })
 
-    // Clear field error as user types
-    if (errors[name]) {
-      setErrors({ ...errors, [name]: "" })
-    }
+    if (errors[name]) setErrors({ ...errors, [name]: "" })
 
-    // Real-time email validation while typing
     if (name === "email" && value && !validateEmail(value)) {
       setErrors(prev => ({ ...prev, email: "Please enter a valid email address" }))
     } else if (name === "email" && validateEmail(value)) {
       setErrors(prev => ({ ...prev, email: "" }))
     }
 
-    // Real-time confirm password check
     if (name === "confirmPassword") {
       if (value && value !== formData.password) {
         setErrors(prev => ({ ...prev, confirmPassword: "Passwords do not match" }))
@@ -172,7 +123,6 @@ function RegisterPage() {
       }
     }
 
-    // If password changes, re-check confirm password
     if (name === "password" && formData.confirmPassword) {
       if (value !== formData.confirmPassword) {
         setErrors(prev => ({ ...prev, confirmPassword: "Passwords do not match" }))
@@ -187,15 +137,11 @@ function RegisterPage() {
     if (errors.role) setErrors({ ...errors, role: "" })
   }
 
-  // ── Full Validation ────────────────────────────────────
   function validate() {
     const newErrors = {}
 
-    if (!formData.firstName.trim())
-      newErrors.firstName = "First name is required"
-
-    if (!formData.lastName.trim())
-      newErrors.lastName = "Last name is required"
+    if (!formData.firstName.trim()) newErrors.firstName = "First name is required"
+    if (!formData.lastName.trim())  newErrors.lastName  = "Last name is required"
 
     if (!formData.email.trim()) {
       newErrors.email = "Email is required"
@@ -218,27 +164,32 @@ function RegisterPage() {
     if (!formData.role) {
       newErrors.role = "Please select a role"
     } else if (formData.role === "mentor") {
-      if (!formData.qualifications.trim()) {
+      if (!formData.qualifications.trim())
         newErrors.qualifications = "Qualifications are required for mentors"
-      }
-      if (!formData.certifications.trim()) {
+      if (!formData.certifications.trim())
         newErrors.certifications = "Certifications are required for mentors"
-      }
     }
 
     setErrors(newErrors)
     return Object.keys(newErrors).length === 0
   }
 
-  // ── Normal Register ────────────────────────────────────
-  async function handleSubmit(e) {
-    e.preventDefault()
-    setApiError("")
-
-    if (!validate()) return
-
+  // ── Execute Normal Register ────────────────────────────
+  async function executeRegister() {
     try {
       setLoading(true)
+      setApiError("")
+      
+      let uploadedCvUrl = null
+      if (formData.role === "mentor" && cvFile) {
+        try {
+          const cvRes = await uploadCV(cvFile)
+          uploadedCvUrl = cvRes?.data?.cv_url || null
+        } catch (cvErr) {
+          console.error("CV Upload error:", cvErr)
+        }
+      }
+
       const fullName = `${formData.firstName} ${formData.lastName}`
       const response = await registerUser(
         fullName,
@@ -246,19 +197,55 @@ function RegisterPage() {
         formData.password,
         formData.role,
         formData.qualifications,
-        formData.certifications
+        formData.certifications,
+        uploadedCvUrl
       )
-      const { user, access_token, refresh_token } = response.data
-      login(user, access_token, refresh_token)
-      const targetRoute = user?.role === "mentor" ? "/mentor/dashboard" : user?.role === "admin" ? "/admin/dashboard" : "/dashboard"
-      navigate(targetRoute, { replace: true })
+
+      const payload = response?.data || response
+      const user = payload?.user
+      const access_token = payload?.access_token
+      const refresh_token = payload?.refresh_token
+
+      if (user && access_token) {
+        setShowMentorNoticeModal(false)
+        login(user, access_token, refresh_token)
+
+        // Direct mentor applicants to student dashboard /dashboard initially while application is pending
+        const targetRoute = (user?.role === "mentor" || formData.role === "mentor")
+          ? "/dashboard"
+          : user?.role === "admin"
+          ? "/admin/dashboard"
+          : "/dashboard"
+
+        navigate(targetRoute, { replace: true })
+      } else {
+        setApiError("Registration response was invalid. Please try again.")
+      }
     } catch (err) {
+      console.error("Registration submit error:", err)
       setApiError(
-        err.response?.data?.error?.message || "Registration failed. Please try again."
+        err.response?.data?.error?.message || err.response?.data?.message || err.message || "Registration failed. Please try again."
       )
     } finally {
       setLoading(false)
     }
+  }
+
+  // ── Form Submit Handler ────────────────────────────────
+  async function handleSubmit(e) {
+    e.preventDefault()
+    setApiError("")
+
+    if (!validate()) return
+
+    // Open mentor notice popup when registering as mentor
+    if (formData.role === "mentor") {
+      setNoticePendingAction("normal")
+      setShowMentorNoticeModal(true)
+      return
+    }
+
+    await executeRegister()
   }
 
   // ── Google Register ────────────────────────────────────
@@ -282,13 +269,15 @@ function RegisterPage() {
           setShowRoleSelect(true)
         } else {
           login(user, access_token, refresh_token)
-          const targetRoute = user?.role === "mentor" ? "/mentor/dashboard" : user?.role === "admin" ? "/admin/dashboard" : "/dashboard"
-          navigate(targetRoute, { replace: true })
+          const target = user?.role === "mentor"
+            ? "/mentor/dashboard"
+            : user?.role === "admin"
+            ? "/admin/dashboard"
+            : "/dashboard"
+          navigate(target, { replace: true })
         }
       } catch (err) {
-        setApiError(
-          err.response?.data?.error?.message || "Google signup failed. Please try again."
-        )
+        setApiError(err.response?.data?.error?.message || "Google signup failed. Please try again.")
       } finally {
         setGLoading(false)
       }
@@ -300,31 +289,52 @@ function RegisterPage() {
     )
   })
 
-  // ── Confirm Role After Google Auth ─────────────────────
-  async function handleRoleConfirm() {
-    if (!selectedRole) {
-      setApiError("Please select a role to continue")
-      return
-    }
-    if (!googleFirstName.trim()) {
-      setApiError("Please enter your first name")
-      return
-    }
-
+  // ── Execute Google Role Confirmation ────────────────────
+  async function executeGoogleRoleConfirm() {
     try {
       setRoleLoading(true)
+      setShowMentorNoticeModal(false)
       setApiError("")
       localStorage.setItem("access_token", googleUserData.access_token)
       const fullName = `${googleFirstName} ${googleLastName}`.trim()
       await api.patch("/users/profile", { name: fullName, role: selectedRole })
       const updatedUser = { ...googleUserData.user, name: fullName, role: selectedRole }
       login(updatedUser, googleUserData.access_token, googleUserData.refresh_token)
-      const targetRoute = selectedRole === "mentor" ? "/mentor/dashboard" : selectedRole === "admin" ? "/admin/dashboard" : "/dashboard"
+
+      const targetRoute = selectedRole === "mentor"
+        ? "/dashboard"
+        : selectedRole === "admin"
+        ? "/admin/dashboard"
+        : "/dashboard"
+
       navigate(targetRoute, { replace: true })
     } catch (err) {
       setApiError("Failed to save profile. Please try again.")
     } finally {
       setRoleLoading(false)
+    }
+  }
+
+  // ── Confirm Role After Google Auth ─────────────────────
+  async function handleRoleConfirm() {
+    if (!selectedRole) { setApiError("Please select a role to continue"); return }
+    if (!googleFirstName.trim()) { setApiError("Please enter your first name"); return }
+
+    if (selectedRole === "mentor") {
+      setNoticePendingAction("google")
+      setShowMentorNoticeModal(true)
+      return
+    }
+
+    await executeGoogleRoleConfirm()
+  }
+
+  // ── Modal Proceed Handler ─────────────────────────────
+  function handleModalProceed() {
+    if (noticePendingAction === "google") {
+      executeGoogleRoleConfirm()
+    } else {
+      executeRegister()
     }
   }
 
@@ -347,26 +357,19 @@ function RegisterPage() {
                 {googleFirstName.charAt(0) || "U"}
               </span>
             </div>
-            <h2 className="font-heading text-xl font-bold text-white">
-              Welcome!
-            </h2>
-            <p className="font-body text-sm text-[#B3CFE5]">
-              Complete your profile to continue
-            </p>
+            <h2 className="font-heading text-xl font-bold text-white">Welcome!</h2>
+            <p className="font-body text-sm text-[#B3CFE5]">Complete your profile to continue</p>
           </div>
 
           {apiError && (
-            <div className="bg-red-500/20 border border-red-500/40
-              rounded-lg px-4 py-3">
+            <div className="bg-red-500/20 border border-red-500/40 rounded-lg px-4 py-3">
               <p className="font-body text-xs text-red-300">{apiError}</p>
             </div>
           )}
 
           <div className="grid grid-cols-2 gap-3">
             <div>
-              <label className="font-body text-xs text-[#B3CFE5] mb-1 block">
-                First Name
-              </label>
+              <label className="font-body text-xs text-[#B3CFE5] mb-1 block">First Name</label>
               <input type="text" value={googleFirstName}
                 onChange={(e) => setGoogleFirstName(e.target.value)}
                 placeholder="First Name"
@@ -376,9 +379,7 @@ function RegisterPage() {
                   focus:outline-none focus:border-[#4A7FA7] transition-colors" />
             </div>
             <div>
-              <label className="font-body text-xs text-[#B3CFE5] mb-1 block">
-                Last Name
-              </label>
+              <label className="font-body text-xs text-[#B3CFE5] mb-1 block">Last Name</label>
               <input type="text" value={googleLastName}
                 onChange={(e) => setGoogleLastName(e.target.value)}
                 placeholder="Last Name"
@@ -390,13 +391,10 @@ function RegisterPage() {
           </div>
 
           <div className="space-y-3">
-            <p className="font-body text-sm text-[#B3CFE5] text-center">
-              I am a...
-            </p>
+            <p className="font-body text-sm text-[#B3CFE5] text-center">I am a...</p>
             <div className="grid grid-cols-2 gap-4">
               <button onClick={() => setSelectedRole("student")}
-                className={`flex flex-col items-center gap-3 py-6
-                  rounded-xl border-2 transition-all duration-200
+                className={`flex flex-col items-center gap-3 py-6 rounded-xl border-2 transition-all duration-200
                   ${selectedRole === "student"
                     ? "bg-[#4A7FA7] border-[#4A7FA7] text-white"
                     : "bg-[#1A3D63] bg-opacity-60 border-[#4A7FA7] border-opacity-40 text-[#B3CFE5]"}`}>
@@ -407,8 +405,7 @@ function RegisterPage() {
                 </div>
               </button>
               <button onClick={() => setSelectedRole("mentor")}
-                className={`flex flex-col items-center gap-3 py-6
-                  rounded-xl border-2 transition-all duration-200
+                className={`flex flex-col items-center gap-3 py-6 rounded-xl border-2 transition-all duration-200
                   ${selectedRole === "mentor"
                     ? "bg-[#4A7FA7] border-[#4A7FA7] text-white"
                     : "bg-[#1A3D63] bg-opacity-60 border-[#4A7FA7] border-opacity-40 text-[#B3CFE5]"}`}>
@@ -427,15 +424,14 @@ function RegisterPage() {
               font-body text-sm font-medium py-3 rounded-lg transition-colors
               duration-200 flex items-center justify-center gap-2
               disabled:opacity-50 disabled:cursor-not-allowed">
-            {roleLoading
-              ? <LoadingSpinner size="sm" color="white" />
-              : "Continue to WhisperHive"}
+            {roleLoading ? <LoadingSpinner size="sm" color="white" /> : "Continue to Learnify"}
           </button>
         </div>
       </div>
     )
   }
 
+  // ── Main Register Form ─────────────────────────────────
   return (
     <div className="relative min-h-screen w-full flex items-center justify-center">
 
@@ -449,9 +445,7 @@ function RegisterPage() {
         {/* Left Panel */}
         <div className="hidden md:flex flex-1 flex-col justify-center
           px-10 py-12 bg-transparent space-y-4">
-          <h1 className="font-heading text-5xl font-bold text-white">
-            WhisperHive
-          </h1>
+          <h1 className="font-heading text-5xl font-bold text-white">Learnify</h1>
           <div className="font-heading text-2xl font-bold text-white space-y-1">
             <p>Plan better.</p>
             <p>Learn smarter.</p>
@@ -474,10 +468,8 @@ function RegisterPage() {
             REGISTER
           </h2>
 
-          {/* API Error */}
           {apiError && (
-            <div className="bg-red-500/20 border border-red-500/40
-              rounded-lg px-4 py-3">
+            <div className="bg-red-500/20 border border-red-500/40 rounded-lg px-4 py-3">
               <p className="font-body text-xs text-red-300">{apiError}</p>
             </div>
           )}
@@ -506,194 +498,175 @@ function RegisterPage() {
           {/* Divider */}
           <div className="flex items-center gap-3">
             <div className="flex-1 h-px bg-white/10" />
-            <span className="font-body text-xs text-white/40">
-              or register with email
-            </span>
+            <span className="font-body text-xs text-white/40">or register with email</span>
             <div className="flex-1 h-px bg-white/10" />
           </div>
 
           <div className="space-y-3">
 
-            {/* First + Last Name */}
+            {/* Name Fields */}
             <div className="grid grid-cols-2 gap-2">
               <div>
-                <input type="text" name="firstName"
-                  placeholder="First Name"
-                  value={formData.firstName}
-                  onChange={handleChange}
+                <input type="text" name="firstName" placeholder="First Name"
+                  value={formData.firstName} onChange={handleChange}
                   className={`w-full bg-[#1A3D63] bg-opacity-60 text-white
                     placeholder-[#B3CFE5] font-body text-sm px-4 py-3
                     rounded-lg border transition-colors focus:outline-none
-                    ${errors.firstName
-                      ? "border-red-400"
-                      : "border-[#4A7FA7] border-opacity-40 focus:border-[#4A7FA7]"}`} />
+                    ${errors.firstName ? "border-red-400" : "border-[#4A7FA7] border-opacity-40 focus:border-[#4A7FA7]"}`} />
                 {errors.firstName && (
-                  <p className="font-body text-[10px] text-red-400 mt-0.5 ml-1">
-                    {errors.firstName}
-                  </p>
+                  <p className="font-body text-[10px] text-red-400 mt-0.5 ml-1">{errors.firstName}</p>
                 )}
               </div>
               <div>
-                <input type="text" name="lastName"
-                  placeholder="Last Name"
-                  value={formData.lastName}
-                  onChange={handleChange}
+                <input type="text" name="lastName" placeholder="Last Name"
+                  value={formData.lastName} onChange={handleChange}
                   className={`w-full bg-[#1A3D63] bg-opacity-60 text-white
                     placeholder-[#B3CFE5] font-body text-sm px-4 py-3
                     rounded-lg border transition-colors focus:outline-none
-                    ${errors.lastName
-                      ? "border-red-400"
-                      : "border-[#4A7FA7] border-opacity-40 focus:border-[#4A7FA7]"}`} />
+                    ${errors.lastName ? "border-red-400" : "border-[#4A7FA7] border-opacity-40 focus:border-[#4A7FA7]"}`} />
                 {errors.lastName && (
-                  <p className="font-body text-[10px] text-red-400 mt-0.5 ml-1">
-                    {errors.lastName}
-                  </p>
+                  <p className="font-body text-[10px] text-red-400 mt-0.5 ml-1">{errors.lastName}</p>
                 )}
               </div>
             </div>
 
-            {/* Email — with real-time format check */}
+            {/* Email */}
             <div>
               <div className="relative">
-                <input type="email" name="email"
-                  placeholder="Email address"
-                  value={formData.email}
-                  onChange={handleChange}
+                <input type="email" name="email" placeholder="Email address"
+                  value={formData.email} onChange={handleChange}
                   className={`w-full bg-[#1A3D63] bg-opacity-60 text-white
-                    placeholder-[#B3CFE5] font-body text-sm px-4 py-3
+                    placeholder-[#B3CFE5] font-body text-sm px-4 py-3 pr-11
                     rounded-lg border transition-colors focus:outline-none
                     ${errors.email
                       ? "border-red-400"
                       : formData.email && validateEmail(formData.email)
                       ? "border-green-400"
                       : "border-[#4A7FA7] border-opacity-40 focus:border-[#4A7FA7]"}`} />
-                {/* Live email valid indicator */}
                 {formData.email && validateEmail(formData.email) && (
                   <div className="absolute right-3 top-1/2 -translate-y-1/2
-                    w-5 h-5 rounded-full bg-green-500 flex items-center
-                    justify-center">
+                    w-5 h-5 rounded-full bg-green-500 flex items-center justify-center">
                     <Check size={11} className="text-white" strokeWidth={3} />
                   </div>
                 )}
               </div>
               {errors.email && (
-                <p className="font-body text-xs text-red-400 mt-1 ml-1">
-                  {errors.email}
-                </p>
+                <p className="font-body text-xs text-red-400 mt-1 ml-1">{errors.email}</p>
               )}
             </div>
 
-            {/* Password — with live criteria checker */}
+            {/* Password */}
             <div>
-              <input type="password" name="password"
-                placeholder="Password"
-                value={formData.password}
-                onChange={handleChange}
-                className={`w-full bg-[#1A3D63] bg-opacity-60 text-white
-                  placeholder-[#B3CFE5] font-body text-sm px-4 py-3
-                  rounded-lg border transition-colors focus:outline-none
-                  ${errors.password
-                    ? "border-red-400"
-                    : formData.password && validatePassword(formData.password)
-                    ? "border-green-400"
-                    : "border-[#4A7FA7] border-opacity-40 focus:border-[#4A7FA7]"}`} />
-
-              {/* Live password criteria — shows as user types */}
-              {formData.password && (
-                <PasswordCriteria password={formData.password} />
-              )}
-
+              <div className="relative">
+                <input
+                  type={showPassword ? "text" : "password"}
+                  name="password"
+                  placeholder="Password"
+                  value={formData.password}
+                  onChange={handleChange}
+                  className={`w-full bg-[#1A3D63] bg-opacity-60 text-white
+                    placeholder-[#B3CFE5] font-body text-sm px-4 py-3 pr-11
+                    rounded-lg border transition-colors focus:outline-none
+                    ${errors.password
+                      ? "border-red-400"
+                      : formData.password && validatePassword(formData.password)
+                      ? "border-green-400"
+                      : "border-[#4A7FA7] border-opacity-40 focus:border-[#4A7FA7]"}`}
+                />
+                <button
+                  type="button"
+                  onClick={() => setShowPassword(!showPassword)}
+                  className="absolute right-3 top-1/2 -translate-y-1/2
+                    text-[#B3CFE5]/50 hover:text-[#B3CFE5] transition-colors"
+                >
+                  {showPassword ? <EyeOff size={16} /> : <Eye size={16} />}
+                </button>
+              </div>
+              {formData.password && <PasswordCriteria password={formData.password} />}
               {errors.password && !formData.password && (
-                <p className="font-body text-xs text-red-400 mt-1 ml-1">
-                  {errors.password}
-                </p>
+                <p className="font-body text-xs text-red-400 mt-1 ml-1">{errors.password}</p>
               )}
             </div>
 
             {/* Confirm Password */}
             <div>
               <div className="relative">
-                <input type="password" name="confirmPassword"
+                <input
+                  type={showConfirmPassword ? "text" : "password"}
+                  name="confirmPassword"
                   placeholder="Confirm Password"
                   value={formData.confirmPassword}
                   onChange={handleChange}
                   className={`w-full bg-[#1A3D63] bg-opacity-60 text-white
-                    placeholder-[#B3CFE5] font-body text-sm px-4 py-3
+                    placeholder-[#B3CFE5] font-body text-sm px-4 py-3 pr-20
                     rounded-lg border transition-colors focus:outline-none
                     ${errors.confirmPassword
                       ? "border-red-400"
-                      : formData.confirmPassword &&
-                        formData.password === formData.confirmPassword
+                      : formData.confirmPassword && formData.password === formData.confirmPassword
                       ? "border-green-400"
-                      : "border-[#4A7FA7] border-opacity-40 focus:border-[#4A7FA7]"}`} />
-                {/* Match indicator */}
+                      : "border-[#4A7FA7] border-opacity-40 focus:border-[#4A7FA7]"}`}
+                />
+                {/* Match tick */}
                 {formData.confirmPassword &&
                  formData.password === formData.confirmPassword && (
-                  <div className="absolute right-3 top-1/2 -translate-y-1/2
-                    w-5 h-5 rounded-full bg-green-500 flex items-center
-                    justify-center">
+                  <div className="absolute right-9 top-1/2 -translate-y-1/2
+                    w-5 h-5 rounded-full bg-green-500 flex items-center justify-center">
                     <Check size={11} className="text-white" strokeWidth={3} />
                   </div>
                 )}
+                {/* Toggle button */}
+                <button
+                  type="button"
+                  onClick={() => setShowConfirm(!showConfirmPassword)}
+                  className="absolute right-3 top-1/2 -translate-y-1/2
+                    text-[#B3CFE5]/50 hover:text-[#B3CFE5] transition-colors"
+                >
+                  {showConfirmPassword ? <EyeOff size={16} /> : <Eye size={16} />}
+                </button>
               </div>
               {errors.confirmPassword && (
-                <p className="font-body text-xs text-red-400 mt-1 ml-1">
-                  {errors.confirmPassword}
-                </p>
+                <p className="font-body text-xs text-red-400 mt-1 ml-1">{errors.confirmPassword}</p>
               )}
-              {formData.confirmPassword &&
-               formData.password === formData.confirmPassword && (
-                <p className="font-body text-xs text-green-400 mt-1 ml-1">
-                  ✓ Passwords match
-                </p>
+              {formData.confirmPassword && formData.password === formData.confirmPassword && (
+                <p className="font-body text-xs text-green-400 mt-1 ml-1">✓ Passwords match</p>
               )}
             </div>
 
             {/* Role Selection */}
             <div className="space-y-2">
-              <p className={`font-body text-sm
-                ${errors.role ? "text-red-400" : "text-[#B3CFE5]"}`}>
+              <p className={`font-body text-sm ${errors.role ? "text-red-400" : "text-[#B3CFE5]"}`}>
                 Choose your role *
               </p>
               <div className="grid grid-cols-2 gap-3">
                 <button onClick={() => handleRoleSelect("student")}
-                  className={`flex flex-col items-center gap-2 py-4
-                    rounded-lg border transition-all duration-200
+                  className={`flex flex-col items-center gap-2 py-4 rounded-lg border transition-all duration-200
                     ${formData.role === "student"
                       ? "bg-[#4A7FA7] border-[#4A7FA7] text-white"
-                      : `bg-[#1A3D63] bg-opacity-60 text-[#B3CFE5]
-                         ${errors.role
-                           ? "border-red-400"
-                           : "border-[#4A7FA7] border-opacity-40"}`}`}>
+                      : `bg-[#1A3D63] bg-opacity-60 text-[#B3CFE5] ${errors.role ? "border-red-400" : "border-[#4A7FA7] border-opacity-40"}`}`}>
                   <GraduationCap size={28} />
                   <span className="font-body text-sm font-medium">Student</span>
                 </button>
                 <button onClick={() => handleRoleSelect("mentor")}
-                  className={`flex flex-col items-center gap-2 py-4
-                    rounded-lg border transition-all duration-200
+                  className={`flex flex-col items-center gap-2 py-4 rounded-lg border transition-all duration-200
                     ${formData.role === "mentor"
                       ? "bg-[#4A7FA7] border-[#4A7FA7] text-white"
-                      : `bg-[#1A3D63] bg-opacity-60 text-[#B3CFE5]
-                         ${errors.role
-                           ? "border-red-400"
-                           : "border-[#4A7FA7] border-opacity-40"}`}`}>
+                      : `bg-[#1A3D63] bg-opacity-60 text-[#B3CFE5] ${errors.role ? "border-red-400" : "border-[#4A7FA7] border-opacity-40"}`}`}>
                   <Users size={28} />
                   <span className="font-body text-sm font-medium">Mentor</span>
                 </button>
               </div>
               {errors.role && (
-                <p className="font-body text-xs text-red-400 ml-1">
-                  {errors.role}
-                </p>
+                <p className="font-body text-xs text-red-400 ml-1">{errors.role}</p>
               )}
             </div>
 
+            {/* Mentor Extra Fields */}
             {formData.role === "mentor" && (
               <div className="space-y-4 pt-2">
                 <div>
                   <textarea
                     name="qualifications"
-                    placeholder="Academic Qualifications (e.g. Degree, University, GPA)*"
+                    placeholder="Academic Qualifications (e.g. Degree, University, GPA) *"
                     value={formData.qualifications}
                     onChange={handleChange}
                     rows={3}
@@ -705,16 +678,13 @@ function RegisterPage() {
                         : "border-[#4A7FA7] border-opacity-40 focus:border-[#4A7FA7]"}`}
                   />
                   {errors.qualifications && (
-                    <p className="font-body text-xs text-red-400 mt-1 ml-1">
-                      {errors.qualifications}
-                    </p>
+                    <p className="font-body text-xs text-red-400 mt-1 ml-1">{errors.qualifications}</p>
                   )}
                 </div>
-
                 <div>
                   <textarea
                     name="certifications"
-                    placeholder="Certifications & Experience (e.g. teaching, certifications)*"
+                    placeholder="Certifications & Experience (e.g. teaching, certifications) *"
                     value={formData.certifications}
                     onChange={handleChange}
                     rows={3}
@@ -726,42 +696,135 @@ function RegisterPage() {
                         : "border-[#4A7FA7] border-opacity-40 focus:border-[#4A7FA7]"}`}
                   />
                   {errors.certifications && (
-                    <p className="font-body text-xs text-red-400 mt-1 ml-1">
-                      {errors.certifications}
-                    </p>
+                    <p className="font-body text-xs text-red-400 mt-1 ml-1">{errors.certifications}</p>
                   )}
+                </div>
+
+                {/* CV / Resume Upload */}
+                <div className="space-y-1">
+                  <label className="font-body text-xs text-[#B3CFE5] block">
+                    Upload CV / Resume (Optional - PDF, DOCX, PNG, JPG)
+                  </label>
+                  <div className="relative border border-dashed border-[#4A7FA7]/60 hover:border-[#4A7FA7] rounded-lg p-3 bg-[#1A3D63]/40 transition-colors text-center cursor-pointer">
+                    <input
+                      type="file"
+                      accept=".pdf,.doc,.docx,.png,.jpg,.jpeg"
+                      onChange={(e) => setCvFile(e.target.files[0] || null)}
+                      className="absolute inset-0 opacity-0 cursor-pointer w-full h-full"
+                    />
+                    <div className="flex items-center justify-center gap-2 text-[#B3CFE5]">
+                      {cvFile ? (
+                        <>
+                          <FileText size={18} className="text-emerald-400" />
+                          <span className="font-body text-xs font-semibold text-white truncate max-w-[220px]">
+                            {cvFile.name}
+                          </span>
+                        </>
+                      ) : (
+                        <>
+                          <Upload size={18} className="text-[#4A7FA7]" />
+                          <span className="font-body text-xs">Choose CV File</span>
+                        </>
+                      )}
+                    </div>
+                  </div>
                 </div>
               </div>
             )}
 
-
-            {/* Submit Button */}
+            {/* Submit */}
             <button onClick={handleSubmit}
               disabled={loading || gLoading}
               className="w-full bg-[#4A7FA7] hover:bg-[#1A3D63] text-white
                 font-body text-sm font-medium py-3 rounded-lg
                 transition-colors duration-200 flex items-center
-                justify-center gap-2 disabled:opacity-50
-                disabled:cursor-not-allowed">
-              {loading
-                ? <LoadingSpinner size="sm" color="white" />
-                : "Create Account"
-              }
+                justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed">
+              {loading ? <LoadingSpinner size="sm" color="white" /> : "Create Account"}
             </button>
 
           </div>
 
           <p className="font-body text-xs text-[#B3CFE5] text-center">
             Already have an account?{" "}
-            <Link to="/login"
-              className="text-[#4A7FA7] font-bold hover:text-white
-                transition-colors">
+            <Link to="/login" className="text-[#4A7FA7] font-bold hover:text-white transition-colors">
               Sign In
             </Link>
           </p>
 
         </div>
       </div>
+
+      {/* ── Mentor Notice Modal ─────────────────────────────── */}
+      {showMentorNoticeModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/70 backdrop-blur-sm">
+          <div className="relative w-full max-w-md bg-[#0A1931] border border-[#4A7FA7] border-opacity-40 rounded-2xl p-6 md:p-8 shadow-[0_0_50px_rgba(0,0,0,0.8)] space-y-6 text-white">
+            
+            {/* Modal Header */}
+            <div className="flex items-start gap-4">
+              <div className="w-12 h-12 rounded-xl bg-[#4A7FA7]/20 border border-[#4A7FA7]/40 flex items-center justify-center text-[#4A7FA7] flex-shrink-0">
+                <Info size={28} />
+              </div>
+              <div>
+                <h3 className="font-heading text-xl font-bold text-white">
+                  Mentor Access Notice
+                </h3>
+                <p className="font-body text-xs text-[#B3CFE5] mt-1">
+                  Please review the access policy below before completing your registration.
+                </p>
+              </div>
+            </div>
+
+            {/* Modal Body Message */}
+            <div className="space-y-3 bg-[#1A3D63]/50 border border-[#4A7FA7]/30 rounded-xl p-4 text-sm font-body leading-relaxed text-[#B3CFE5]">
+              <div className="flex items-center gap-2 text-yellow-400 font-semibold text-xs uppercase tracking-wider">
+                <Clock size={16} />
+                <span>Pending Admin Approval</span>
+              </div>
+              <p>
+                When registering as a mentor, you will initially receive <strong className="text-white font-semibold">Student access</strong> to explore the platform.
+              </p>
+              <p>
+                Your submitted credentials (qualifications and certifications) will be reviewed by an administrator. Once approved by an admin, your account access will be upgraded to <strong className="text-white font-semibold">Mentor access</strong>.
+              </p>
+            </div>
+
+            {/* Modal API Error */}
+            {apiError && (
+              <div className="bg-red-500/20 border border-red-500/40 rounded-xl p-3 text-xs text-red-300 font-body">
+                {apiError}
+              </div>
+            )}
+
+            {/* Modal Action Buttons */}
+            <div className="flex items-center gap-3 pt-2">
+              <button
+                type="button"
+                onClick={() => setShowMentorNoticeModal(false)}
+                disabled={loading || roleLoading}
+                className="w-1/3 px-4 py-3 rounded-lg border border-white/20 hover:bg-white/10 text-white font-body text-sm font-medium transition-colors text-center disabled:opacity-50"
+              >
+                Back
+              </button>
+              <button
+                type="button"
+                onClick={handleModalProceed}
+                disabled={loading || roleLoading}
+                className="w-2/3 px-4 py-3 rounded-lg bg-[#4A7FA7] hover:bg-[#1A3D63] text-white font-body text-sm font-semibold transition-all shadow-lg flex items-center justify-center gap-2 disabled:opacity-50"
+              >
+                {(loading || roleLoading) ? (
+                  <LoadingSpinner size="sm" color="white" />
+                ) : (
+                  <>
+                    <span>Click to Proceed</span>
+                    <ArrowRight size={16} />
+                  </>
+                )}
+              </button>
+            </div>
+
+          </div>
+        </div>
+      )}
     </div>
   )
 }

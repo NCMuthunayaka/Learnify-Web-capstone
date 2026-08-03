@@ -1,10 +1,14 @@
+import os
 from flask import Blueprint, request
 from flask_jwt_extended import jwt_required, get_jwt
-from sqlalchemy import func, text
+from sqlalchemy import func, text, or_, case
 from datetime import datetime, timedelta
 from app.extensions import db
 from app.models.user import User
 from app.models.feedback import Feedback
+from app.models.resource import Resource
+from app.models.subject import Subject
+from app.models.file_type import FileType
 from app.utils.response_utils import success_response, error_response
 
 bp = Blueprint("admin", __name__)
@@ -301,7 +305,7 @@ def get_pending_approvals():
 
         rows = db.session.execute(
             text(
-                "SELECT ma.id, u.id as user_id, u.name, u.email, ma.qualifications, ma.certifications, ma.created_at "
+                "SELECT ma.id, u.id as user_id, u.name, u.email, ma.qualifications, ma.certifications, ma.created_at, ma.cv_url, ma.request_type "
                 "FROM mentor_applications ma "
                 "JOIN users u ON ma.user_id = u.id "
                 "WHERE ma.status = 'pending' "
@@ -315,6 +319,10 @@ def get_pending_approvals():
         for r in rows:
             uid = r[1]
             perf = get_user_platform_performance(uid)
+            dt_str = r[6].isoformat() if r[6] else None
+            if dt_str and not dt_str.endswith("Z") and "+" not in dt_str:
+                dt_str += "Z"
+
             users.append({
                 "application_id": r[0],
                 "id": r[1],
@@ -322,7 +330,9 @@ def get_pending_approvals():
                 "email": r[3],
                 "qualifications": r[4],
                 "certifications": r[5],
-                "created_at": r[6].isoformat() if r[6] else None,
+                "created_at": dt_str,
+                "cv_url": r[7] if len(r) > 7 else None,
+                "request_type": r[8] if (len(r) > 8 and r[8]) else "registration",
                 "role": "mentor",
                 "status": "pending",
                 "total_points": perf["total_points"],
@@ -341,19 +351,23 @@ def get_pending_approvals():
                  .limit(PAGE_SIZE)
                  .all()
         )
-        users = [
-            {
+        users = []
+        for u in db_users:
+            u_dt = u.created_at.isoformat() if u.created_at else None
+            if u_dt and not u_dt.endswith("Z") and "+" not in u_dt:
+                u_dt += "Z"
+            users.append({
                 "id": u.id,
                 "name": u.name,
                 "email": u.email,
                 "qualifications": "Standard Registration",
                 "certifications": "Standard Registration",
-                "created_at": u.created_at.isoformat() if u.created_at else None,
+                "created_at": u_dt,
+                "cv_url": None,
+                "request_type": "registration",
                 "role": u.role,
                 "status": u.status
-            }
-            for u in db_users
-        ]
+            })
 
     return success_response(data={
         "users":       users,
@@ -382,20 +396,35 @@ def approve_user(user_id):
 
     try:
         app_row = db.session.execute(
-            text("SELECT id FROM mentor_applications WHERE user_id = :uid AND status = 'pending'"),
+            text("SELECT id, cv_url FROM mentor_applications WHERE user_id = :uid AND status = 'pending'"),
             {"uid": user_id}
         ).fetchone()
     except Exception:
         app_row = None
 
     if app_row:
+        # Auto-delete physical CV file from disk upon approval
+        cv_url = app_row[1] if (app_row and len(app_row) > 1) else None
+        if cv_url and cv_url.startswith("/uploads/"):
+            try:
+                rel_path = cv_url.lstrip("/")
+                abs_cv_path = os.path.join(
+                    os.path.dirname(os.path.dirname(os.path.dirname(__file__))),
+                    rel_path
+                )
+                if os.path.exists(abs_cv_path):
+                    os.remove(abs_cv_path)
+                    print(f"Auto-deleted CV file upon approval: {abs_cv_path}")
+            except Exception as fe:
+                print(f"Notice: Failed to auto-delete CV file: {fe}")
+
         # Transition student to mentor
         user.role = "mentor"
         user.status = "active"
 
-        # Update application status
+        # Update application status and clear cv_url
         db.session.execute(
-            text("UPDATE mentor_applications SET status = 'approved' WHERE user_id = :uid"),
+            text("UPDATE mentor_applications SET status = 'approved', cv_url = NULL WHERE user_id = :uid"),
             {"uid": user_id}
         )
 
@@ -409,11 +438,11 @@ def approve_user(user_id):
         from app.routes.mentor import ensure_mentor_profile
         ensure_mentor_profile(user_id)
 
-        # Insert system notification
+        # Insert system notification for user
         db.session.execute(
             text(
                 "INSERT INTO notifications (user_id, type_id, title, body, is_read, created_at) "
-                "VALUES (:uid, 4, 'Mentor Account Approved', 'Your application to register as a mentor has been approved! You now have mentor access.', 0, :now)"
+                "VALUES (:uid, 4, 'Mentor Application Approved!', 'Congratulations! Your mentor application has been reviewed and approved by Admin. You now have full Mentor access.', 0, :now)"
             ),
             {"uid": user_id, "now": datetime.utcnow()}
         )
@@ -422,7 +451,7 @@ def approve_user(user_id):
         user.status = "active"
         db.session.commit()
 
-    return success_response(data=user.to_dict(), message="User approved")
+    return success_response(data=user.to_dict(), message="User approved successfully")
 
 
 # ── POST /api/admin/approvals/<id>/reject ────────────────────
@@ -458,11 +487,16 @@ def reject_user(user_id):
         db.session.execute(
             text(
                 "INSERT INTO notifications (user_id, type_id, title, body, is_read, created_at) "
-                "VALUES (:uid, 6, 'Mentor Application Declined', 'Your application to register as a mentor has been declined by the system administrators. You will retain student access.', 0, :now)"
+                "VALUES (:uid, 6, 'Mentor Application Declined', 'Your mentor application was reviewed by Admin and declined at this time. You will retain Student access.', 0, :now)"
             ),
             {"uid": user_id, "now": datetime.utcnow()}
         )
         db.session.commit()
+    else:
+        user.status = "inactive"
+        db.session.commit()
+
+    return success_response(data=user.to_dict(), message="User rejected")
     else:
         user.status = "inactive"
         db.session.commit()
@@ -668,3 +702,144 @@ def get_feedback_stats():
         "negative":   negative,
         "trend":      trend,
     })
+
+
+# ── GET /api/admin/resources ──────────────────────────────────
+@bp.route("/resources", methods=["GET"])
+@jwt_required()
+def get_admin_resources():
+    err = _require_admin()
+    if err:
+        return err
+
+    search        = request.args.get("search", "").strip()
+    subject_id    = request.args.get("subject_id", type=int)
+    rating_filter = request.args.get("rating_filter", "all") # all, bad (<3.0), top (>=4.0), unrated
+    sort_by       = request.args.get("sort_by", "newest") # newest, rating_asc, rating_desc, downloads, views
+
+    query = Resource.query
+
+    if subject_id:
+        query = query.filter_by(subject_id=subject_id)
+
+    if search:
+        query = query.filter(Resource.title.ilike(f"%{search}%"))
+
+    resources = query.order_by(Resource.uploaded_at.desc()).all()
+
+    items = []
+    total_downloads = 0
+    total_views = 0
+    bad_rating_count = 0
+    all_ratings = []
+
+    for r in resources:
+        res_dict = r.to_dict()
+        subject   = Subject.query.get(r.subject_id)   if r.subject_id   else None
+        file_type = FileType.query.get(r.file_type_id) if r.file_type_id else None
+        uploader  = User.query.get(r.uploader_id)     if r.uploader_id  else None
+
+        # Fetch rating stats
+        try:
+            row = db.session.execute(
+                text("SELECT AVG(rating), COUNT(id) FROM resource_ratings WHERE resource_id = :rid"),
+                {"rid": r.id}
+            ).fetchone()
+            avg_r = round(float(row[0]), 1) if row and row[0] is not None else 0.0
+            r_cnt = int(row[1]) if row and row[1] is not None else 0
+        except Exception:
+            avg_r = 0.0
+            r_cnt = 0
+
+        res_dict["uploader_name"]  = uploader.name  if uploader  else "Unknown"
+        res_dict["uploader_email"] = uploader.email if uploader  else ""
+        res_dict["subject_name"]   = subject.name   if subject   else "General"
+        res_dict["file_type_name"] = file_type.name if file_type else "File"
+        res_dict["avg_rating"]     = avg_r
+        res_dict["rating_count"]   = r_cnt
+
+        total_downloads += (r.download_count or 0)
+        total_views     += (r.view_count or 0)
+        if r_cnt > 0 and avg_r < 3.0:
+            bad_rating_count += 1
+        if r_cnt > 0:
+            all_ratings.append(avg_r)
+
+        # Rating filtering
+        if rating_filter == "bad" and (r_cnt == 0 or avg_r >= 3.0):
+            continue
+        if rating_filter == "top" and (r_cnt == 0 or avg_r < 4.0):
+            continue
+        if rating_filter == "unrated" and r_cnt > 0:
+            continue
+
+        items.append(res_dict)
+
+    # Sorting
+    if sort_by == "rating_asc":
+        items.sort(key=lambda x: (0 if x["rating_count"] > 0 else 1, x["avg_rating"]))
+    elif sort_by == "rating_desc":
+        items.sort(key=lambda x: x["avg_rating"], reverse=True)
+    elif sort_by == "downloads":
+        items.sort(key=lambda x: x.get("download_count") or 0, reverse=True)
+    elif sort_by == "views":
+        items.sort(key=lambda x: x.get("view_count") or 0, reverse=True)
+
+    platform_avg = round(sum(all_ratings) / len(all_ratings), 1) if all_ratings else 0.0
+
+    return success_response(data={
+        "resources": items,
+        "summary": {
+            "total_resources":  len(items),
+            "bad_rating_count": bad_rating_count,
+            "total_downloads":  total_downloads,
+            "total_views":      total_views,
+            "platform_avg":     platform_avg,
+        }
+    })
+
+
+# ── DELETE /api/admin/resources/batch ─────────────────────────
+@bp.route("/resources/batch", methods=["DELETE"])
+@jwt_required()
+def delete_admin_resources_batch():
+    err = _require_admin()
+    if err:
+        return err
+
+    data = request.get_json() or {}
+    resource_ids = data.get("resource_ids", [])
+    if not resource_ids or not isinstance(resource_ids, list):
+        return error_response("MISSING_FIELD", "resource_ids array is required", status=400)
+
+    try:
+        resources = Resource.query.filter(Resource.id.in_(resource_ids)).all()
+        deleted_count = 0
+
+        for r in resources:
+            # Clean up local disk file if present
+            if r.file_url and r.file_url.startswith("/uploads/"):
+                filename = r.file_url.replace("/uploads/", "")
+                upload_folder = os.path.join(
+                    os.path.dirname(os.path.dirname(os.path.dirname(__file__))),
+                    "uploads"
+                )
+                file_path = os.path.join(upload_folder, filename)
+                if os.path.exists(file_path):
+                    try:
+                        os.remove(file_path)
+                    except Exception as fe:
+                        print(f"File delete notice: {fe}")
+
+            db.session.delete(r)
+            deleted_count += 1
+
+        db.session.commit()
+        return success_response(
+            data={"deleted_count": deleted_count},
+            message=f"Successfully deleted {deleted_count} resources"
+        )
+    except Exception as e:
+        db.session.rollback()
+        return error_response("DELETE_ERROR", str(e), status=500)
+

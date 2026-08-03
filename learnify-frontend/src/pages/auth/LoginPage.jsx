@@ -5,16 +5,19 @@ import { loginUser, googleAuth } from "../../api/authApi"
 import { useAuth } from "../../hooks/useAuth"
 import { useGoogleLogin } from "@react-oauth/google"
 import LoadingSpinner from "../../components/common/LoadingSpinner"
+import { Eye, EyeOff } from "lucide-react"
 
 function LoginPage() {
-  const navigate  = useNavigate()
+  const navigate = useNavigate()
   const { login } = useAuth()
 
+
   const [formData, setFormData] = useState({ email: "", password: "" })
-  const [loading, setLoading]   = useState(false)
+  const [loading, setLoading] = useState(false)
   const [gLoading, setGLoading] = useState(false)
-  const [errors, setErrors]     = useState({})  // field-level errors
+  const [errors, setErrors] = useState({})  // field-level errors
   const [apiError, setApiError] = useState("")  // backend error
+  const [showPassword, setShowPassword] = useState(false)
 
   function handleChange(e) {
     setFormData({ ...formData, [e.target.name]: e.target.value })
@@ -53,7 +56,7 @@ function LoginPage() {
 
     try {
       setLoading(true)
-      const response                              = await loginUser(formData.email, formData.password)
+      const response = await loginUser(formData.email, formData.password)
       const { user, access_token, refresh_token } = response.data
       login(user, access_token, refresh_token)
       navigate("/dashboard")
@@ -76,7 +79,7 @@ function LoginPage() {
       try {
         setGLoading(true)
         setApiError("")
-        const response                              = await googleAuth(tokenResponse.access_token, "login")
+        const response = await googleAuth(tokenResponse.access_token, "login")
         const { user, access_token, refresh_token } = response.data
         login(user, access_token, refresh_token)
         navigate("/dashboard")
@@ -159,11 +162,11 @@ function LoginPage() {
             ) : (
               <>
                 <svg width="18" height="18" viewBox="0 0 48 48">
-                  <path fill="#EA4335" d="M24 9.5c3.54 0 6.71 1.22 9.21 3.6l6.85-6.85C35.9 2.38 30.47 0 24 0 14.62 0 6.51 5.38 2.56 13.22l7.98 6.19C12.43 13.72 17.74 9.5 24 9.5z"/>
-                  <path fill="#4285F4" d="M46.98 24.55c0-1.57-.15-3.09-.38-4.55H24v9.02h12.94c-.58 2.96-2.26 5.48-4.78 7.18l7.73 6c4.51-4.18 7.09-10.36 7.09-17.65z"/>
-                  <path fill="#FBBC05" d="M10.53 28.59c-.48-1.45-.76-2.99-.76-4.59s.27-3.14.76-4.59l-7.98-6.19C.92 16.46 0 20.12 0 24c0 3.88.92 7.54 2.56 10.78l7.97-6.19z"/>
-                  <path fill="#34A853" d="M24 48c6.48 0 11.93-2.13 15.89-5.81l-7.73-6c-2.15 1.45-4.92 2.3-8.16 2.3-6.26 0-11.57-4.22-13.47-9.91l-7.98 6.19C6.51 42.62 14.62 48 24 48z"/>
-                  <path fill="none" d="M0 0h48v48H0z"/>
+                  <path fill="#EA4335" d="M24 9.5c3.54 0 6.71 1.22 9.21 3.6l6.85-6.85C35.9 2.38 30.47 0 24 0 14.62 0 6.51 5.38 2.56 13.22l7.98 6.19C12.43 13.72 17.74 9.5 24 9.5z" />
+                  <path fill="#4285F4" d="M46.98 24.55c0-1.57-.15-3.09-.38-4.55H24v9.02h12.94c-.58 2.96-2.26 5.48-4.78 7.18l7.73 6c4.51-4.18 7.09-10.36 7.09-17.65z" />
+                  <path fill="#FBBC05" d="M10.53 28.59c-.48-1.45-.76-2.99-.76-4.59s.27-3.14.76-4.59l-7.98-6.19C.92 16.46 0 20.12 0 24c0 3.88.92 7.54 2.56 10.78l7.97-6.19z" />
+                  <path fill="#34A853" d="M24 48c6.48 0 11.93-2.13 15.89-5.81l-7.73-6c-2.15 1.45-4.92 2.3-8.16 2.3-6.26 0-11.57-4.22-13.47-9.91l-7.98 6.19C6.51 42.62 14.62 48 24 48z" />
+                  <path fill="none" d="M0 0h48v48H0z" />
                 </svg>
                 Continue with Google
               </>
@@ -209,21 +212,34 @@ function LoginPage() {
 
             {/* Password Field */}
             <div>
-              <input
-                type="password"
-                name="password"
-                placeholder="Password"
-                value={formData.password}
-                onChange={handleChange}
-                className={`w-full bg-[#1A3D63] bg-opacity-60 text-white
-                  placeholder-[#B3CFE5] font-body text-sm px-4 py-3
+              <div className="relative">
+                <input
+                  type={showPassword ? "text" : "password"}
+                  name="password"
+                  placeholder="Password"
+                  value={formData.password}
+                  onChange={handleChange}
+                  className={`w-full bg-[#1A3D63] bg-opacity-60 text-white
+                  placeholder-[#B3CFE5] font-body text-sm px-4 py-3 pr-11
                   rounded-lg border transition-colors duration-200
                   focus:outline-none
                   ${errors.password
-                    ? "border-red-400"
-                    : "border-[#4A7FA7] border-opacity-40 focus:border-[#4A7FA7]"
-                  }`}
-              />
+                      ? "border-red-400"
+                      : "border-[#4A7FA7] border-opacity-40 focus:border-[#4A7FA7]"
+                    }`}
+                />
+                <button
+                  type="button"
+                  onClick={() => setShowPassword(!showPassword)}
+                  className="absolute right-3 top-1/2 -translate-y-1/2
+                  text-[#B3CFE5]/50 hover:text-[#B3CFE5] transition-colors"
+                >
+                  {showPassword
+                    ? <EyeOff size={16} />
+                    : <Eye size={16} />
+                  }
+                </button>
+              </div>
               {errors.password && (
                 <p className="font-body text-xs text-red-400 mt-1 ml-1">
                   {errors.password}

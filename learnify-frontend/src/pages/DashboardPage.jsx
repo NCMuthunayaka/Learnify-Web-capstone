@@ -1,12 +1,13 @@
 import { useState, useEffect } from "react"
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Cell } from "recharts"
-import { Send, Flame, Zap, Target, Clock, BookOpen, ChevronRight } from "lucide-react"
+import { Send, Flame, Zap, Target, Clock, BookOpen, ChevronRight, Info, ShieldCheck, AlertCircle, Sparkles } from "lucide-react"
 import Button from "../components/common/Button"
 import LoadingSpinner from "../components/common/LoadingSpinner"
 import ErrorMessage from "../components/common/ErrorMessage"
 import { useAuth } from "../hooks/useAuth"
 import { useNavigate } from "react-router-dom"
 import { getDashboardStats } from "../api/dashboardApi"
+import { getMentorEligibility } from "../api/usersApi"
 
 // ── Helper — build calendar for current month ─────────────
 function buildCalendar(deadlines) {
@@ -87,6 +88,7 @@ export default function DashboardPage() {
   const [weeklyData, setWeeklyData]       = useState([])
   const [deadlines, setDeadlines]         = useState([])
   const [scheduledSubjects, setScheduled] = useState([])
+  const [mentorApp, setMentorApp]         = useState(null)
 
   // ── Fetch dashboard data ───────────────────────────────
   useEffect(() => {
@@ -105,6 +107,15 @@ export default function DashboardPage() {
         setWeeklyData(data.weekly_chart)
         setDeadlines(data.deadlines)
         setScheduled(data.scheduled_subjects)
+
+        // Fetch mentor application status feedback if user applied
+        try {
+          const elRes = await getMentorEligibility()
+          if (elRes?.data?.application) {
+            setMentorApp(elRes.data.application)
+          }
+        } catch (_) {}
+
       } catch (err) {
         setError("Failed to load dashboard data. Please refresh.")
       } finally {
@@ -226,6 +237,60 @@ export default function DashboardPage() {
           onDismiss={() => setError("")}
           onRetry={() => window.location.reload()}
         />
+      )}
+
+      {/* ── Mentor Application Decision Feedback Banner ── */}
+      {mentorApp && (
+        <div className={`rounded-2xl p-4 border flex items-center justify-between gap-4 shadow-sm transition-all ${
+          mentorApp.status === "pending"
+            ? "bg-amber-50 border-amber-200 text-amber-900"
+            : mentorApp.status === "approved"
+            ? "bg-emerald-50 border-emerald-200 text-emerald-900"
+            : "bg-red-50 border-red-200 text-red-900"
+        }`}>
+          <div className="flex items-center gap-3">
+            <div className={`w-10 h-10 rounded-xl flex items-center justify-center shrink-0 ${
+              mentorApp.status === "pending"
+                ? "bg-amber-100 text-amber-600"
+                : mentorApp.status === "approved"
+                ? "bg-emerald-100 text-emerald-600"
+                : "bg-red-100 text-red-600"
+            }`}>
+              {mentorApp.status === "pending" ? (
+                <Clock size={20} />
+              ) : mentorApp.status === "approved" ? (
+                <ShieldCheck size={20} />
+              ) : (
+                <AlertCircle size={20} />
+              )}
+            </div>
+            <div>
+              <p className="font-heading text-sm font-bold">
+                {mentorApp.status === "pending"
+                  ? "Mentor Application Under Review"
+                  : mentorApp.status === "approved"
+                  ? "Mentor Application Approved!"
+                  : "Mentor Application Status"}
+              </p>
+              <p className="font-body text-xs opacity-80 mt-0.5">
+                {mentorApp.status === "pending"
+                  ? "Your credentials have been submitted to Admin. You currently have Student access while your application is under review."
+                  : mentorApp.status === "approved"
+                  ? "Congratulations! Admin has approved your application. You now have full Mentor access."
+                  : "Your mentor application was reviewed by Admin and declined at this time. You retain full Student access."}
+              </p>
+            </div>
+          </div>
+          <span className={`font-body text-xs font-bold px-3 py-1 rounded-xl uppercase shrink-0 ${
+            mentorApp.status === "pending"
+              ? "bg-amber-100 text-amber-800"
+              : mentorApp.status === "approved"
+              ? "bg-emerald-100 text-emerald-800"
+              : "bg-red-100 text-red-800"
+          }`}>
+            {mentorApp.status}
+          </span>
+        </div>
       )}
 
       {/* ── Stats Cards ── */}

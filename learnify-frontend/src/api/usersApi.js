@@ -35,10 +35,11 @@ export async function getMentorEligibility() {
     return response.data
 }
 
-export async function applyForMentor(qualifications, certifications) {
+export async function applyForMentor(qualifications, certifications, cv_url = "") {
     const response = await api.post("/users/apply-mentor", {
         qualifications,
-        certifications
+        certifications,
+        cv_url
     })
     return response.data
 }

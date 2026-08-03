@@ -16,24 +16,38 @@ from app.models.chat_message      import ChatSession, ChatMessage
 from app.models.feedback          import Feedback
 from flask_mail import Mail
 from app.models.resource_rating   import ResourceRating
+from app.models.password_reset    import PasswordReset
 
 load_dotenv()
 
+_schema_initialized = False
+
 def create_app(config_name="development"):
+    global _schema_initialized
     app = Flask(__name__)
     app.config.from_object(config[config_name])
 
-    app.config["MAIL_SERVER"]         = "smtp.gmail.com"
-    app.config["MAIL_PORT"]           = 587
-    app.config["MAIL_USE_TLS"]        = True
+    app.config["MAIL_SERVER"] = os.environ.get("MAIL_SERVER", "smtp.gmail.com")
+    port_env = os.environ.get("MAIL_PORT")
+    if port_env and port_env == "587":
+        app.config["MAIL_PORT"]     = 587
+        app.config["MAIL_USE_TLS"]  = True
+        app.config["MAIL_USE_SSL"]  = False
+    else:
+        # Port 465 SSL — compatible with Railway container networking
+        app.config["MAIL_PORT"]     = 465
+        app.config["MAIL_USE_TLS"]  = False
+        app.config["MAIL_USE_SSL"]  = True
     app.config["MAIL_USERNAME"]       = os.environ.get("MAIL_USERNAME")
     app.config["MAIL_PASSWORD"]       = os.environ.get("MAIL_PASSWORD")
-    app.config["MAIL_DEFAULT_SENDER"] = os.environ.get("MAIL_DEFAULT_SENDER")
+    
+    sender = os.environ.get("MAIL_DEFAULT_SENDER") or os.environ.get("MAIL_USERNAME")
+    app.config["MAIL_DEFAULT_SENDER"] = sender
 
     if not app.config["MAIL_USERNAME"]:
         print("⚠️  WARNING: MAIL_USERNAME not set — forgot password emails will fail")
-
-    mail.init_app(app)
+    if not app.config["MAIL_PASSWORD"]:
+        print("⚠️  WARNING: MAIL_PASSWORD not set — forgot password emails will fail")
 
     # Initialize extensions
     db.init_app(app)
@@ -49,46 +63,69 @@ def create_app(config_name="development"):
         allowed_origins = [url.strip().rstrip("/") for url in frontend_url_env.split(",") if url.strip()]
         
     cors.init_app(app,
-        resources={r"/api/*": {"origins": allowed_origins}},
+        resources={
+            r"/api/*":     {"origins": allowed_origins},
+            r"/uploads/*": {"origins": allowed_origins},
+        },
         supports_credentials=allowed_origins != "*",
         allow_headers=["Content-Type", "Authorization", "X-Refresh-Token",],
-        methods=["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"]
+        methods=["GET", "HEAD", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"]
     )
 
     # ── Auto-ensure database tables & columns exist ──────────
-    with app.app_context():
-        try:
-            db.create_all()
-        except Exception as e:
-            print(f"db.create_all() warning: {e}")
+    if not _schema_initialized:
+        _schema_initialized = True
+        with app.app_context():
+            try:
+                db.create_all()
+            except Exception as e:
+                print(f"db.create_all() warning: {e}")
 
-        try:
-            from sqlalchemy import text
-            db.session.execute(text(
-                "CREATE TABLE IF NOT EXISTS resource_ratings ("
-                "id INT AUTO_INCREMENT PRIMARY KEY, "
-                "resource_id INT NOT NULL, "
-                "user_id INT NOT NULL, "
-                "rating TINYINT NOT NULL CHECK (rating BETWEEN 1 AND 5), "
-                "created_at DATETIME DEFAULT CURRENT_TIMESTAMP, "
-                "UNIQUE KEY uq_resource_user (resource_id, user_id), "
-                "CONSTRAINT fk_rr_resource FOREIGN KEY (resource_id) REFERENCES resources(id) ON DELETE CASCADE, "
-                "CONSTRAINT fk_rr_user FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE"
-                ") ENGINE=InnoDB"
-            ))
-            db.session.commit()
-        except Exception as e:
-            db.session.rollback()
-            print(f"Auto DB setup warning (resource_ratings): {e}")
+            try:
+                from sqlalchemy import text
+                db.session.execute(text(
+                    "CREATE TABLE IF NOT EXISTS resource_ratings ("
+                    "id INT AUTO_INCREMENT PRIMARY KEY, "
+                    "resource_id INT NOT NULL, "
+                    "user_id INT NOT NULL, "
+                    "rating TINYINT NOT NULL CHECK (rating BETWEEN 1 AND 5), "
+                    "created_at DATETIME DEFAULT CURRENT_TIMESTAMP, "
+                    "UNIQUE KEY uq_resource_user (resource_id, user_id), "
+                    "CONSTRAINT fk_rr_resource FOREIGN KEY (resource_id) REFERENCES resources(id) ON DELETE CASCADE, "
+                    "CONSTRAINT fk_rr_user FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE"
+                    ") ENGINE=InnoDB"
+                ))
+                db.session.commit()
+            except Exception as e:
+                db.session.rollback()
+                print(f"Auto DB setup warning (resource_ratings): {e}")
 
-        try:
-            from sqlalchemy import text
-            db.session.execute(text(
-                "ALTER TABLE resources ADD COLUMN uploader_type ENUM('mentor', 'peer') NOT NULL DEFAULT 'mentor' AFTER uploader_id"
-            ))
-            db.session.commit()
-        except Exception:
-            db.session.rollback()
+            try:
+                from sqlalchemy import text
+                db.session.execute(text(
+                    "CREATE TABLE IF NOT EXISTS password_resets ("
+                    "id INT AUTO_INCREMENT PRIMARY KEY, "
+                    "user_id INT NOT NULL, "
+                    "token VARCHAR(255) NOT NULL UNIQUE, "
+                    "expires_at DATETIME NOT NULL, "
+                    "used TINYINT(1) NOT NULL DEFAULT 0, "
+                    "created_at DATETIME DEFAULT CURRENT_TIMESTAMP, "
+                    "CONSTRAINT fk_pr_user FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE"
+                    ") ENGINE=InnoDB"
+                ))
+                db.session.commit()
+            except Exception as e:
+                db.session.rollback()
+                print(f"Auto DB setup warning (password_resets): {e}")
+
+            try:
+                from sqlalchemy import text
+                db.session.execute(text(
+                    "ALTER TABLE resources ADD COLUMN uploader_type ENUM('mentor', 'peer') NOT NULL DEFAULT 'mentor' AFTER uploader_id"
+                ))
+                db.session.commit()
+            except Exception:
+                db.session.rollback()
 
     # ── Fix Google OAuth popup issue ──────────────────────
     @app.after_request
@@ -122,11 +159,39 @@ def create_app(config_name="development"):
 
     # ── Serve uploaded files ──────────────────────────────
     # This makes /uploads/filename.pdf accessible from browser
-    @app.route("/uploads/<path:filename>")
+    @app.route("/uploads/<path:filename>", methods=["GET", "HEAD", "OPTIONS"])
+    @app.route("/api/uploads/<path:filename>", methods=["GET", "HEAD", "OPTIONS"])
     def serve_file(filename):
+        # Handle CORS preflight
+        if request.method == "OPTIONS":
+            return "", 204
         upload_folder = app.config["UPLOAD_FOLDER"]
         as_attachment = request.args.get("download", "0") == "1"
-        return send_from_directory(upload_folder, filename, as_attachment=as_attachment)
+        download_name = request.args.get("name")
+
+        file_path = os.path.join(upload_folder, filename)
+        if not os.path.exists(file_path):
+            base_name = os.path.basename(filename)
+            ext = base_name.rsplit(".", 1)[-1].lower() if "." in base_name else ""
+            
+            # Check for sample file fallback matching extension
+            sample_candidates = [
+                f"sample.{ext}",
+                "sample.pdf" if ext in ["pdf", "doc", "docx"] else None,
+                "sample.pptx" if ext in ["ppt", "pptx"] else None,
+            ]
+            for candidate in sample_candidates:
+                if candidate and os.path.exists(os.path.join(upload_folder, candidate)):
+                    return send_from_directory(upload_folder, candidate, as_attachment=as_attachment, download_name=download_name or base_name)
+            
+            # Fallback to any file with matching extension in uploads folder
+            if os.path.exists(upload_folder):
+                existing_files = [f for f in os.listdir(upload_folder) if os.path.isfile(os.path.join(upload_folder, f))]
+                matching = next((f for f in existing_files if f.lower().endswith(f".{ext}")), None)
+                if matching:
+                    return send_from_directory(upload_folder, matching, as_attachment=as_attachment, download_name=download_name or base_name)
+
+        return send_from_directory(upload_folder, filename, as_attachment=as_attachment, download_name=download_name)
 
     # Register blueprints
     app.register_blueprint(auth.bp,          url_prefix="/api/auth")
