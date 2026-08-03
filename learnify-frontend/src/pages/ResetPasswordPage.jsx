@@ -1,15 +1,15 @@
 import { useState, useEffect } from "react"
 import { Link, useNavigate, useSearchParams } from "react-router-dom"
-import { Lock, Check, X }                     from "lucide-react"
+import { Lock, Check, X, Eye, EyeOff } from "lucide-react"
 import backgroundImage from "../assets/images/background.jpg"
-import api             from "../api/axiosInstance"
+import api from "../api/axiosInstance"
 
 function validatePassword(password) {
   return (
-    password.length >= 8       &&
-    /[A-Z]/.test(password)     &&
-    /[a-z]/.test(password)     &&
-    /[0-9]/.test(password)     &&
+    password.length >= 8 &&
+    /[A-Z]/.test(password) &&
+    /[a-z]/.test(password) &&
+    /[0-9]/.test(password) &&
     /[^A-Za-z0-9]/.test(password)
   )
 }
@@ -18,11 +18,11 @@ function PasswordCriteria({ password }) {
   if (!password) return null
 
   const criteria = [
-    { label: "At least 8 characters",          met: password.length >= 8          },
-    { label: "At least one uppercase (A–Z)",    met: /[A-Z]/.test(password)        },
-    { label: "At least one lowercase (a–z)",    met: /[a-z]/.test(password)        },
-    { label: "At least one number (0–9)",       met: /[0-9]/.test(password)        },
-    { label: "At least one special character",  met: /[^A-Za-z0-9]/.test(password) },
+    { label: "At least 8 characters", met: password.length >= 8 },
+    { label: "At least one uppercase (A–Z)", met: /[A-Z]/.test(password) },
+    { label: "At least one lowercase (a–z)", met: /[a-z]/.test(password) },
+    { label: "At least one number (0–9)", met: /[0-9]/.test(password) },
+    { label: "At least one special character", met: /[^A-Za-z0-9]/.test(password) },
   ]
 
   return (
@@ -34,7 +34,7 @@ function PasswordCriteria({ password }) {
             ${c.met ? "bg-green-500" : "bg-white/10 border border-white/20"}`}>
             {c.met
               ? <Check size={9} className="text-white" strokeWidth={3} />
-              : <X     size={9} className="text-white/30" strokeWidth={3} />
+              : <X size={9} className="text-white/30" strokeWidth={3} />
             }
           </div>
           <span className={`font-body text-[10px] transition-colors
@@ -48,15 +48,17 @@ function PasswordCriteria({ password }) {
 }
 
 function ResetPasswordPage() {
-  const navigate                        = useNavigate()
-  const [searchParams]                  = useSearchParams()
-  const token                           = searchParams.get("token")
+  const navigate = useNavigate()
+  const [searchParams] = useSearchParams()
+  const token = searchParams.get("token")
 
-  const [password, setPassword]         = useState("")
-  const [confirmPassword, setConfirm]   = useState("")
-  const [loading, setLoading]           = useState(false)
-  const [success, setSuccess]           = useState(false)
-  const [error, setError]               = useState("")
+  const [password, setPassword] = useState("")
+  const [confirmPassword, setConfirm] = useState("")
+  const [showPassword, setShowPassword] = useState(false)
+  const [showConfirmPassword, setShowConfirm] = useState(false)
+  const [loading, setLoading] = useState(false)
+  const [success, setSuccess] = useState(false)
+  const [error, setError] = useState("")
 
   // Redirect if no token in URL
   useEffect(() => {
@@ -155,18 +157,26 @@ function ResetPasswordPage() {
               <div>
                 <div className="relative">
                   <Lock size={15} className="absolute left-3 top-1/2
-                    -translate-y-1/2 text-[#B3CFE5]/50" />
+                      -translate-y-1/2 text-[#B3CFE5]/50" />
                   <input
-                    type="password"
+                    type={showPassword ? "text" : "password"}
                     placeholder="New Password"
                     value={password}
                     onChange={(e) => setPassword(e.target.value)}
-                    className="w-full pl-9 pr-3 py-3 bg-[#1A3D63]
-                      bg-opacity-60 text-white placeholder-[#B3CFE5]/50
-                      font-body text-sm rounded-lg border
-                      border-[#4A7FA7] border-opacity-40 focus:outline-none
-                      focus:border-[#4A7FA7] transition-colors"
+                    className="w-full pl-9 pr-11 py-3 bg-[#1A3D63]
+                    bg-opacity-60 text-white placeholder-[#B3CFE5]/50
+                    font-body text-sm rounded-lg border
+                    border-[#4A7FA7] border-opacity-40 focus:outline-none
+                    focus:border-[#4A7FA7] transition-colors"
                   />
+                  <button
+                    type="button"
+                    onClick={() => setShowPassword(!showPassword)}
+                    className="absolute right-3 top-1/2 -translate-y-1/2
+                    text-[#B3CFE5]/50 hover:text-[#B3CFE5] transition-colors"
+                  >
+                    {showPassword ? <EyeOff size={16} /> : <Eye size={16} />}
+                  </button>
                 </div>
                 {password && <PasswordCriteria password={password} />}
               </div>
@@ -175,22 +185,30 @@ function ResetPasswordPage() {
               <div>
                 <div className="relative">
                   <Lock size={15} className="absolute left-3 top-1/2
-                    -translate-y-1/2 text-[#B3CFE5]/50" />
+                  -translate-y-1/2 text-[#B3CFE5]/50" />
                   <input
-                    type="password"
+                    type={showConfirmPassword ? "text" : "password"}
                     placeholder="Confirm New Password"
                     value={confirmPassword}
                     onChange={(e) => setConfirm(e.target.value)}
-                    className={`w-full pl-9 pr-3 py-3 bg-[#1A3D63]
-                      bg-opacity-60 text-white placeholder-[#B3CFE5]/50
-                      font-body text-sm rounded-lg border
-                      focus:outline-none transition-colors
-                      ${confirmPassword && password === confirmPassword
+                    className={`w-full pl-9 pr-11 py-3 bg-[#1A3D63]
+                    bg-opacity-60 text-white placeholder-[#B3CFE5]/50
+                    font-body text-sm rounded-lg border
+                    focus:outline-none transition-colors
+                    ${confirmPassword && password === confirmPassword
                         ? "border-green-400"
                         : confirmPassword && password !== confirmPassword
-                        ? "border-red-400"
-                        : "border-[#4A7FA7] border-opacity-40 focus:border-[#4A7FA7]"}`}
+                          ? "border-red-400"
+                          : "border-[#4A7FA7] border-opacity-40 focus:border-[#4A7FA7]"}`}
                   />
+                  <button
+                    type="button"
+                    onClick={() => setShowConfirm(!showConfirmPassword)}
+                    className="absolute right-3 top-1/2 -translate-y-1/2
+                    text-[#B3CFE5]/50 hover:text-[#B3CFE5] transition-colors"
+                  >
+                    {showConfirmPassword ? <EyeOff size={16} /> : <Eye size={16} />}
+                  </button>
                 </div>
                 {confirmPassword && password === confirmPassword && (
                   <p className="font-body text-xs text-green-400 mt-1 ml-1">
