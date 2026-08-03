@@ -1,7 +1,7 @@
 import { useState } from "react"
 import { Link, useNavigate } from "react-router-dom"
 import backgroundImage from "../../assets/images/background.jpg"
-import { GraduationCap, Users, Check, X, Clock, Info, ArrowRight, Upload, FileText } from "lucide-react"
+import { GraduationCap, Users, Check, X, Clock, Info, ArrowRight, Upload, FileText, Eye, EyeOff } from "lucide-react"
 import { registerUser, googleAuth, uploadCV } from "../../api/authApi"
 import { useAuth } from "../../hooks/useAuth"
 import { useGoogleLogin } from "@react-oauth/google"
@@ -134,10 +134,12 @@ function RegisterPage() {
     password: "", confirmPassword: "", role: "",
     qualifications: "", certifications: "",
   })
-  const [loading, setLoading]   = useState(false)
-  const [gLoading, setGLoading] = useState(false)
-  const [errors, setErrors]     = useState({})
-  const [apiError, setApiError] = useState("")
+  const [loading, setLoading]               = useState(false)
+  const [gLoading, setGLoading]             = useState(false)
+  const [showPassword, setShowPassword]     = useState(false)
+  const [showConfirmPassword, setShowConfirmPassword] = useState(false)
+  const [errors, setErrors]                 = useState({})
+  const [apiError, setApiError]             = useState("")
 
   // Mentor registration notice modal & CV upload state
   const [showMentorNoticeModal, setShowMentorNoticeModal] = useState(false)
@@ -660,18 +662,27 @@ function RegisterPage() {
 
             {/* Password — with live criteria checker */}
             <div>
-              <input type="password" name="password"
-                placeholder="Password"
-                value={formData.password}
-                onChange={handleChange}
-                className={`w-full bg-[#1A3D63] bg-opacity-60 text-white
-                  placeholder-[#B3CFE5] font-body text-sm px-4 py-3
-                  rounded-lg border transition-colors focus:outline-none
-                  ${errors.password
-                    ? "border-red-400"
-                    : formData.password && validatePassword(formData.password)
-                    ? "border-green-400"
-                    : "border-[#4A7FA7] border-opacity-40 focus:border-[#4A7FA7]"}`} />
+              <div className="relative">
+                <input type={showPassword ? "text" : "password"} name="password"
+                  placeholder="Password"
+                  value={formData.password}
+                  onChange={handleChange}
+                  className={`w-full bg-[#1A3D63] bg-opacity-60 text-white
+                    placeholder-[#B3CFE5] font-body text-sm px-4 py-3 pr-10
+                    rounded-lg border transition-colors focus:outline-none
+                    ${errors.password
+                      ? "border-red-400"
+                      : formData.password && validatePassword(formData.password)
+                      ? "border-green-400"
+                      : "border-[#4A7FA7] border-opacity-40 focus:border-[#4A7FA7]"}`} />
+                <button
+                  type="button"
+                  onClick={() => setShowPassword(!showPassword)}
+                  className="absolute right-3 top-1/2 -translate-y-1/2 text-[#B3CFE5] hover:text-white transition-colors cursor-pointer bg-transparent border-none p-0 flex items-center justify-center"
+                >
+                  {showPassword ? <EyeOff size={18} /> : <Eye size={18} />}
+                </button>
+              </div>
 
               {/* Live password criteria — shows as user types */}
               {formData.password && (
@@ -688,12 +699,12 @@ function RegisterPage() {
             {/* Confirm Password */}
             <div>
               <div className="relative">
-                <input type="password" name="confirmPassword"
+                <input type={showConfirmPassword ? "text" : "password"} name="confirmPassword"
                   placeholder="Confirm Password"
                   value={formData.confirmPassword}
                   onChange={handleChange}
                   className={`w-full bg-[#1A3D63] bg-opacity-60 text-white
-                    placeholder-[#B3CFE5] font-body text-sm px-4 py-3
+                    placeholder-[#B3CFE5] font-body text-sm px-4 py-3 pr-16
                     rounded-lg border transition-colors focus:outline-none
                     ${errors.confirmPassword
                       ? "border-red-400"
@@ -701,15 +712,22 @@ function RegisterPage() {
                         formData.password === formData.confirmPassword
                       ? "border-green-400"
                       : "border-[#4A7FA7] border-opacity-40 focus:border-[#4A7FA7]"}`} />
-                {/* Match indicator */}
-                {formData.confirmPassword &&
-                 formData.password === formData.confirmPassword && (
-                  <div className="absolute right-3 top-1/2 -translate-y-1/2
-                    w-5 h-5 rounded-full bg-green-500 flex items-center
-                    justify-center">
-                    <Check size={11} className="text-white" strokeWidth={3} />
-                  </div>
-                )}
+                <div className="absolute right-3 top-1/2 -translate-y-1/2 flex items-center gap-2">
+                  {/* Match indicator */}
+                  {formData.confirmPassword &&
+                   formData.password === formData.confirmPassword && (
+                    <div className="w-5 h-5 rounded-full bg-green-500 flex items-center justify-center">
+                      <Check size={11} className="text-white" strokeWidth={3} />
+                    </div>
+                  )}
+                  <button
+                    type="button"
+                    onClick={() => setShowConfirmPassword(!showConfirmPassword)}
+                    className="text-[#B3CFE5] hover:text-white transition-colors cursor-pointer bg-transparent border-none p-0 flex items-center justify-center"
+                  >
+                    {showConfirmPassword ? <EyeOff size={18} /> : <Eye size={18} />}
+                  </button>
+                </div>
               </div>
               {errors.confirmPassword && (
                 <p className="font-body text-xs text-red-400 mt-1 ml-1">

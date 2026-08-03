@@ -1,7 +1,7 @@
 import { useState, useEffect } from "react"
 import {
   User, Mail, Phone, BookOpen, Briefcase,
-  Save, Trash2, AlertTriangle
+  Save, Trash2, AlertTriangle, Eye, EyeOff
 } from "lucide-react"
 import Button from "../../components/common/Button"
 import LoadingSpinner from "../../components/common/LoadingSpinner"
@@ -17,6 +17,10 @@ const MAX_BIO           = 300
 
 function InputField({ label, icon: Icon, type = "text", value,
   onChange, name, disabled, error, placeholder }) {
+  const [showPwd, setShowPwd] = useState(false)
+  const isPassword            = type === "password"
+  const actualType            = isPassword ? (showPwd ? "text" : "password") : type
+
   return (
     <div>
       <label className="font-body text-xs font-semibold text-slate-600 mb-1.5 block">
@@ -28,13 +32,13 @@ function InputField({ label, icon: Icon, type = "text", value,
             -translate-y-1/2 text-slate-400" />
         )}
         <input
-          type={type}
+          type={actualType}
           name={name}
           value={value || ""}
           onChange={onChange}
           disabled={disabled}
           placeholder={placeholder}
-          className={`w-full ${Icon ? "pl-10" : "pl-3.5"} pr-3.5 py-2.5
+          className={`w-full ${Icon ? "pl-10" : "pl-3.5"} ${isPassword ? "pr-10" : "pr-3.5"} py-2.5
             border rounded-xl font-body text-sm text-slate-800 shadow-xs
             focus:outline-none transition-all duration-200
             ${error
@@ -44,6 +48,15 @@ function InputField({ label, icon: Icon, type = "text", value,
               ? "bg-slate-100 text-slate-400 cursor-not-allowed border-slate-200/60"
               : ""}`}
         />
+        {isPassword && (
+          <button
+            type="button"
+            onClick={() => setShowPwd(!showPwd)}
+            className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 transition-colors cursor-pointer bg-transparent border-none p-0 flex items-center justify-center"
+          >
+            {showPwd ? <EyeOff size={16} /> : <Eye size={16} />}
+          </button>
+        )}
       </div>
       {error && (
         <p className="font-body text-[10px] text-red-500 font-semibold mt-1">
@@ -84,10 +97,11 @@ function MentorProfilePage() {
   const [activeTab, setActiveTab]       = useState("personal")
 
   // Delete account states
-  const [showDeleteModal, setShowDeleteModal] = useState(false)
-  const [deletePassword, setDeletePassword]   = useState("")
-  const [deletingAccount, setDeletingAccount] = useState(false)
-  const [deleteError, setDeleteError]         = useState("")
+  const [showDeleteModal, setShowDeleteModal]       = useState(false)
+  const [deletePassword, setDeletePassword]         = useState("")
+  const [showDeletePassword, setShowDeletePassword] = useState(false)
+  const [deletingAccount, setDeletingAccount]       = useState(false)
+  const [deleteError, setDeleteError]               = useState("")
 
   const hasChanges = JSON.stringify(formData) !== JSON.stringify(originalData)
 
@@ -552,15 +566,24 @@ function MentorProfilePage() {
                 text-gray-500 uppercase tracking-wider block mb-1">
                 Enter Your Password to Confirm
               </label>
-              <input
-                type="password"
-                value={deletePassword}
-                onChange={(e) => setDeletePassword(e.target.value)}
-                placeholder="Enter current password"
-                className="w-full bg-[#f2f1ed] text-gray-800 font-body
-                  text-xs px-4 py-3 rounded-2xl border-none
-                  focus:outline-none focus:ring-1 focus:ring-red-400"
-              />
+              <div className="relative">
+                <input
+                  type={showDeletePassword ? "text" : "password"}
+                  value={deletePassword}
+                  onChange={(e) => setDeletePassword(e.target.value)}
+                  placeholder="Enter current password"
+                  className="w-full bg-[#f2f1ed] text-gray-800 font-body
+                    text-xs px-4 py-3 pr-10 rounded-2xl border-none
+                    focus:outline-none focus:ring-1 focus:ring-red-400"
+                />
+                <button
+                  type="button"
+                  onClick={() => setShowDeletePassword(!showDeletePassword)}
+                  className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 transition-colors cursor-pointer bg-transparent border-none p-0 flex items-center justify-center"
+                >
+                  {showDeletePassword ? <EyeOff size={16} /> : <Eye size={16} />}
+                </button>
+              </div>
             </div>
 
             {deleteError && (

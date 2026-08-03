@@ -5,16 +5,18 @@ import { loginUser, googleAuth } from "../../api/authApi"
 import { useAuth } from "../../hooks/useAuth"
 import { useGoogleLogin } from "@react-oauth/google"
 import LoadingSpinner from "../../components/common/LoadingSpinner"
+import { Eye, EyeOff } from "lucide-react"
 
 function LoginPage() {
   const navigate  = useNavigate()
   const { login } = useAuth()
 
-  const [formData, setFormData] = useState({ email: "", password: "" })
-  const [loading, setLoading]   = useState(false)
-  const [gLoading, setGLoading] = useState(false)
-  const [errors, setErrors]     = useState({})  // field-level errors
-  const [apiError, setApiError] = useState("")  // backend error
+  const [formData, setFormData]         = useState({ email: "", password: "" })
+  const [showPassword, setShowPassword] = useState(false)
+  const [loading, setLoading]           = useState(false)
+  const [gLoading, setGLoading]         = useState(false)
+  const [errors, setErrors]             = useState({})  // field-level errors
+  const [apiError, setApiError]         = useState("")  // backend error
 
   function handleChange(e) {
     setFormData({ ...formData, [e.target.name]: e.target.value })
@@ -209,21 +211,30 @@ function LoginPage() {
 
             {/* Password Field */}
             <div>
-              <input
-                type="password"
-                name="password"
-                placeholder="Password"
-                value={formData.password}
-                onChange={handleChange}
-                className={`w-full bg-[#1A3D63] bg-opacity-60 text-white
-                  placeholder-[#B3CFE5] font-body text-sm px-4 py-3
-                  rounded-lg border transition-colors duration-200
-                  focus:outline-none
-                  ${errors.password
-                    ? "border-red-400"
-                    : "border-[#4A7FA7] border-opacity-40 focus:border-[#4A7FA7]"
-                  }`}
-              />
+              <div className="relative">
+                <input
+                  type={showPassword ? "text" : "password"}
+                  name="password"
+                  placeholder="Password"
+                  value={formData.password}
+                  onChange={handleChange}
+                  className={`w-full bg-[#1A3D63] bg-opacity-60 text-white
+                    placeholder-[#B3CFE5] font-body text-sm px-4 py-3 pr-10
+                    rounded-lg border transition-colors duration-200
+                    focus:outline-none
+                    ${errors.password
+                      ? "border-red-400"
+                      : "border-[#4A7FA7] border-opacity-40 focus:border-[#4A7FA7]"
+                    }`}
+                />
+                <button
+                  type="button"
+                  onClick={() => setShowPassword(!showPassword)}
+                  className="absolute right-3 top-1/2 -translate-y-1/2 text-[#B3CFE5] hover:text-white transition-colors cursor-pointer bg-transparent border-none p-0 flex items-center justify-center"
+                >
+                  {showPassword ? <EyeOff size={18} /> : <Eye size={18} />}
+                </button>
+              </div>
               {errors.password && (
                 <p className="font-body text-xs text-red-400 mt-1 ml-1">
                   {errors.password}
