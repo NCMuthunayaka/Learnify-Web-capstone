@@ -442,7 +442,7 @@ function MaterialPreviewModal({ resource, isOpen, onClose, onDownload }) {
   }
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-6 bg-black/60 backdrop-blur-sm animate-fadeIn">
+    <div className="fixed inset-0 z-[60] flex items-center justify-center p-3 sm:p-6 bg-black/60 backdrop-blur-sm animate-fadeIn">
       <div className="absolute inset-0" onClick={handleClose} />
 
       <div className="relative bg-white rounded-2xl shadow-2xl w-full max-w-5xl max-h-[92vh] flex flex-col z-10 overflow-hidden border border-slate-200">
@@ -474,17 +474,17 @@ function MaterialPreviewModal({ resource, isOpen, onClose, onDownload }) {
           </div>
           <div className="flex items-center gap-2 flex-shrink-0 ml-4">
             <button type="button" onClick={handleOpenTab}
-              className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-slate-700 bg-white border border-slate-200 rounded-lg hover:bg-slate-50 hover:text-[#1A3D63] transition-colors shadow-sm">
+              className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-slate-700 bg-white border border-slate-200 rounded-lg hover:bg-slate-50 hover:text-[#1A3D63] transition-colors shadow-sm cursor-pointer">
               <ExternalLink size={14} />
               <span className="hidden sm:inline">Open in Tab</span>
             </button>
             <button type="button" onClick={handleDownloadClick}
-              className="flex items-center gap-1.5 px-3.5 py-1.5 text-xs font-medium text-white bg-[#1A3D63] rounded-lg hover:bg-[#0A1931] transition-colors shadow-sm">
+              className="flex items-center gap-1.5 px-3.5 py-1.5 text-xs font-medium text-white bg-[#1A3D63] rounded-lg hover:bg-[#0A1931] transition-colors shadow-sm cursor-pointer border-none">
               <Download size={14} />
               <span className="hidden sm:inline">Download</span>
             </button>
             <button type="button" onClick={handleClose}
-              className="p-1.5 text-slate-400 hover:text-slate-700 hover:bg-slate-200/60 rounded-lg transition-colors ml-1">
+              className="p-1.5 text-slate-400 hover:text-slate-700 hover:bg-slate-200/60 rounded-lg transition-colors ml-1 cursor-pointer border-none bg-transparent">
               <X size={20} />
             </button>
           </div>
@@ -498,32 +498,38 @@ function MaterialPreviewModal({ resource, isOpen, onClose, onDownload }) {
         {/* Footer */}
         <div className="px-6 py-3 border-t border-slate-100 bg-slate-50/80 flex flex-wrap items-center justify-between gap-3 text-xs text-slate-500">
           <div className="flex items-center gap-4">
-            <span className="flex items-center gap-1.5">
-              <Eye size={13} className="text-slate-400" />
-              <span>{currentResource.view_count || 0} views</span>
-            </span>
-            <span className="flex items-center gap-1.5">
-              <Download size={13} className="text-slate-400" />
-              <span>{currentResource.download_count || 0} downloads</span>
-            </span>
-          </div>
-          <div className="flex items-center gap-2 bg-amber-50/80 border border-amber-200/80 px-3 py-1 rounded-xl">
-            <span className="text-xs font-semibold text-slate-700">Rate material:</span>
-            <StarRating
-              rating={currentResource.avg_rating || 0}
-              count={currentResource.rating_count || 0}
-              userRating={currentResource.user_rating}
-              interactive={true}
-              onRate={handleRate}
-              size={17}
-              showLabel={true}
-            />
-            {currentResource.user_rating && (
-              <span className="text-[10px] font-bold text-amber-700 bg-amber-100 px-1.5 py-0.5 rounded ml-1">
-                Your rating: {currentResource.user_rating}★
-              </span>
+            {!currentResource.is_cv && (
+              <>
+                <span className="flex items-center gap-1.5">
+                  <Eye size={13} className="text-slate-400" />
+                  <span>{currentResource.view_count || 0} views</span>
+                </span>
+                <span className="flex items-center gap-1.5">
+                  <Download size={13} className="text-slate-400" />
+                  <span>{currentResource.download_count || 0} downloads</span>
+                </span>
+              </>
             )}
           </div>
+          {!currentResource.is_cv && currentResource.id && (
+            <div className="flex items-center gap-2 bg-amber-50/80 border border-amber-200/80 px-3 py-1 rounded-xl">
+              <span className="text-xs font-semibold text-slate-700">Rate material:</span>
+              <StarRating
+                rating={currentResource.avg_rating || 0}
+                count={currentResource.rating_count || 0}
+                userRating={currentResource.user_rating}
+                interactive={true}
+                onRate={handleRate}
+                size={17}
+                showLabel={true}
+              />
+              {currentResource.user_rating && (
+                <span className="text-[10px] font-bold text-amber-700 bg-amber-100 px-1.5 py-0.5 rounded ml-1">
+                  Your rating: {currentResource.user_rating}★
+                </span>
+              )}
+            </div>
+          )}
           {currentResource.uploaded_at && formatDate(currentResource.uploaded_at) && (
             <span className="flex items-center gap-1 text-slate-400">
               <Calendar size={12} />

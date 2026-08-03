@@ -6,6 +6,7 @@ import {
   AlertTriangle, ArrowRight, Eye, X
 } from "lucide-react"
 import { getPendingApprovals, approveUser, rejectUser, getAdminStats } from "../../api/adminApi"
+import MaterialPreviewModal from "../../components/resources/MaterialPreviewModal"
 
 const AVATAR_COLORS = [
   "bg-blue-500", "bg-teal-500", "bg-purple-500", "bg-amber-500",
@@ -46,7 +47,7 @@ function timeAgo(isoString) {
 }
 
 // ── Candidate Detail Popup Modal (Matches user screenshot 1:1) ──
-function CandidateDetailModal({ candidate, onClose, onApprove, onReject, actioned }) {
+function CandidateDetailModal({ candidate, onClose, onApprove, onReject, actioned, onPreviewCv }) {
   if (!candidate) return null
 
   const isDone = actioned[candidate.id]
@@ -170,14 +171,13 @@ function CandidateDetailModal({ candidate, onClose, onApprove, onReject, actione
                       <FileText size={16} className="text-[#3b719f]" />
                       <span className="text-xs font-semibold text-slate-700">Submitted CV / Resume:</span>
                     </div>
-                    <a
-                      href={candidate.cv_url.startsWith("http") ? candidate.cv_url : `http://localhost:5000${candidate.cv_url}`}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="px-3 py-1.5 bg-emerald-50 hover:bg-emerald-100 text-emerald-700 border border-emerald-200 rounded-lg text-xs font-bold transition-all flex items-center gap-1.5 text-decoration-none"
+                    <button
+                      type="button"
+                      onClick={() => onPreviewCv(candidate)}
+                      className="px-3 py-1.5 bg-emerald-50 hover:bg-emerald-100 text-emerald-700 border border-emerald-200 rounded-lg text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer"
                     >
                       <Eye size={13} /> View CV Document
-                    </a>
+                    </button>
                   </div>
                 ) : (
                   <div className="pt-2 border-t border-slate-200/60">
@@ -288,6 +288,7 @@ export default function AdminApprovalsPage() {
   const [confirmModal, setConfirmModal]   = useState(null)
   const [actioned, setActioned]           = useState({})
   const [filterTab, setFilterTab]         = useState("all") // "all", "registration", "upgrade"
+  const [previewResource, setPreviewResource] = useState(null)
 
   const fetchApprovals = useCallback(() => {
     setLoading(true)
@@ -319,6 +320,17 @@ export default function AdminApprovalsPage() {
       setActionLoading(false)
       setConfirmModal(null)
     }
+  }
+
+  const handlePreviewCv = (candidate) => {
+    if (!candidate?.cv_url) return
+    setPreviewResource({
+      title: `${candidate.name} - CV Document`,
+      file_url: candidate.cv_url,
+      uploader_name: candidate.name,
+      uploaded_at: candidate.created_at,
+      is_cv: true,
+    })
   }
 
   const filteredUsers = users.filter(u => {
@@ -480,14 +492,16 @@ export default function AdminApprovalsPage() {
 
                     {/* View CV Quick Link */}
                     {u.cv_url && (
-                      <a
-                        href={u.cv_url.startsWith("http") ? u.cv_url : `http://localhost:5000${u.cv_url}`}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="px-2.5 py-1.5 bg-emerald-50 hover:bg-emerald-100 text-emerald-700 border border-emerald-200 rounded-xl font-body text-xs font-bold transition-all flex items-center gap-1 text-decoration-none hidden md:flex"
+                      <button
+                        type="button"
+                        onClick={(e) => {
+                          e.stopPropagation()
+                          handlePreviewCv(u)
+                        }}
+                        className="px-2.5 py-1.5 bg-emerald-50 hover:bg-emerald-100 text-emerald-700 border border-emerald-200 rounded-xl font-body text-xs font-bold transition-all flex items-center gap-1 cursor-pointer hidden md:flex"
                       >
                         <FileText size={13} /> View CV
-                      </a>
+                      </button>
                     )}
 
                     {done ? (
@@ -532,6 +546,7 @@ export default function AdminApprovalsPage() {
         <CandidateDetailModal
           candidate={selectedCandidate}
           onClose={() => setSelectedCandidate(null)}
+          onPreviewCv={handlePreviewCv}
           onApprove={c => {
             setSelectedCandidate(null)
             setConfirmModal({ action: "approve", userId: c.id, name: c.name })
@@ -554,6 +569,13 @@ export default function AdminApprovalsPage() {
           onClose={() => setConfirmModal(null)}
         />
       )}
+
+      {/* Material Preview Modal for CV viewing */}
+      <MaterialPreviewModal
+        resource={previewResource}
+        isOpen={!!previewResource}
+        onClose={() => setPreviewResource(null)}
+      />
 
     </div>
   )
