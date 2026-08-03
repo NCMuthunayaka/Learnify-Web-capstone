@@ -239,7 +239,7 @@ function RegisterPage() {
   async function executeRegister() {
     try {
       setLoading(true)
-      setShowMentorNoticeModal(false)
+      setApiError("")
       
       let uploadedCvUrl = null
       if (formData.role === "mentor" && cvFile) {
@@ -261,20 +261,31 @@ function RegisterPage() {
         formData.certifications,
         uploadedCvUrl
       )
-      const { user, access_token, refresh_token } = response.data
-      login(user, access_token, refresh_token)
 
-      // Direct mentor applicants to student dashboard /dashboard initially while application is pending
-      const targetRoute = (user?.role === "mentor" || formData.role === "mentor")
-        ? "/dashboard"
-        : user?.role === "admin"
-        ? "/admin/dashboard"
-        : "/dashboard"
+      const payload = response?.data || response
+      const user = payload?.user
+      const access_token = payload?.access_token
+      const refresh_token = payload?.refresh_token
 
-      navigate(targetRoute, { replace: true })
+      if (user && access_token) {
+        setShowMentorNoticeModal(false)
+        login(user, access_token, refresh_token)
+
+        // Direct mentor applicants to student dashboard /dashboard initially while application is pending
+        const targetRoute = (user?.role === "mentor" || formData.role === "mentor")
+          ? "/dashboard"
+          : user?.role === "admin"
+          ? "/admin/dashboard"
+          : "/dashboard"
+
+        navigate(targetRoute, { replace: true })
+      } else {
+        setApiError("Registration response was invalid. Please try again.")
+      }
     } catch (err) {
+      console.error("Registration submit error:", err)
       setApiError(
-        err.response?.data?.error?.message || "Registration failed. Please try again."
+        err.response?.data?.error?.message || err.response?.data?.message || err.message || "Registration failed. Please try again."
       )
     } finally {
       setLoading(false)
@@ -890,6 +901,13 @@ function RegisterPage() {
                 Your submitted credentials (qualifications and certifications) will be reviewed by an administrator. Once approved by an admin, your account access will be upgraded to <strong className="text-white font-semibold">Mentor access</strong>.
               </p>
             </div>
+
+            {/* Modal API Error */}
+            {apiError && (
+              <div className="bg-red-500/20 border border-red-500/40 rounded-xl p-3 text-xs text-red-300 font-body">
+                {apiError}
+              </div>
+            )}
 
             {/* Modal Action Buttons */}
             <div className="flex items-center gap-3 pt-2">

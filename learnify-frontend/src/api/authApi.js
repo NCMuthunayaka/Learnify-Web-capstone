@@ -30,9 +30,7 @@ export async function registerUser(name, email, password, role, qualifications =
 export async function uploadCV(file) {
     const formData = new FormData()
     formData.append("cv", file)
-    const response = await api.post("/auth/upload-cv", formData, {
-        headers: { "Content-Type": "multipart/form-data" }
-    })
+    const response = await api.post("/auth/upload-cv", formData)
     return response.data
 }
 
