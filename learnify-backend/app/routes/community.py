@@ -788,10 +788,53 @@ def send_direct_message(thread_id):
         except Exception as notif_err:
             print(f"Error creating notification: {notif_err}")
 
-        return success_response(message="Message sent successfully", data={"message_id": msg_id}, status=201)
+        return success_response(message="Message sent successfully")
     except Exception as e:
-        db.session.rollback()
         return error_response("SEND_DIRECT_MESSAGE_ERROR", str(e), status=500)
+
+# PATCH /api/community/direct/<id>/status
+@bp.route("/direct/<int:thread_id>/status", methods=["PATCH", "POST"])
+@jwt_required()
+def update_direct_thread_status(thread_id):
+    user_id = int(get_jwt_identity())
+    claims = get_jwt()
+    role = claims.get("role", "student")
+
+    data = request.get_json(silent=True) or {}
+    new_status = data.get("status")
+    if new_status not in ["pending", "in_progress", "accepted", "resolved", "declined"]:
+        return error_response("INVALID_STATUS", "Invalid status value", status=400)
+
+    try:
+        thread_row = db.session.execute(text("""
+            SELECT id, sender_id, recipient_id, status FROM direct_requests WHERE id = :tid
+        """), {"tid": thread_id}).fetchone()
+
+        if not thread_row:
+            return error_response("NOT_FOUND", "Direct request thread not found", status=404)
+
+        if user_id != thread_row[1] and user_id != thread_row[2]:
+            return error_response("FORBIDDEN", "Permission denied", status=403)
+
+        mapped_status = "in_progress" if new_status in ["accepted", "in_progress"] else new_status
+
+        db.session.execute(text("""
+            UPDATE direct_requests SET status = :st WHERE id = :tid
+        """), {"st": mapped_status, "tid": thread_id})
+
+        # Award Mentor Points if resolved by mentor
+        if new_status == "resolved" and role in ["mentor", "admin"]:
+            try:
+                db.session.execute(text("""
+                    UPDATE users SET peer_assistance_count = peer_assistance_count + 1, total_points = total_points + 10 WHERE id = :uid
+                """), {"uid": user_id})
+            except Exception as pt_err:
+                print(f"Points update note: {pt_err}")
+
+        db.session.commit()
+        return success_response(message=f"Request marked as {mapped_status}")
+    except Exception as e:
+        return error_response("UPDATE_STATUS_ERROR", str(e), status=500)
 
 # POST /api/community/direct/escalate ("Continue Privately")
 @bp.route("/direct/escalate", methods=["POST"])

@@ -11,7 +11,7 @@ import Button from "../components/common/Button"
 import Modal from "../components/common/Modal"
 import { 
   getCommunitySummary, getPublicRequests, createPublicRequest, createPublicReply, acceptPublicReply,
-  getDirectRequests, createDirectRequest, getDirectThread, sendDirectMessage, escalateToDirect,
+  getDirectRequests, createDirectRequest, getDirectThread, sendDirectMessage, updateDirectStatus, escalateToDirect,
   votePublicRequest, votePublicReply
 } from "../api/communityApi"
 import { getSubjects, createSubject } from "../api/subjectsApi"
@@ -204,7 +204,7 @@ function CommunityPage() {
   const handleAcceptDirectTicket = async (threadId) => {
     try {
       setTicketActionLoading(true)
-      await acceptRequest(threadId)
+      await updateDirectStatus(threadId, "in_progress")
       fetchDirectFeed()
       if (activeDirectThread) {
         setActiveDirectThread(prev => ({ ...prev, status: "in_progress" }))
@@ -220,7 +220,7 @@ function CommunityPage() {
     if (!window.confirm("Are you sure you want to decline this request?")) return
     try {
       setTicketActionLoading(true)
-      await declineRequest(threadId)
+      await updateDirectStatus(threadId, "declined")
       fetchDirectFeed()
       if (activeDirectThread?.id === threadId) {
         setActiveDirectThread(null)
@@ -235,7 +235,7 @@ function CommunityPage() {
   const handleResolveDirectTicket = async (threadId) => {
     try {
       setTicketActionLoading(true)
-      await resolveRequest(threadId)
+      await updateDirectStatus(threadId, "resolved")
       fetchDirectFeed()
       if (activeDirectThread) {
         setActiveDirectThread(prev => ({ ...prev, status: "resolved" }))

@@ -48,6 +48,11 @@ export async function sendDirectMessage(threadId, messageData) {
   return response.data
 }
 
+export async function updateDirectStatus(threadId, status) {
+  const response = await api.patch(`/community/direct/${threadId}/status`, { status })
+  return response.data
+}
+
 export async function escalateToDirect(publicRequestId, publicReplyId) {
   const response = await api.post("/community/direct/escalate", {
     public_request_id: publicRequestId,
