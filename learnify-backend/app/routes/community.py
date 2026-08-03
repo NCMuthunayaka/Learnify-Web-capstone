@@ -38,7 +38,7 @@ def ensure_community_tables():
                 recipient_id INT NOT NULL,
                 subject VARCHAR(255) NOT NULL,
                 initial_message TEXT NOT NULL,
-                status ENUM('pending', 'in_progress', 'resolved') DEFAULT 'pending',
+                status ENUM('pending', 'in_progress', 'resolved', 'declined') DEFAULT 'pending',
                 origin_public_request_id INT NULL,
                 origin_public_reply_id INT NULL,
                 created_at DATETIME DEFAULT CURRENT_TIMESTAMP
@@ -90,6 +90,16 @@ def ensure_community_tables():
 
         try:
             db.session.execute(text("ALTER TABLE public_replies ADD COLUMN is_accepted TINYINT(1) DEFAULT 0"))
+            db.session.commit()
+        except Exception:
+            db.session.rollback()
+
+        # Expand direct_requests status ENUM to include 'declined' if not already present
+        try:
+            db.session.execute(text(
+                "ALTER TABLE direct_requests MODIFY COLUMN status "
+                "ENUM('pending', 'in_progress', 'resolved', 'declined') DEFAULT 'pending'"
+            ))
             db.session.commit()
         except Exception:
             db.session.rollback()

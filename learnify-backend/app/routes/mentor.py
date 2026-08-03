@@ -94,10 +94,13 @@ def ensure_mentor_profile(user_id: int):
             )
             db.session.commit()
 
-# Helper to check mentor or admin permission against DB
+# Helper to check mentor or admin permission against DB (uses raw SQL — no ORM import needed)
 def check_mentor_permission(user_id: int):
-    user = User.query.get(user_id)
-    if not user or user.role not in ["mentor", "admin"]:
+    row = db.session.execute(
+        text("SELECT role FROM users WHERE id = :uid"),
+        {"uid": user_id}
+    ).fetchone()
+    if not row or row[0] not in ["mentor", "admin"]:
         return error_response("FORBIDDEN", "Mentor access required", status=403)
     return None
 
@@ -202,93 +205,139 @@ def get_dashboard_stats():
             max_requests = avail_rows[0][3]
 
         # 3. Calculate Ticket Counts (Open vs Resolved) & Dynamic Metrics
+        try:
+            from app.routes.community import ensure_community_tables
+            ensure_community_tables()
+        except Exception:
+            pass
+
         open_count = db.session.execute(
             text(
-                "SELECT COUNT(*) FROM help_requests "
-                "WHERE (assigned_to = :uid OR (assigned_to IS NULL AND status = 'pending')) "
-                "AND status != 'resolved'"
+                "SELECT ("
+                "  SELECT COUNT(*) FROM help_requests "
+                "  WHERE (assigned_to = :uid OR (assigned_to IS NULL AND status = 'pending')) "
+                "  AND status != 'resolved'"
+                ") + ("
+                "  SELECT COUNT(*) FROM direct_requests "
+                "  WHERE (recipient_id = :uid OR sender_id = :uid) "
+                "  AND status NOT IN ('resolved', 'declined')"
+                ")"
             ),
             {"uid": user_id}
         ).scalar() or 0
 
         resolved_count = db.session.execute(
             text(
-                "SELECT COUNT(*) FROM help_requests "
-                "WHERE assigned_to = :uid AND status = 'resolved'"
+                "SELECT ("
+                "  SELECT COUNT(*) FROM help_requests "
+                "  WHERE assigned_to = :uid AND status = 'resolved'"
+                ") + ("
+                "  SELECT COUNT(*) FROM direct_requests "
+                "  WHERE (recipient_id = :uid OR sender_id = :uid) AND status = 'resolved'"
+                ")"
             ),
             {"uid": user_id}
         ).scalar() or 0
 
-        # Dynamic total students helped (distinct students served)
+        # Dynamic total students helped (distinct students across help_requests, direct_requests, escalated threads & public_replies)
         total_students_helped_count = db.session.execute(
             text(
-                "SELECT COUNT(DISTINCT student_id) FROM help_requests "
-                "WHERE assigned_to = :uid AND status = 'resolved'"
+                "SELECT COUNT(DISTINCT student_id) FROM ("
+                "  SELECT student_id FROM help_requests WHERE assigned_to = :uid "
+                "  UNION "
+                "  SELECT sender_id AS student_id FROM direct_requests WHERE recipient_id = :uid "
+                "  UNION "
+                "  SELECT recipient_id AS student_id FROM direct_requests WHERE sender_id = :uid "
+                "  UNION "
+                "  SELECT pr.requester_id AS student_id FROM public_replies prep JOIN public_requests pr ON prep.request_id = pr.id WHERE prep.author_id = :uid "
+                ") AS helped_students"
             ),
             {"uid": user_id}
         ).scalar() or 0
 
-        # Dynamic average response time in minutes
+        # Dynamic average response time in minutes across direct_messages & help_responses
+        # Includes both threads where mentor is recipient AND threads where mentor escalated (sender)
         avg_resp_row = db.session.execute(
             text(
-                "SELECT AVG(TIMESTAMPDIFF(MINUTE, created_at, updated_at)) FROM help_requests "
-                "WHERE assigned_to = :uid AND status IN ('accepted', 'in_progress', 'resolved')"
+                "SELECT AVG(diff_min) FROM ("
+                "  SELECT TIMESTAMPDIFF(MINUTE, dr.created_at, MIN(dm.created_at)) AS diff_min "
+                "  FROM direct_requests dr "
+                "  JOIN direct_messages dm ON dm.request_id = dr.id "
+                "  WHERE dr.recipient_id = :uid AND dm.sender_id = :uid "
+                "  GROUP BY dr.id "
+                "  UNION ALL "
+                "  SELECT TIMESTAMPDIFF(MINUTE, dr.created_at, MIN(dm.created_at)) AS diff_min "
+                "  FROM direct_requests dr "
+                "  JOIN direct_messages dm ON dm.request_id = dr.id "
+                "  WHERE dr.sender_id = :uid AND dm.sender_id = :uid "
+                "  GROUP BY dr.id "
+                "  UNION ALL "
+                "  SELECT TIMESTAMPDIFF(MINUTE, hr.created_at, MIN(hrsp.created_at)) AS diff_min "
+                "  FROM help_requests hr "
+                "  JOIN help_responses hrsp ON hrsp.request_id = hr.id "
+                "  WHERE hr.assigned_to = :uid AND hrsp.responder_id = :uid "
+                "  GROUP BY hr.id "
+                ") AS resp_times"
             ),
             {"uid": user_id}
         ).scalar()
-        avg_resp_min = round(float(avg_resp_row)) if avg_resp_row is not None else 0
+        avg_resp_min = round(float(avg_resp_row)) if avg_resp_row is not None and float(avg_resp_row) > 0 else 0
 
         # Override profile_data with live dynamic calculations
         profile_data["total_students_helped"] = total_students_helped_count
         profile_data["avg_response_time_min"] = avg_resp_min
 
-        # 4. Fetch Active Today's Sessions (accepted or in_progress assigned to mentor)
+        # 4. Fetch Active Today's Sessions / Direct Requests (accepted or in_progress assigned to mentor)
         session_rows = db.session.execute(
             text(
-                "SELECT hr.id, u.name, hr.topic_title, s.name AS subject_name, "
-                "hr.priority, hr.status, hr.created_at "
-                "FROM help_requests hr "
-                "JOIN users u ON hr.student_id = u.id "
-                "JOIN subjects s ON hr.subject_id = s.id "
-                "WHERE hr.assigned_to = :uid AND hr.status IN ('accepted', 'in_progress') "
-                "ORDER BY hr.created_at ASC LIMIT 4"
+                "SELECT id, name, subject_name, desc_text, status, created_at FROM ("
+                "  SELECT dr.id, u.name, dr.subject AS subject_name, dr.initial_message AS desc_text, dr.status, dr.created_at "
+                "  FROM direct_requests dr JOIN users u ON dr.sender_id = u.id "
+                "  WHERE dr.recipient_id = :uid AND dr.status IN ('pending', 'in_progress') "
+                "  UNION ALL "
+                "  SELECT dr.id, u.name, dr.subject AS subject_name, dr.initial_message AS desc_text, dr.status, dr.created_at "
+                "  FROM direct_requests dr JOIN users u ON dr.recipient_id = u.id "
+                "  WHERE dr.sender_id = :uid AND dr.status IN ('pending', 'in_progress') "
+                "  UNION ALL "
+                "  SELECT hr.id, u.name, s.name AS subject_name, hr.topic_title AS desc_text, hr.status, hr.created_at "
+                "  FROM help_requests hr JOIN users u ON hr.student_id = u.id JOIN subjects s ON hr.subject_id = s.id "
+                "  WHERE hr.assigned_to = :uid AND hr.status IN ('accepted', 'in_progress') "
+                ") AS combined_sessions ORDER BY created_at DESC LIMIT 4"
             ),
             {"uid": user_id}
         ).fetchall()
 
         sessions = []
-        # Generate clean mock times today for UI display
         mock_times = ["9:00 - 9:45 AM", "11:00 - 11:30 AM", "2:00 - 2:45 PM", "4:00 - 4:30 PM"]
         for idx, row in enumerate(session_rows):
             name = row[1]
             initials = "".join([part[0] for part in name.split()]).upper()[:2]
             
-            # Map status database format to UI capital case
-            ui_status = "In Progress" if row[5] == "in_progress" else "Upcoming"
-            status_color = "bg-green-500 text-green-600 border-green-100 bg-green-50/30" if row[5] == "in_progress" else "bg-blue-500 text-blue-600 border-blue-100 bg-blue-50/30"
+            ui_status = "In Progress" if row[4] in ("in_progress", "accepted") else "Pending"
+            status_color = "bg-green-500 text-green-600 border-green-100 bg-green-50/30" if row[4] in ("in_progress", "accepted") else "bg-amber-500 text-amber-600 border-amber-100 bg-amber-50/30"
 
             sessions.append({
                 "id": row[0],
                 "time": mock_times[idx % len(mock_times)],
                 "initials": initials,
                 "name": name,
-                "subject": row[3],
-                "desc": row[2],
+                "subject": row[2],
+                "desc": row[3],
                 "status": ui_status,
                 "statusColor": status_color,
-                "btnText": "Join" if row[5] == "in_progress" else "Prepare",
-                "btnPrimary": row[5] == "in_progress",
-                "priority": row[4].capitalize()
+                "btnText": "Join" if row[4] in ("in_progress", "accepted") else "Review",
+                "btnPrimary": row[4] in ("in_progress", "accepted"),
+                "priority": "High"
             })
 
-        # 5. Performance by Subject (Calculated based on resolved tickets or default fallback if 0)
+        # 5. Performance by Subject (from help_requests & direct_requests)
         perf_rows = db.session.execute(
             text(
-                "SELECT s.name, COUNT(hr.id) "
-                "FROM help_requests hr "
-                "JOIN subjects s ON hr.subject_id = s.id "
-                "WHERE hr.assigned_to = :uid AND hr.status = 'resolved' "
-                "GROUP BY s.name"
+                "SELECT subject_name, COUNT(*) FROM ("
+                "  SELECT s.name AS subject_name FROM help_requests hr JOIN subjects s ON hr.subject_id = s.id WHERE hr.assigned_to = :uid AND hr.status = 'resolved' "
+                "  UNION ALL "
+                "  SELECT subject AS subject_name FROM direct_requests WHERE (recipient_id = :uid OR sender_id = :uid) AND status = 'resolved' "
+                ") AS all_resolved GROUP BY subject_name"
             ),
             {"uid": user_id}
         ).fetchall()
