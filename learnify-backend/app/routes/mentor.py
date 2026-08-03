@@ -431,61 +431,6 @@ def get_dashboard_stats():
         user_email = (user_row[0] or "").lower() if user_row else ""
 
         if user_email == "ncmuthunayaka@gmail.com":
-            sessions = [
-                {
-                    "id": 901,
-                    "time": "09:00 - 09:45 AM",
-                    "initials": "AR",
-                    "name": "Alex Rivera (Student ID: #ST-8041)",
-                    "subject": "Data Structures & Algorithms",
-                    "desc": "Guidance on Binary Search Tree Balancing & AVL Rotations",
-                    "status": "In Progress",
-                    "statusColor": "bg-green-500 text-green-600 border-green-100 bg-green-50/30",
-                    "btnText": "Join Session",
-                    "btnPrimary": True,
-                    "priority": "Urgent"
-                },
-                {
-                    "id": 902,
-                    "time": "11:00 - 11:30 AM",
-                    "initials": "ER",
-                    "name": "Elena Rostova (Student ID: #ST-8042)",
-                    "subject": "Web Development",
-                    "desc": "Question on React UseEffect Clean-up Functions & AbortController",
-                    "status": "Upcoming",
-                    "statusColor": "bg-blue-500 text-blue-600 border-blue-100 bg-blue-50/30",
-                    "btnText": "Prepare",
-                    "btnPrimary": False,
-                    "priority": "High"
-                },
-                {
-                    "id": 903,
-                    "time": "02:00 - 02:45 PM",
-                    "initials": "DK",
-                    "name": "David Kaelen (Student ID: #ST-8043)",
-                    "subject": "Database Management Systems",
-                    "desc": "Database Normalization (3NF vs BCNF) Schema Examples",
-                    "status": "Upcoming",
-                    "statusColor": "bg-blue-500 text-blue-600 border-blue-100 bg-blue-50/30",
-                    "btnText": "Prepare",
-                    "btnPrimary": False,
-                    "priority": "Normal"
-                },
-                {
-                    "id": 904,
-                    "time": "04:00 - 04:30 PM",
-                    "initials": "SC",
-                    "name": "Sophia Chen (Student ID: #ST-8044)",
-                    "subject": "Network Security",
-                    "desc": "Asymmetric Encryption & RSA Key Pair Generation Walkthrough",
-                    "status": "Upcoming",
-                    "statusColor": "bg-blue-500 text-blue-600 border-blue-100 bg-blue-50/30",
-                    "btnText": "Prepare",
-                    "btnPrimary": False,
-                    "priority": "High"
-                }
-            ]
-
             if not performance:
                 performance = [
                     {"name": "Data Structures", "value": 45, "bg": "bg-blue-500"},

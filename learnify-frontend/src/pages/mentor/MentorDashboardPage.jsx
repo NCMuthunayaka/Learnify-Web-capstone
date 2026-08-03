@@ -816,132 +816,52 @@ export default function MentorDashboardPage() {
         </div>
       </div>
 
-      {/* ── 4. Today's Sessions & Performance ── */}
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+      {/* ── 4. Subject Performance Breakdown ── */}
+      <div className="bg-white rounded-2xl p-6 border border-gray-100 shadow-sm flex flex-col justify-between">
+        <div>
+          <div className="flex items-center justify-between border-b border-gray-50 pb-4 mb-5">
+            <h3 className="font-heading text-base font-bold text-[#0A1931]">
+              Subject Breakdown
+            </h3>
+            <BarChart4 size={18} className="text-[#4A7FA7]" />
+          </div>
 
-        {/* Sessions list */}
-        <div className="lg:col-span-2 bg-white rounded-2xl p-6 border border-gray-100 shadow-sm flex flex-col justify-between">
-          <div>
-            <div className="flex items-center justify-between border-b border-gray-50 pb-4 mb-5">
-              <div className="flex items-center gap-2">
-                <h3 className="font-heading text-base font-bold text-[#0A1931]">
-                  Active Sessions
-                </h3>
-                <span className="font-body text-xs font-semibold bg-[#EBF3F9] text-[#1A3D63] px-2.5 py-0.5 rounded-lg border border-[#D5E6F2]">
-                  {sessions.length} today
-                </span>
-              </div>
-              <button
-                onClick={() => setShowAllSessions(true)}
-                className="font-body text-xs font-bold text-[#4A7FA7] hover:text-[#1A3D63] hover:underline flex items-center gap-1 transition-colors"
-              >
-                View all <ArrowRight size={13} />
-              </button>
-            </div>
-
-            <div className="space-y-3">
-              {sessions.length === 0 ? (
-                <p className="font-body text-xs text-gray-400 italic py-4">No active mentoring sessions today</p>
-              ) : (
-                sessions.map((sess, idx) => (
-                  <div key={idx} className="flex flex-col sm:flex-row sm:items-center justify-between p-4 border border-gray-50 rounded-xl hover:bg-gray-50/50 transition-all duration-200 gap-4">
-                    <div className="flex items-center gap-3">
-                      <span className="w-24 font-body text-xs font-semibold text-gray-500">
-                        {sess.time}
-                      </span>
-                      <div className="w-9 h-9 rounded-full bg-slate-100 text-[#1A3D63] font-bold flex items-center justify-center text-xs font-heading">
-                        {sess.initials}
-                      </div>
-                      <div>
-                        <h4 className="font-heading text-sm font-bold text-[#0A1931]">
-                          {sess.name}
-                        </h4>
-                        <p className="font-body text-xs text-gray-400 mt-0.5">
-                          <span className="font-semibold text-gray-500">{sess.subject}</span> — {sess.desc}
-                        </p>
-                      </div>
-                    </div>
-
-                    <div className="flex items-center gap-3 justify-end sm:justify-start">
-                      <span className={`px-2.5 py-1 rounded-lg border font-body text-[10px] font-bold flex items-center gap-1.5 ${sess.statusColor}`}>
-                        <span className={`w-1.5 h-1.5 rounded-full ${
-                          sess.status === "In Progress" ? "bg-green-500 animate-pulse" : "bg-blue-500"
-                        }`} />
-                        {sess.status}
-                      </span>
-
-                      {sess.btnPrimary ? (
-                        <button
-                          onClick={() => setActiveSession(sess)}
-                          className="bg-[#0A1931] hover:bg-[#1A3D63] text-white px-4 py-1.5 rounded-xl font-body text-xs font-semibold shadow-sm transition-colors flex items-center gap-1"
-                        >
-                          <Play size={12} className="fill-white" />
-                          {sess.btnText}
-                        </button>
-                      ) : (
-                        <button
-                          onClick={() => setPrepSession(sess)}
-                          className="border border-[#4A7FA7] text-[#4A7FA7] hover:bg-[#F6FAFD] px-4 py-1.5 rounded-xl font-body text-xs font-semibold transition-colors"
-                        >
-                          {sess.btnText}
-                        </button>
-                      )}
-                    </div>
+          <div className="space-y-4">
+            {performance.length === 0 ? (
+              <p className="font-body text-xs text-gray-400 italic py-4">No resolved requests to show breakdown</p>
+            ) : (
+              performance.map((subject, idx) => (
+                <div key={idx} className="space-y-1.5">
+                  <div className="flex justify-between text-xs font-body font-bold text-gray-700">
+                    <span>{subject.name}</span>
+                    <span>{subject.value}%</span>
                   </div>
-                ))
-              )}
-            </div>
+                  <div className="w-full bg-gray-100 h-2 rounded-full overflow-hidden">
+                    <div
+                      className={`h-full rounded-full transition-all duration-500 ${subject.bg}`}
+                      style={{ width: `${subject.value}%` }}
+                    />
+                  </div>
+                </div>
+              ))
+            )}
           </div>
         </div>
 
-        {/* Performance by Subject */}
-        <div className="bg-white rounded-2xl p-6 border border-gray-100 shadow-sm flex flex-col justify-between">
-          <div>
-            <div className="flex items-center justify-between border-b border-gray-50 pb-4 mb-5">
-              <h3 className="font-heading text-base font-bold text-[#0A1931]">
-                Subject Breakdown
-              </h3>
-              <BarChart4 size={18} className="text-[#4A7FA7]" />
-            </div>
-
-            <div className="space-y-4">
-              {performance.length === 0 ? (
-                <p className="font-body text-xs text-gray-400 italic py-4">No resolved requests to show breakdown</p>
-              ) : (
-                performance.map((subject, idx) => (
-                  <div key={idx} className="space-y-1.5">
-                    <div className="flex justify-between text-xs font-body font-bold text-gray-700">
-                      <span>{subject.name}</span>
-                      <span>{subject.value}%</span>
-                    </div>
-                    <div className="w-full bg-gray-100 h-2 rounded-full overflow-hidden">
-                      <div
-                        className={`h-full rounded-full transition-all duration-500 ${subject.bg}`}
-                        style={{ width: `${subject.value}%` }}
-                      />
-                    </div>
-                  </div>
-                ))
-              )}
-            </div>
+        <div className="flex justify-between border-t border-gray-50 pt-5 mt-6 font-body">
+          <div className="text-left">
+            <span className="text-[10px] text-gray-400 uppercase tracking-wider font-semibold block">Satisfaction</span>
+            <span className="font-heading text-lg font-bold text-[#0A1931] mt-0.5 block">
+              {stats.rating} <span className="text-xs text-gray-400 font-normal">/ 5.0</span>
+            </span>
           </div>
-
-          <div className="flex justify-between border-t border-gray-50 pt-5 mt-6 font-body">
-            <div className="text-left">
-              <span className="text-[10px] text-gray-400 uppercase tracking-wider font-semibold block">Satisfaction</span>
-              <span className="font-heading text-lg font-bold text-[#0A1931] mt-0.5 block">
-                {stats.rating} <span className="text-xs text-gray-400 font-normal">/ 5.0</span>
-              </span>
-            </div>
-            <div className="text-right">
-              <span className="text-[10px] text-gray-400 uppercase tracking-wider font-semibold block">Completion Rate</span>
-              <span className="font-heading text-lg font-bold text-green-600 mt-0.5 block">
-                {stats.completion_rate || 100}%
-              </span>
-            </div>
+          <div className="text-right">
+            <span className="text-[10px] text-gray-400 uppercase tracking-wider font-semibold block">Completion Rate</span>
+            <span className="font-heading text-lg font-bold text-green-600 mt-0.5 block">
+              {stats.completion_rate || 100}%
+            </span>
           </div>
         </div>
-
       </div>
 
       {/* ── 5. Recent Notifications ── */}
