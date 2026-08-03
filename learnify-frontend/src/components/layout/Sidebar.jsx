@@ -21,7 +21,7 @@ const studentNavItems = [
 
 const mentorNavItems = [
   { label: "Dashboard",        icon: LayoutDashboard, path: "/mentor/dashboard" },
-  { label: "Student Requests", icon: HelpCircle,      path: "/mentor/requests"  },
+  { label: "Direct Requests",  icon: HelpCircle,      path: "/community?tab=direct" },
   { label: "AI Assistant",     icon: Bot,             path: "/ai-chat"          },
   { label: "My Resources",     icon: BookOpen,        path: "/mentor/resources" },
   { label: "Community",        icon: Users,           path: "/community"        },

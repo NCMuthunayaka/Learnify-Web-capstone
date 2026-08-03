@@ -178,10 +178,6 @@ def update_user_details(user_id):
         if status in ("active", "pending", "inactive"):
             user.status = status
 
-    if "password" in data and data["password"].strip():
-        from app.extensions import bcrypt
-        user.password_hash = bcrypt.generate_password_hash(data["password"].strip()).decode("utf-8")
-
     db.session.commit()
     return success_response(data=user.to_dict(), message="User updated successfully")
 

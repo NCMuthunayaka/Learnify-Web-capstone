@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef, useMemo } from "react"
-import { useNavigate } from "react-router-dom"
+import { useNavigate, useLocation } from "react-router-dom"
 import { 
   Users, MessageSquare, Plus, Search, Filter, Paperclip, Send, 
   ArrowRight, ArrowLeft, CheckCircle2, Clock, FileText, Check, AlertCircle, Sparkles, X, Lock,
@@ -17,6 +17,7 @@ import {
 import { getSubjects, createSubject } from "../api/subjectsApi"
 import { getAvailableMentors } from "../api/helpRequestsApi"
 import { uploadFile } from "../api/resourcesApi"
+import { acceptRequest, declineRequest, resolveRequest } from "../api/mentorApi"
 
 // Helper to get role from JWT token
 function getRoleFromToken() {
@@ -360,6 +361,7 @@ function CommunityPage() {
   const [submittingPublicReply, setSubmittingPublicReply] = useState(false)
 
   // ── Direct Requests State ──────────────────────────────────
+  const location = useLocation()
   const [directTab, setDirectTab] = useState(isMentor ? "inbox" : "sent") // mentors: 'inbox'/'sent', students: 'sent'
   const [directThreads, setDirectThreads] = useState([])
   const [directLoading, setDirectLoading] = useState(true)
@@ -368,6 +370,64 @@ function CommunityPage() {
   const [directMessageBody, setDirectMessageBody] = useState("")
   const [directMessageAttachments, setDirectMessageAttachments] = useState([])
   const [sendingDirectMsg, setSendingDirectMsg] = useState(false)
+  const [directPriority, setDirectPriority] = useState("Normal")
+  const [ticketActionLoading, setTicketActionLoading] = useState(false)
+
+  // Auto switch mainTab to direct if URL contains ?tab=direct
+  useEffect(() => {
+    const params = new URLSearchParams(location.search)
+    if (params.get("tab") === "direct") {
+      setMainTab("direct")
+    }
+  }, [location.search])
+
+  // ── Ticket Action Handlers for Mentors ─────────────────────
+  const handleAcceptDirectTicket = async (threadId) => {
+    try {
+      setTicketActionLoading(true)
+      await acceptRequest(threadId)
+      fetchDirectFeed()
+      if (activeDirectThread) {
+        setActiveDirectThread(prev => ({ ...prev, status: "in_progress" }))
+      }
+    } catch (err) {
+      console.error("Accept request error:", err)
+    } finally {
+      setTicketActionLoading(false)
+    }
+  }
+
+  const handleDeclineDirectTicket = async (threadId) => {
+    if (!window.confirm("Are you sure you want to decline this request?")) return
+    try {
+      setTicketActionLoading(true)
+      await declineRequest(threadId)
+      fetchDirectFeed()
+      if (activeDirectThread?.id === threadId) {
+        setActiveDirectThread(null)
+      }
+    } catch (err) {
+      console.error("Decline request error:", err)
+    } finally {
+      setTicketActionLoading(false)
+    }
+  }
+
+  const handleResolveDirectTicket = async (threadId) => {
+    try {
+      setTicketActionLoading(true)
+      await resolveRequest(threadId)
+      fetchDirectFeed()
+      if (activeDirectThread) {
+        setActiveDirectThread(prev => ({ ...prev, status: "resolved" }))
+      }
+    } catch (err) {
+      console.error("Resolve request error:", err)
+    } finally {
+      setTicketActionLoading(false)
+    }
+  }
+
   // ── Two-level Direct Requests navigation ──────────────────
   const [selectedSender, setSelectedSender] = useState(null)  // { id, name, role }
   const [directSortBy, setDirectSortBy] = useState("newest")  // 'newest' | 'oldest' | 'unread' | 'status' | 'az' | 'za'
@@ -647,10 +707,12 @@ function CommunityPage() {
       const res = await createDirectRequest({
         recipient_id: directRecipientId,
         subject: directSubject.trim(),
-        initial_message: directInitialMsg.trim()
+        initial_message: directInitialMsg.trim(),
+        priority: directPriority
       })
       setDirectSubject("")
       setDirectInitialMsg("")
+      setDirectPriority("Normal")
       setShowNewDirectModal(false)
       setMainTab("direct")
       setDirectTab("sent")
@@ -1298,14 +1360,73 @@ function CommunityPage() {
               </div>
             </div>
 
-            {/* Initial Subject Banner */}
-            <div className="bg-[#F6FAFD] p-4 rounded-2xl border border-gray-100">
-              <h4 className="font-heading text-xs font-bold text-[#0A1931]">
-                Subject: {activeDirectThread.subject}
-              </h4>
-              <p className="font-body text-xs text-gray-600 mt-1">
+            {/* Initial Subject & Ticket Banner */}
+            <div className="bg-[#F6FAFD] p-4 rounded-2xl border border-gray-100 space-y-3">
+              <div className="flex items-center justify-between gap-3 flex-wrap">
+                <h4 className="font-heading text-xs font-bold text-[#0A1931]">
+                  Subject: {activeDirectThread.subject}
+                </h4>
+                <div className="flex items-center gap-2">
+                  <span className={`px-2.5 py-0.5 rounded-full font-body text-[10px] font-bold border capitalize ${
+                    activeDirectThread.priority?.toLowerCase() === "urgent"
+                      ? "bg-red-50 text-red-700 border-red-200"
+                      : activeDirectThread.priority?.toLowerCase() === "high"
+                      ? "bg-amber-50 text-amber-700 border-amber-200"
+                      : "bg-gray-100 text-gray-700 border-gray-200"
+                  }`}>
+                    Priority: {activeDirectThread.priority || "Normal"}
+                  </span>
+                  <span className={`px-2.5 py-0.5 rounded-full font-body text-[10px] font-bold border capitalize ${
+                    activeDirectThread.status === "resolved"
+                      ? "bg-green-50 text-green-700 border-green-200"
+                      : activeDirectThread.status === "accepted" || activeDirectThread.status === "in_progress"
+                      ? "bg-blue-50 text-blue-700 border-blue-200"
+                      : "bg-amber-50 text-amber-700 border-amber-200"
+                  }`}>
+                    Status: {activeDirectThread.status === "in_progress" ? "In Progress" : activeDirectThread.status || "Pending"}
+                  </span>
+                </div>
+              </div>
+
+              <p className="font-body text-xs text-gray-600">
                 {activeDirectThread.initial_message}
               </p>
+
+              {/* Mentor Actions Bar */}
+              {isMentor && (
+                <div className="flex items-center gap-2 pt-2 border-t border-gray-200/60">
+                  {activeDirectThread.status !== "resolved" && (
+                    <>
+                      {activeDirectThread.status !== "in_progress" && activeDirectThread.status !== "accepted" && (
+                        <button
+                          type="button"
+                          onClick={() => handleAcceptDirectTicket(activeDirectThread.id)}
+                          disabled={ticketActionLoading}
+                          className="px-3 py-1.5 bg-[#0A1931] hover:bg-[#1A3D63] text-white rounded-xl font-body text-xs font-bold transition-all border-none cursor-pointer flex items-center gap-1"
+                        >
+                          <CheckCircle2 size={13} /> Accept Request
+                        </button>
+                      )}
+                      <button
+                        type="button"
+                        onClick={() => handleResolveDirectTicket(activeDirectThread.id)}
+                        disabled={ticketActionLoading}
+                        className="px-3 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl font-body text-xs font-bold transition-all border-none cursor-pointer flex items-center gap-1"
+                      >
+                        <CheckCircle2 size={13} /> Mark Resolved & Earn Points
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => handleDeclineDirectTicket(activeDirectThread.id)}
+                        disabled={ticketActionLoading}
+                        className="px-3 py-1.5 bg-gray-100 hover:bg-red-50 hover:text-red-600 text-gray-600 rounded-xl font-body text-xs font-bold transition-all border border-gray-200 cursor-pointer flex items-center gap-1"
+                      >
+                        <X size={13} /> Decline
+                      </button>
+                    </>
+                  )}
+                </div>
+              )}
             </div>
 
             {/* Chat History Messages */}
@@ -1816,6 +1937,21 @@ function CommunityPage() {
                 {mentors.map(m => (
                   <option key={m.id} value={m.id}>{m.name} ({m.specialty})</option>
                 ))}
+              </select>
+            </div>
+
+            <div>
+              <label className="font-heading text-[10px] font-bold text-[#4A7FA7] uppercase tracking-wider block mb-1">
+                Priority Level
+              </label>
+              <select
+                value={directPriority}
+                onChange={(e) => setDirectPriority(e.target.value)}
+                className="w-full bg-[#f2f1ed] text-gray-800 font-body text-xs px-4 py-3 rounded-2xl border-none cursor-pointer"
+              >
+                <option value="Normal">Normal Priority</option>
+                <option value="High">High Priority ⚠️</option>
+                <option value="Urgent">Urgent Priority 🔥</option>
               </select>
             </div>
 
