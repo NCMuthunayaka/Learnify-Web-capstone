@@ -1,168 +1,59 @@
-import { useState } from "react"
-import { Link, useNavigate } from "react-router-dom"
-import backgroundImage from "../../assets/images/background.jpg"
-import { useAuth } from "../../hooks/useAuth"
+import { useState } from 'react';
+import { Link, useNavigate } from 'react-router-dom';
+import Button from '../../components/common/Button';
+import ErrorMessage from '../../components/common/ErrorMessage';
+import { useAuth } from '../../hooks/useAuth';
+import * as authApi from '../../api/authApi';
 
-function LoginPage() {
-  const navigate = useNavigate()
-  const { login } = useAuth()
-  const [formData, setFormData] = useState({
-    email: "",
-    password: "",
-  })
-  const [error, setError] = useState("")
+const LoginPage = () => {
+  const navigate = useNavigate();
+  const { signIn } = useAuth();
+  const [form, setForm] = useState({ email: '', password: '' });
+  const [error, setError] = useState('');
+  const [isLoading, setIsLoading] = useState(false);
 
-  function handleChange(e) {
-    setFormData({ ...formData, [e.target.name]: e.target.value })
-  }
-
-  function handleSubmit(e) {
-    e.preventDefault()
-    setError("")
-
-    // Basic validation
-    if (!formData.email || !formData.password) {
-      setError("Please fill in all fields")
-      return
+  const submit = async (event) => {
+    event.preventDefault();
+    if (!form.email || !form.password) {
+      setError('Email and password are required.');
+      return;
     }
-
-    // Dynamic mock login depending on email address
-    const isMentor = formData.email.toLowerCase().includes("mentor") || formData.email.toLowerCase().includes("kamal")
-    const mockUser = {
-      firstName: isMentor ? "Kamal" : "Nirmal",
-      lastName: isMentor ? "Fernando" : "Chamara",
-      email: formData.email,
-      role: isMentor ? "mentor" : "student"
+    
+    setIsLoading(true);
+    setError('');
+    
+    try {
+      const response = await authApi.login({ email: form.email, password: form.password });
+      if (response.success) {
+        signIn({ access_token: response.token, user: response.user });
+        navigate('/dashboard');
+      } else {
+        setError(response.error || 'Login failed');
+      }
+    } catch (err) {
+      setError(err.message || 'An error occurred during login');
+    } finally {
+      setIsLoading(false);
     }
-
-    console.log("Login with:", mockUser)
-    login(mockUser, "mock-access-token")
-
-    if (isMentor) {
-      navigate("/mentor/dashboard")
-    } else {
-      navigate("/dashboard")
-    }
-  }
+  };
 
   return (
-    <div className="relative min-h-screen w-full flex items-center justify-center">
-
-      {/* Background Image */}
-      <div
-        className="absolute inset-0 bg-cover bg-center bg-no-repeat blur-sm"
-        style={{ backgroundImage: `url(${backgroundImage})` }}
-      />
-
-      {/* Dark Overlay */}
-      <div className="absolute inset-0 bg-[#0A1931] opacity-60" />
-
-      {/* Content */}
-      <div className="relative z-10 w-full max-w-2xl mx-6 flex rounded-2xl
-                      overflow-hidden shadow-[0_0_40px_rgba(0,0,0,0.8)]">
-
-        {/* Left — Welcome Text */}
-        <div className="hidden md:flex flex-1 flex-col justify-center
-          px-10 py-16 bg-transparent">
-          <p className="font-body text-[#B3CFE5] text-md mb-2">
-            Welcome Back To
-          </p>
-          <h1 className="font-heading text-6xl font-bold text-white mb-4">
-            Learnify
-          </h1>
-          <p className="font-body text-[#B3CFE5] text-xs">
-            Login to continue your learning journey.
-          </p>
+    <main className="flex min-h-screen items-center justify-center bg-slate-100 p-4">
+      <form onSubmit={submit} className="w-full max-w-md space-y-4 rounded-lg bg-white p-6 shadow-sm">
+        <div>
+          <h1 className="text-2xl font-bold text-slate-900">Login</h1>
+          <p className="text-sm text-slate-500">Continue to Learnify.</p>
         </div>
+        <ErrorMessage message={error} />
+        <input className="w-full rounded-md border border-slate-200 px-3 py-2" placeholder="Email" value={form.email} onChange={(event) => setForm({ ...form, email: event.target.value })} disabled={isLoading} />
+        <input className="w-full rounded-md border border-slate-200 px-3 py-2" type="password" placeholder="Password" value={form.password} onChange={(event) => setForm({ ...form, password: event.target.value })} disabled={isLoading} />
+        <Button type="submit" className="w-full" disabled={isLoading}>{isLoading ? 'Logging in...' : 'Login'}</Button>
+        <p className="text-center text-sm text-slate-500">
+          New here? <Link className="font-semibold text-indigo-700" to="/register">Create an account</Link>
+        </p>
+      </form>
+    </main>
+  );
+};
 
-        {/* Right — Login Form */}
-        <div className="w-full md:w-96 bg-[#000000] bg-opacity-50
-                        backdrop-blur-md px-10 py-12 flex flex-col justify-center space-y-6
-                        border border-[#4A7FA7] border-opacity-30 shadow-2xl">
-
-          {/* Title */}
-          <h2 className="font-heading text-2xl font-semibold text-white
-            text-center tracking-widest">
-            LOGIN
-          </h2>
-
-          {/* Error Message */}
-          {error && (
-            <p className="font-body text-xs text-red-400 text-center">
-              {error}
-            </p>
-          )}
-
-          {/* Form */}
-          <div className="space-y-4">
-
-            {/* Email */}
-            <input
-              type="email"
-              name="email"
-              placeholder="Email"
-              value={formData.email}
-              onChange={handleChange}
-              className="w-full bg-[#D9D9D9] bg-opacity-60 text-white
-                placeholder-[#0A1832]/50 font-bold font-body text-sm px-4 py-3
-                rounded-lg border border-[#4A7FA7] border-opacity-40
-                focus:outline-none focus:border-[#4A7FA7]
-                transition-colors duration-200"
-            />
-
-            {/* Password */}
-            <input
-              type="password"
-              name="password"
-              placeholder="Password"
-              value={formData.password}
-              onChange={handleChange}
-              className="w-full bg-[#D9D9D9] bg-opacity-60 text-white
-                placeholder-[#0A1832]/50 font-bold font-body text-sm px-4 py-3
-                rounded-lg border border-[#4A7FA7] border-opacity-40
-                focus:outline-none focus:border-[#4A7FA7]
-                transition-colors duration-200"
-            />
-
-            {/* Forgot Password */}
-            <div className="text-right">
-              <Link
-                to="/forgot-password"
-                className="font-body text-xs text-[#B3CFE5]
-                  hover:text-white transition-colors"
-              >
-                Forgot password?
-              </Link>
-            </div>
-
-            {/* Login Button */}
-            <button
-              onClick={handleSubmit}
-              className="w-full bg-[#4A7FA7] hover:bg-[#1A3D63] text-white
-                font-body text-sm font-medium py-3 rounded-lg
-                transition-colors duration-200"
-            >
-              Login
-            </button>
-
-          </div>
-
-          {/* Register Link */}
-          <p className="font-body text-xs text-[#B3CFE5] text-center">
-            Do Not have an account?{" "}
-            <Link
-              to="/register"
-              className="text-[#4A7FA7] font-medium hover:text-white
-                transition-colors"
-            >
-              Get Started
-            </Link>
-          </p>
-
-        </div>
-      </div>
-    </div>
-  )
-}
-
-export default LoginPage
+export default LoginPage;

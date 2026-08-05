@@ -1,34 +1,35 @@
-import { createContext, useState } from "react"
+import { createContext, useEffect, useMemo, useState } from 'react';
+import { getStoredToken, getStoredUser, saveAuthTokens, clearAuthTokens } from '../utils/tokenUtils';
 
-export const AuthContext = createContext(null)
+export const AuthContext = createContext(null);
 
-export function AuthProvider({ children }) {
-    const [user, setUser]   = useState(null)
-    const [token, setToken] = useState(
-        localStorage.getItem("access_token") || null
-    )
+export const AuthProvider = ({ children }) => {
+  const [user, setUser] = useState(getStoredUser);
+  const [token, setToken] = useState(getStoredToken);
 
-    function login(userData, accessToken, refreshToken) {
-        // Save user data in state
-        setUser(userData)
-        setToken(accessToken)
+  useEffect(() => {
+    const storedUser = getStoredUser();
+    const storedToken = getStoredToken();
+    if (storedUser) setUser(storedUser);
+    if (storedToken) setToken(storedToken);
+  }, []);
 
-        // Save tokens in localStorage so they persist
-        // after page refresh
-        localStorage.setItem("access_token",  accessToken)
-        localStorage.setItem("refresh_token", refreshToken)
-    }
+  const signIn = (authData) => {
+    const accessToken = authData.access_token || authData.token;
+    const refreshToken = authData.refresh_token;
+    const nextUser = authData.user || { name: authData.name || 'Student', role: authData.role || 'student' };
+    saveAuthTokens({ accessToken, refreshToken, user: nextUser });
+    setToken(accessToken);
+    setUser(nextUser);
+  };
 
-    function logout() {
-        // Clear everything
-        setUser(null)
-        setToken(null)
-        localStorage.clear()
-    }
+  const signOut = () => {
+    clearAuthTokens();
+    setToken(null);
+    setUser(null);
+  };
 
-    return (
-        <AuthContext.Provider value={{ user, token, login, logout }}>
-            {children}
-        </AuthContext.Provider>
-    )
-}
+  const value = useMemo(() => ({ user, token, signIn, signOut, isAuthenticated: Boolean(token) }), [user, token]);
+
+  return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
+};

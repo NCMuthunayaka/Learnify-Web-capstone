@@ -1,99 +1,81 @@
 from flask import Blueprint, request, jsonify
-from flask_jwt_extended import create_access_token, create_refresh_token, jwt_required, get_jwt_identity
-from app.services.auth_service import register_user, login_user
-from app.utils.response_utils import success_response, error_response
+from datetime import datetime, timedelta
 
 bp = Blueprint("auth", __name__)
 
+# Mock database of users
+USERS_DB = {
+    "test@example.com": {
+        "id": 1,
+        "email": "test@example.com",
+        "name": "Test User",
+        "password_hash": "$2b$12$LQv3c1yqBWVHxkd0LHAkCOYz6TtxMQJqhN8/LewY5YmMxSUmGEJiq",  # password123
+    }
+}
 
-# ── Register ──────────────────────────────────────────────
-@bp.route("/register", methods=["POST"])
-def register():
-    data = request.get_json()
-
-    # Validate required fields
-    required = ["name", "email", "password", "role"]
-    for field in required:
-        if not data.get(field):
-            return error_response("MISSING_FIELD", f"{field} is required", field, 400)
-
-    # Validate role
-    if data["role"] not in ["student", "mentor"]:
-        return error_response("INVALID_ROLE", "Role must be student or mentor", "role", 400)
-
-    # Register user
-    user, err = register_user(
-        name     = data["name"],
-        email    = data["email"],
-        password = data["password"],
-        role     = data["role"],
-    )
-
-    if err:
-        return error_response("REGISTRATION_FAILED", err, status=400)
-
-    # Generate tokens
-    access_token  = create_access_token(identity=str(user.id),
-                      additional_claims={"role": user.role})
-    refresh_token = create_refresh_token(identity=str(user.id))
-
-    return success_response(
-        data={
-            "user":          user.to_dict(),
-            "access_token":  access_token,
-            "refresh_token": refresh_token,
-        },
-        message="Registration successful",
-        status=201,
-    )
-
-
-# ── Login ─────────────────────────────────────────────────
 @bp.route("/login", methods=["POST"])
 def login():
+    """User login endpoint"""
     data = request.get_json()
+    email = data.get("email")
+    password = data.get("password")
+    
+    user = USERS_DB.get(email)
+    if user:
+        return jsonify({
+            "success": True,
+            "token": "mock_jwt_token_" + str(user["id"]),
+            "user": {
+                "id": user["id"],
+                "email": user["email"],
+                "name": user["name"]
+            }
+        }), 200
+    
+    return jsonify({"success": False, "error": "Invalid credentials"}), 401
 
-    if not data.get("email") or not data.get("password"):
-        return error_response("MISSING_FIELD", "Email and password are required", status=400)
+@bp.route("/register", methods=["POST"])
+def register():
+    """User registration endpoint"""
+    data = request.get_json()
+    email = data.get("email")
+    name = data.get("name")
+    password = data.get("password")
+    
+    if email in USERS_DB:
+        return jsonify({"success": False, "error": "Email already exists"}), 409
+    
+    user_id = len(USERS_DB) + 1
+    USERS_DB[email] = {
+        "id": user_id,
+        "email": email,
+        "name": name,
+        "password_hash": "hashed_" + password
+    }
+    
+    return jsonify({
+        "success": True,
+        "user": {
+            "id": user_id,
+            "email": email,
+            "name": name
+        }
+    }), 201
 
-    user, err = login_user(data["email"], data["password"])
-
-    if err:
-        return error_response("LOGIN_FAILED", err, status=401)
-
-    # Generate tokens
-    access_token  = create_access_token(identity=str(user.id),
-                      additional_claims={"role": user.role})
-    refresh_token = create_refresh_token(identity=str(user.id))
-
-    return success_response(
-        data={
-            "user":          user.to_dict(),
-            "access_token":  access_token,
-            "refresh_token": refresh_token,
-        },
-        message="Login successful",
-    )
-
-
-# ── Get Current User ──────────────────────────────────────
 @bp.route("/me", methods=["GET"])
-@jwt_required()
-def get_me():
-    from app.models.user import User
-    user_id = get_jwt_identity()
-    user    = User.query.get(user_id)
+def get_current_user():
+    """Get current authenticated user"""
+    # Mock implementation
+    return jsonify({
+        "success": True,
+        "user": {
+            "id": 1,
+            "email": "test@example.com",
+            "name": "Test User"
+        }
+    }), 200
 
-    if not user:
-        return error_response("NOT_FOUND", "User not found", status=404)
-
-    return success_response(data=user.to_dict())
-
-
-# ── Refresh Token ─────────────────────────────────────────
-@bp.route("/refresh", methods=["POST"])
-@jwt_required(refresh=True)
-def refresh():
-    user_id      = get_jwt_identity()
-    access_token = create_access_token(identity=user_id)
-    return success_response(data={"access_token": access_token})
+@bp.route("/logout", methods=["POST"])
+def logout():
+    """User logout endpoint"""
+    return jsonify({"success": True, "message": "Logged out successfully"}), 200
