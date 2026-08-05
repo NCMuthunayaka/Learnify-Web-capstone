@@ -64,6 +64,9 @@ def end_session(session_id):
         if not session_row or session_row[1] != user_id:
             return error_response("NOT_FOUND", "Study session not found", status=404)
             
+        if session_row[5] == 1:
+            return error_response("ALREADY_LOGGED", "Session log has already been submitted and cannot be changed.", status=400)
+            
         scheduled_duration_min = session_row[4]
         
         if status == "Completed":
@@ -74,7 +77,7 @@ def end_session(session_id):
             completed_val = 1
         else: # Skipped
             actual_duration_min = 0
-            completed_val = 0
+            completed_val = 1
             
         # Compute focus rating
         focus_rating = 0.0
