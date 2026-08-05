@@ -454,42 +454,24 @@ def _build_recent_activity(user_id):
 
 def _build_monthly_score_trend(user_id):
     try:
-        # Get enrolled subjects for student
-        enrolled_rows = db.session.execute(
+        # Get enrolled / active subjects for student
+        subj_rows = db.session.execute(
             text(
-                "SELECT DISTINCT s.name "
-                "FROM student_subjects ss "
-                "JOIN subjects s ON ss.subject_id = s.id "
-                "JOIN student_profiles sp ON ss.student_id = sp.id "
-                "WHERE sp.user_id = :uid"
+                "SELECT DISTINCT s.id, s.name "
+                "FROM subjects s "
+                "WHERE s.id IN ("
+                "  SELECT subject_id FROM student_subjects ss JOIN student_profiles sp ON ss.student_id = sp.id WHERE sp.user_id = :uid "
+                "  UNION "
+                "  SELECT subject_id FROM student_subjects WHERE student_id = :uid "
+                "  UNION "
+                "  SELECT subject_id FROM study_sessions WHERE student_id = :uid "
+                "  UNION "
+                "  SELECT subject_id FROM tasks WHERE student_id = :uid"
+                ") ORDER BY s.name"
             ),
             {"uid": user_id}
         ).fetchall()
-        subjects = [r[0] for r in enrolled_rows]
-
-        if not subjects:
-            subject_rows = db.session.execute(
-                text(
-                    "SELECT DISTINCT s.name "
-                    "FROM tasks t "
-                    "JOIN subjects s ON t.subject_id = s.id "
-                    "WHERE t.student_id = :uid"
-                ),
-                {"uid": user_id}
-            ).fetchall()
-            subjects = [r[0] for r in subject_rows]
-
-        if not subjects:
-            session_subjects = db.session.execute(
-                text(
-                    "SELECT DISTINCT s.name "
-                    "FROM study_sessions ss "
-                    "JOIN subjects s ON ss.subject_id = s.id "
-                    "WHERE ss.student_id = :uid"
-                ),
-                {"uid": user_id}
-            ).fetchall()
-            subjects = [r[0] for r in session_subjects]
+        subjects = [r[1] for r in subj_rows]
 
         if not subjects:
             all_subs = db.session.execute(text("SELECT name FROM subjects LIMIT 6")).fetchall()
@@ -595,12 +577,10 @@ def _build_monthly_score_trend(user_id):
                 "borderRadius": 5
             })
 
-        has_data = any(val > 0 for sub_scores in scores_map.values() for val in sub_scores)
-
         return {
             "labels": subjects,
             "datasets": datasets,
-            "empty": not has_data
+            "empty": len(subjects) == 0
         }
     except Exception as e:
         print(f"Error in _build_monthly_score_trend: {e}")
