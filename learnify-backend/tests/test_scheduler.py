@@ -453,6 +453,35 @@ class SchedulerTestCase(unittest.TestCase):
         response = self.client.delete(f"/api/scheduler/tasks/{task_id}", headers=self.headers)
         self.assertEqual(response.status_code, 404)
 
+    def test_generate_timetable_starts_from_tomorrow(self):
+        from unittest.mock import patch
+        mock_sessions = [
+            {"day": "Monday", "start_time": "09:00", "end_time": "11:00", "subject": "Test Subject", "session_type": "study"},
+            {"day": "Wednesday", "start_time": "09:00", "end_time": "11:00", "subject": "Test Subject", "session_type": "study"},
+            {"day": "Friday", "start_time": "09:00", "end_time": "11:00", "subject": "Test Subject", "session_type": "study"},
+        ]
+        with patch("app.routes.scheduler.ai_generate", return_value=mock_sessions):
+            payload = {"intensity": "Balanced", "focus_subject": "Test Subject"}
+            response = self.client.post("/api/scheduler/generate", headers=self.headers, data=json.dumps(payload))
+            self.assertEqual(response.status_code, 200)
+
+            rows = db.session.execute(
+                text("SELECT start_time FROM study_sessions WHERE student_id = :uid"),
+                {"uid": self.user_id}
+            ).fetchall()
+
+            today = date.today()
+            tomorrow = today + timedelta(days=1)
+
+            self.assertGreater(len(rows), 0)
+            for row in rows:
+                session_start_date = row[0].date() if isinstance(row[0], datetime) else row[0]
+                self.assertGreaterEqual(session_start_date, tomorrow)
+
+            # Cleanup
+            db.session.execute(text("DELETE FROM study_sessions WHERE student_id = :uid"), {"uid": self.user_id})
+            db.session.commit()
+
 
 if __name__ == "__main__":
     unittest.main()

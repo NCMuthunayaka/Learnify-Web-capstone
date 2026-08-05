@@ -566,8 +566,9 @@ def generate_timetable():
     except Exception as e:
         return error_response("GENERATE_FAILED", f"AI generation error: {e}", status=500)
 
-    # Calculate the start of the current week (Monday)
+    # Calculate schedule start (tomorrow)
     today      = date.today()
+    tomorrow   = today + timedelta(days=1)
     week_start = today - timedelta(days=today.weekday())
 
     DAY_MAP = {
@@ -592,6 +593,9 @@ def generate_timetable():
 
             day_offset  = DAY_MAP.get(day_name, 0)
             session_date = week_start + timedelta(days=day_offset)
+            if session_date < tomorrow:
+                session_date += timedelta(days=7)
+
             start_dt    = datetime.strptime(f"{session_date} {start_str}", "%Y-%m-%d %H:%M")
             end_dt      = datetime.strptime(f"{session_date} {end_str}",   "%Y-%m-%d %H:%M")
             duration    = int((end_dt - start_dt).total_seconds() / 60)
