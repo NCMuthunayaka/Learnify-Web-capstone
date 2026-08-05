@@ -1,4 +1,8 @@
 {
+  "buildCommand": "cd learnify-frontend && npm run build",
+  "outputDirectory": "learnify-frontend/dist",
+  "installCommand": "cd learnify-frontend && npm install",
+  "framework": "vite",
   "headers": [
     {
       "source": "/(.*)",
