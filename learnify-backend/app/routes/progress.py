@@ -454,7 +454,7 @@ def _build_recent_activity(user_id):
 
 def _build_monthly_score_trend(user_id):
     try:
-        # Get enrolled subjects
+        # Get enrolled subjects for student
         enrolled_rows = db.session.execute(
             text(
                 "SELECT DISTINCT s.name "
@@ -492,137 +492,122 @@ def _build_monthly_score_trend(user_id):
             subjects = [r[0] for r in session_subjects]
 
         if not subjects:
+            all_subs = db.session.execute(text("SELECT name FROM subjects LIMIT 6")).fetchall()
+            subjects = [r[0] for r in all_subs]
+
+        subjects = subjects[:6]
+        if not subjects:
             return {
                 "labels": [],
                 "datasets": [],
                 "empty": True
             }
 
-        subjects = subjects[:6]
-
-        # Get last 3 months info
+        # Calculate last 3 months
         today = date.today()
         months_info = []
         for i in range(2, -1, -1):
-            first_day_of_current_month = today.replace(day=1)
-            if i == 2:
-                target_month_date = (first_day_of_current_month - timedelta(days=15)).replace(day=1)
-            elif i == 1:
-                target_month_date = (first_day_of_current_month - timedelta(days=1)).replace(day=1)
-            else:
-                target_month_date = first_day_of_current_month
+            m_year = today.year
+            m_num = today.month - i
+            if m_num <= 0:
+                m_num += 12
+                m_year -= 1
+            target_start = date(m_year, m_num, 1)
 
-            next_month = (target_month_date + timedelta(days=32)).replace(day=1)
-            last_day_of_month = next_month - timedelta(days=1)
+            next_m_num = m_num + 1
+            next_m_year = m_year
+            if next_m_num > 12:
+                next_m_num = 1
+                next_m_year += 1
+            target_end = date(next_m_year, next_m_num, 1) - timedelta(days=1)
+
             months_info.append({
-                "name": target_month_date.strftime("%b"),
-                "date_limit": last_day_of_month
+                "name": target_start.strftime("%b"),
+                "start": target_start,
+                "end": target_end
             })
 
         months = [m["name"] for m in months_info]
         scores_map = {sub: [0, 0, 0] for sub in subjects}
 
-        # Check if there is any user data at all
-        any_activity = db.session.execute(
-            text(
-                "SELECT (SELECT COUNT(*) FROM tasks WHERE student_id = :uid) + "
-                "(SELECT COUNT(*) FROM study_sessions WHERE student_id = :uid AND completed = 1)"
-            ),
-            {"uid": user_id}
-        ).fetchone()
-        has_any_data = (any_activity[0] > 0) if any_activity else False
+        for sub in subjects:
+            for m_idx, m_info in enumerate(months_info):
+                # 1. Query progress snapshots first
+                snap_row = db.session.execute(
+                    text(
+                        "SELECT AVG(ps.avg_score) "
+                        "FROM progress_snapshots ps "
+                        "JOIN subjects s ON ps.subject_id = s.id "
+                        "WHERE ps.student_id = :uid AND s.name = :sub_name "
+                        "AND ps.snapshot_date BETWEEN :mstart AND :mend "
+                        "AND ps.avg_score IS NOT NULL"
+                    ),
+                    {"uid": user_id, "sub_name": sub, "mstart": m_info["start"], "mend": m_info["end"]}
+                ).fetchone()
 
-        if has_any_data:
-            # Query actual progress snapshots first
-            rows = db.session.execute(
-                text(
-                    "SELECT s.name, DATE_FORMAT(ps.snapshot_date, '%b') as month, AVG(ps.avg_score) as avg_score "
-                    "FROM progress_snapshots ps "
-                    "JOIN subjects s ON ps.subject_id = s.id "
-                    "WHERE ps.student_id = :uid "
-                    "AND ps.avg_score IS NOT NULL "
-                    "GROUP BY s.name, month"
-                ),
-                {"uid": user_id}
-            ).fetchall()
+                if snap_row and snap_row[0] is not None:
+                    scores_map[sub][m_idx] = float(snap_row[0])
+                else:
+                    # 2. Calculate actual task completion & session completion rate
+                    t_row = db.session.execute(
+                        text(
+                            "SELECT COUNT(*), SUM(CASE WHEN status = 'done' THEN 1 ELSE 0 END) "
+                            "FROM tasks "
+                            "WHERE student_id = :uid AND subject_id = (SELECT id FROM subjects WHERE name = :sub_name) "
+                            "AND DATE(created_at) <= :dlimit"
+                        ),
+                        {"uid": user_id, "sub_name": sub, "dlimit": m_info["end"]}
+                    ).fetchone()
 
-            for row in rows:
-                sub_name, month_name, avg_s = row
-                if sub_name in scores_map and month_name in months:
-                    m_idx = months.index(month_name)
-                    scores_map[sub_name][m_idx] = float(avg_s)
+                    s_row = db.session.execute(
+                        text(
+                            "SELECT COUNT(*), SUM(CASE WHEN completed = 1 THEN 1 ELSE 0 END) "
+                            "FROM study_sessions "
+                            "WHERE student_id = :uid AND subject_id = (SELECT id FROM subjects WHERE name = :sub_name) "
+                            "AND DATE(start_time) <= :dlimit"
+                        ),
+                        {"uid": user_id, "sub_name": sub, "dlimit": m_info["end"]}
+                    ).fetchone()
 
-            # Calculate score for missing items dynamically
-            for sub in subjects:
-                for m_idx, m_info in enumerate(months_info):
-                    if scores_map[sub][m_idx] == 0:
-                        # 1. Look at tasks due in or before this month
-                        task_row = db.session.execute(
-                            text(
-                                "SELECT COUNT(*), SUM(CASE WHEN status = 'done' THEN 1 ELSE 0 END) "
-                                "FROM tasks "
-                                "WHERE student_id = :uid AND subject_id = (SELECT id FROM subjects WHERE name = :sub_name) "
-                                "AND DATE(created_at) <= :dlimit"
-                            ),
-                            {"uid": user_id, "sub_name": sub, "dlimit": m_info["date_limit"]}
-                        ).fetchone()
+                    t_total = t_row[0] if t_row else 0
+                    t_done = t_row[1] if t_row and t_row[1] is not None else 0
+                    s_total = s_row[0] if s_row else 0
+                    s_done = s_row[1] if s_row and s_row[1] is not None else 0
 
-                        total_tasks = task_row[0] if task_row else 0
-                        completed_tasks = task_row[1] if task_row and task_row[1] is not None else 0
+                    rates = []
+                    if t_total > 0:
+                        rates.append((t_done / t_total) * 100.0)
+                    if s_total > 0:
+                        rates.append((s_done / s_total) * 100.0)
 
-                        if total_tasks > 0:
-                            completion_pct = (completed_tasks / total_tasks * 100.0)
-                            scores_map[sub][m_idx] = round(70 + (completion_pct * 0.25))
-                        else:
-                            # 2. Check study hours
-                            hours_row = db.session.execute(
-                                text(
-                                    "SELECT COALESCE(SUM(duration_min), 0) "
-                                    "FROM study_sessions "
-                                    "WHERE student_id = :uid AND subject_id = (SELECT id FROM subjects WHERE name = :sub_name) "
-                                    "AND DATE(start_time) <= :dlimit AND completed = 1"
-                                ),
-                                {"uid": user_id, "sub_name": sub, "dlimit": m_info["date_limit"]}
-                            ).fetchone()
-                            study_hours = float(hours_row[0]) / 60.0
-                            if study_hours > 0:
-                                scores_map[sub][m_idx] = round(min(65 + study_hours * 5, 95))
-                            else:
-                                scores_map[sub][m_idx] = 0
-
-        else:
-            # Fallback to MD5 simulated scores for initial state
-            import hashlib
-            for sub in subjects:
-                for m_idx, month_name in enumerate(months):
-                    h_val = int(hashlib.md5(f"{user_id}-{sub}-{month_name}".encode()).hexdigest(), 16)
-                    base_score = 65 + (h_val % 15)
-                    improvement = m_idx * (3 + (h_val % 5))
-                    scores_map[sub][m_idx] = min(base_score + improvement, 95)
+                    if rates:
+                        scores_map[sub][m_idx] = sum(rates) / len(rates)
+                    else:
+                        scores_map[sub][m_idx] = 0
 
         datasets = []
         bg_colors = ["rgba(179,207,229,0.75)", "rgba(74,127,167,0.65)", "#1A3D63"]
         for m_idx, month_name in enumerate(months):
             datasets.append({
                 "label": month_name,
-                "data": [round(scores_map[sub][m_idx]) for sub in subjects],
+                "data": [round(scores_map[sub][m_idx], 1) for sub in subjects],
                 "backgroundColor": bg_colors[m_idx % len(bg_colors)],
                 "borderRadius": 5
             })
 
+        has_data = any(val > 0 for sub_scores in scores_map.values() for val in sub_scores)
+
         return {
             "labels": subjects,
-            "datasets": datasets
+            "datasets": datasets,
+            "empty": not has_data
         }
     except Exception as e:
         print(f"Error in _build_monthly_score_trend: {e}")
         return {
-            "labels": ["Data Struct.", "Calculus", "Databases", "Soft. Eng.", "Networks", "Op. Systems"],
-            "datasets": [
-                { "label": "Jan", "data": [72,65,78,50,80,60], "backgroundColor": "rgba(179,207,229,0.75)", "borderRadius": 5 },
-                { "label": "Feb", "data": [78,70,82,55,85,65], "backgroundColor": "rgba(74,127,167,0.65)",  "borderRadius": 5 },
-                { "label": "Mar", "data": [85,74,88,60,90,70], "backgroundColor": "#1A3D63",                "borderRadius": 5 },
-            ]
+            "labels": [],
+            "datasets": [],
+            "empty": True
         }
 
 

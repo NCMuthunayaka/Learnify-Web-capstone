@@ -351,17 +351,20 @@ export function MonthlyScoreChart({ chartData }) {
   const [reportLoading, setReportLoading] = useState(false);
   const [reportError, setReportError]     = useState("");
 
+  const isEmpty = !chartData || chartData.empty || !chartData.labels || chartData.labels.length === 0;
+
   useEffect(() => {
+    if (isEmpty) {
+      if (chartRef.current) chartRef.current.destroy();
+      return;
+    }
+
     loadChartJs((Chart) => {
       if (!canvasRef.current) return;
       if (chartRef.current) chartRef.current.destroy();
 
-      const labels = chartData?.labels || ["Data Struct.", "Calculus", "Databases", "Soft. Eng.", "Networks", "Op. Systems"];
-      const datasets = chartData?.datasets || [
-        { label: "Jan", data: [72,65,78,50,80,60], backgroundColor: "rgba(179,207,229,0.75)", borderRadius: 5 },
-        { label: "Feb", data: [78,70,82,55,85,65], backgroundColor: "rgba(74,127,167,0.65)",  borderRadius: 5 },
-        { label: "Mar", data: [85,74,88,60,90,70], backgroundColor: "#1A3D63",                borderRadius: 5 },
-      ];
+      const labels = chartData.labels;
+      const datasets = chartData.datasets;
 
       chartRef.current = new Chart(canvasRef.current, {
         type: "bar",
@@ -406,7 +409,7 @@ export function MonthlyScoreChart({ chartData }) {
       });
     });
     return () => chartRef.current?.destroy();
-  }, [chartData]);
+  }, [chartData, isEmpty]);
 
   const openReport = async () => {
     setShowReport(true);
@@ -421,8 +424,6 @@ export function MonthlyScoreChart({ chartData }) {
       setReportLoading(false);
     }
   };
-
-  const isEmpty = !chartData || chartData.empty || !chartData.labels || chartData.labels.length === 0;
 
   return (
     <div className="h-full bg-white rounded-[18px] border border-[#D0E3F0] overflow-hidden shadow-[0_2px_8px_rgba(10,25,49,0.07)] flex flex-col">
