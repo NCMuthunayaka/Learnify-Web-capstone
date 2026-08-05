@@ -1,7 +1,7 @@
 {
   "buildCommand": "cd learnify-frontend && npm run build",
   "outputDirectory": "learnify-frontend/dist",
-  "installCommand": "cd learnify-frontend && npm install",
+  "installCommand": "cd learnify-frontend && npm install --legacy-peer-deps",
   "framework": "vite",
   "headers": [
     {
