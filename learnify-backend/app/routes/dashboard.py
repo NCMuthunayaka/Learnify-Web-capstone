@@ -102,6 +102,7 @@ def get_dashboard_stats():
                  "SUM(duration_min)/60 as hours "
                  "FROM study_sessions "
                  "WHERE student_id = :user_id "
+                 "AND completed = 1 "
                  "AND start_time >= :week_ago "
                  "GROUP BY DAYNAME(start_time), DAYOFWEEK(start_time) "
                  "ORDER BY DAYOFWEEK(start_time)"),

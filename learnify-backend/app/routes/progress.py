@@ -18,6 +18,7 @@ def _build_study_hours_chart(user_id):
                 "ROUND(SUM(ss.duration_min) / 60.0, 2) as hrs "
                 "FROM study_sessions ss "
                 "WHERE ss.student_id = :uid "
+                "AND ss.completed = 1 "
                 "AND DATE(ss.start_time) >= :since "
                 "GROUP BY DATE(ss.start_time) "
                 "ORDER BY DATE(ss.start_time)"
@@ -50,6 +51,7 @@ def _build_subject_time_allocation(user_id):
                 "FROM study_sessions ss "
                 "JOIN subjects s ON ss.subject_id = s.id "
                 "WHERE ss.student_id = :uid "
+                "AND ss.completed = 1 "
                 "AND DATE(ss.start_time) >= :since "
                 "GROUP BY s.id, s.name "
                 "ORDER BY hrs DESC "
@@ -142,6 +144,7 @@ def _build_streak_heatmap(user_id):
                 "ROUND(SUM(duration_min) / 60.0, 1) as hrs "
                 "FROM study_sessions "
                 "WHERE student_id = :uid "
+                "AND completed = 1 "
                 "AND DATE(start_time) >= :start "
                 "GROUP BY DATE(start_time)"
             ),
@@ -254,6 +257,7 @@ def _build_top_stats(user_id):
                 "SELECT ROUND(SUM(duration_min) / 60.0, 1) "
                 "FROM study_sessions "
                 "WHERE student_id = :uid "
+                "AND completed = 1 "
                 "AND DATE(start_time) >= :ms"
             ),
             {"uid": user_id, "ms": month_start},
