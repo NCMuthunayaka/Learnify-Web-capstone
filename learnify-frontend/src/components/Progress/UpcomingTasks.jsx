@@ -119,7 +119,7 @@ export function StudyStreak({ streakDays = 0, bestDays = 0, weeks = [[0,0,0,0,0,
             Study Streak
           </div>
           <div className="text-[12px] text-[#8AAABF] mt-0.5" style={{ fontFamily: "Inter, sans-serif" }}>
-            Daily consistency — April
+            Daily consistency
           </div>
         </div>
         <span className="text-[20px] font-extrabold text-[#c8900a]" style={{ fontFamily: "Poppins, sans-serif" }}>
