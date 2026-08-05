@@ -219,30 +219,22 @@ function AIChatPage() {
     }
   }
 
-  // ── Init: fetch sessions and load active or create new ────────────────────
+  // ── Init: start fresh session and fetch sessions list ──────────────────────
   useEffect(() => {
     async function initSession() {
       try {
         setIsLoading(true)
-        const list = await fetchSessions()
-        if (list.length > 0) {
-          // Load latest session
-          const latestId = list[0].id
-          setSessionId(latestId)
-          const mRes = await getChatMessages(latestId)
-          setMessages(mRes.data?.data?.messages || [])
-        } else {
-          // Create new session
-          const res = await createChatSession("Study Session")
-          const data = res.data?.data
-          const sid = data?.session?.id
-          const greeting = data?.greeting
-          setSessionId(sid)
-          if (greeting) {
-            setMessages([greeting])
-          }
-          await fetchSessions()
+        await fetchSessions()
+        // Always start with a fresh chat session on login / page load
+        const res = await createChatSession("Study Session")
+        const data = res.data?.data
+        const sid = data?.session?.id
+        const greeting = data?.greeting
+        setSessionId(sid)
+        if (greeting) {
+          setMessages([greeting])
         }
+        await fetchSessions()
       } catch (err) {
         setError("Could not connect to AI. Please refresh the page.")
       } finally {
