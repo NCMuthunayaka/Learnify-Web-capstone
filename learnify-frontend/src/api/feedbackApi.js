@@ -1,63 +1,22 @@
-import axiosInstance from "./axiosInstance"
+import api from './axiosInstance';
 
-const feedbackApi = {
-  /**
-   * Create new feedback
-   */
-  createFeedback: async (feedbackData) => {
-    const response = await axiosInstance.post("/feedback", feedbackData)
-    return response.data.data
-  },
+export const getFeedback = async (params = {}) => {
+  const { data } = await api.get('/feedback', { params });
+  return data;
+};
 
-  /**
-   * Get current user's feedback
-   */
-  getUserFeedback: async (filters = {}) => {
-    const response = await axiosInstance.get("/feedback", { params: filters })
-    return response.data.data
-  },
+export const createFeedback = async (payload) => {
+  const { data } = await api.post('/feedback', payload);
+  return data;
+};
 
-  /**
-   * Get feedback by ID
-   */
-  getFeedbackById: async (feedbackId) => {
-    const response = await axiosInstance.get(`/feedback/${feedbackId}`)
-    return response.data.data
-  },
+export const getFeedbackAnalytics = async () => {
+  const { data } = await api.get('/admin/feedback/analytics');
+  return data;
+};
 
-  /**
-   * Update feedback
-   */
-  updateFeedback: async (feedbackId, feedbackData) => {
-    const response = await axiosInstance.put(`/feedback/${feedbackId}`, feedbackData)
-    return response.data.data
-  },
-
-  /**
-   * Delete feedback
-   */
-  deleteFeedback: async (feedbackId) => {
-    const response = await axiosInstance.delete(`/feedback/${feedbackId}`)
-    return response.data.data
-  },
-
-  /**
-   * Get all feedback (admin only)
-   */
-  getAllFeedback: async (filters = {}) => {
-    const response = await axiosInstance.get("/feedback/all", { params: filters })
-    return response.data.data
-  },
-
-  /**
-   * Resolve feedback with admin response
-   */
-  resolveFeedback: async (feedbackId, adminResponse) => {
-    const response = await axiosInstance.post(`/feedback/${feedbackId}/resolve`, {
-      admin_response: adminResponse,
-    })
-    return response.data.data
-  },
-}
-
-export default feedbackApi
+export default {
+  getFeedback,
+  createFeedback,
+  getFeedbackAnalytics,
+};

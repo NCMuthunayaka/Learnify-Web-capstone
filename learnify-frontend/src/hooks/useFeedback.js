@@ -1,79 +1,52 @@
-import { useState, useCallback } from "react"
-import feedbackApi from "../api/feedbackApi"
+import { useMemo, useState, useEffect } from 'react';
+import * as feedbackApi from '../api/feedbackApi';
 
-export function useFeedback() {
-  const [feedbacks, setFeedbacks] = useState([])
-  const [loading, setLoading] = useState(false)
-  const [error, setError] = useState(null)
+export const useFeedback = () => {
+  const [items, setItems] = useState([]);
+  const [category, setCategory] = useState('All');
+  const [isLoading, setIsLoading] = useState(true);
+  const [error, setError] = useState(null);
 
-  const createFeedback = useCallback(async (feedbackData) => {
-    setLoading(true)
-    setError(null)
+  useEffect(() => {
+    const loadFeedback = async () => {
+      try {
+        setIsLoading(true);
+        const response = await feedbackApi.getFeedback();
+        if (response.success) {
+          setItems(response.feedback);
+        }
+      } catch (err) {
+        setError(err.message);
+        console.error('Failed to load feedback:', err);
+      } finally {
+        setIsLoading(false);
+      }
+    };
+    loadFeedback();
+  }, []);
 
+  const filteredItems = useMemo(
+    () => (category === 'All' ? items : items.filter((item) => item.category === category)),
+    [category, items]
+  );
+
+  const submitFeedback = async (payload) => {
     try {
-      const response = await feedbackApi.createFeedback(feedbackData)
-      return response
+      const response = await feedbackApi.createFeedback(payload);
+      if (response.success) {
+        setItems((current) => [
+          { 
+            ...response.feedback, 
+            sentiment: response.feedback.rating >= 4 ? 'positive' : 'neutral' 
+          }, 
+          ...current
+        ]);
+      }
     } catch (err) {
-      setError(err.message || "Failed to create feedback")
-      throw err
-    } finally {
-      setLoading(false)
+      setError(err.message);
+      console.error('Failed to submit feedback:', err);
     }
-  }, [])
+  };
 
-  const getUserFeedback = useCallback(async (filters = {}) => {
-    setLoading(true)
-    setError(null)
-
-    try {
-      const response = await feedbackApi.getUserFeedback(filters)
-      setFeedbacks(response.feedbacks || [])
-      return response
-    } catch (err) {
-      setError(err.message || "Failed to load feedback")
-      throw err
-    } finally {
-      setLoading(false)
-    }
-  }, [])
-
-  const updateFeedback = useCallback(async (feedbackId, feedbackData) => {
-    setLoading(true)
-    setError(null)
-
-    try {
-      const response = await feedbackApi.updateFeedback(feedbackId, feedbackData)
-      return response
-    } catch (err) {
-      setError(err.message || "Failed to update feedback")
-      throw err
-    } finally {
-      setLoading(false)
-    }
-  }, [])
-
-  const deleteFeedback = useCallback(async (feedbackId) => {
-    setLoading(true)
-    setError(null)
-
-    try {
-      const response = await feedbackApi.deleteFeedback(feedbackId)
-      return response
-    } catch (err) {
-      setError(err.message || "Failed to delete feedback")
-      throw err
-    } finally {
-      setLoading(false)
-    }
-  }, [])
-
-  return {
-    feedbacks,
-    loading,
-    error,
-    createFeedback,
-    getUserFeedback,
-    updateFeedback,
-    deleteFeedback,
-  }
-}
+  return { items: filteredItems, category, setCategory, submitFeedback, isLoading, error };
+};
