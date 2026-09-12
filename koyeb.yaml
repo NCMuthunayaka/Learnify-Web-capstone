@@ -1,0 +1,21 @@
+# Koyeb App Deployment Configuration
+# https://www.koyeb.com/docs/build-and-deploy/deploy-with-koyeb-yaml
+
+name: learnify
+services:
+  - name: backend-api
+    git:
+      branch: main
+      workdir: learnify-backend
+    build:
+      type: docker
+      dockerfile: Dockerfile
+    ports:
+      - port: 8000
+        path: /
+    routes:
+      - path: /
+        port: 8000
+    regions:
+      - fra
+    instance_type: free

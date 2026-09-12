@@ -157,6 +157,11 @@ def create_app(config_name="development"):
         response.headers["Access-Control-Allow-Methods"] = "GET, POST, PUT, PATCH, DELETE, OPTIONS"
         return response
 
+    # ── Health Check ──────────────────────────────────────
+    @app.route("/", methods=["GET"])
+    def health_check():
+        return {"status": "ok", "service": "Learnify API"}, 200
+
     # ── Serve uploaded files ──────────────────────────────
     # This makes /uploads/filename.pdf accessible from browser
     @app.route("/uploads/<path:filename>", methods=["GET", "HEAD", "OPTIONS"])
